@@ -1,0 +1,54 @@
+//========================================
+//
+//	This file lists all plugins that are loaded by the game
+//	Plugins use Angelscript
+//
+//========================================
+"plugins"
+{
+	"plugin"
+	{
+		"name" "PlayerManagement"
+		"script" "admin/PlayerManagement"
+		"concommandns" "plrmgr"
+	}
+	// CS16 Weapons — CS16 weapons, buy menu, kill feed, CS1.6 damage system.
+	// Load this on any map where you want CS16 weapons available.
+	"plugin"
+	{
+		"name" "CS16 Weapons"
+		"script" "cs16/cs16_register"
+	}
+
+	// Counter-Life — replaces Half-Life world weapons and NPC drops with CS16 equivalents.
+	// Optional add-on; requires the CS16 Weapons plugin above to be loaded first.
+	"plugin"
+	{
+		"name" "Counter-Life"
+		"script" "counterlife"
+	}
+	"plugin"
+	{
+		"name" "DamageMoneyScore"
+		"script" "DamageMoneyScore"
+	}
+//	"plugin"
+//	{
+//		"name" "EntityManager"
+//		"script" "EntityManager"
+//		"adminlevel" "ADMIN_YES"
+//		"concommandns" "entmngr"
+//	}
+//
+//	"plugin"
+//	{
+//		"name" "Teleport"
+//		"script" "Teleport"
+//	}
+//
+//	"plugin"
+//	{
+//		"name" "Vox"
+//		"script" "Vox"
+//	}
+}
