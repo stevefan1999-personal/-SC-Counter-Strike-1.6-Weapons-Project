@@ -1,5 +1,14 @@
 {
-  "fmt": { "lineWidth": 120, "indentWidth": 2 },
+  "fmt": {
+    "lineWidth": 120,
+    "indentWidth": 2,
+    "include": ["tools/", "tests/", "docs/", "deno.json"],
+    "exclude": ["docs/research/asset-audit/report.md"]
+  },
   "lint": { "rules": { "tags": ["recommended"] } },
-  "imports": { "@std/assert": "jsr:@std/assert@^1.0.19" }
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.19",
+    "@std/fs": "jsr:@std/fs@^1",
+    "@std/path": "jsr:@std/path@^1"
+  }
 }
