@@ -265,6 +265,13 @@ e2e-hud port='27017' label='hud':
 hudboxes image x y w h:
   deno run -A '{{justfile_directory()}}/tests/e2e/hudboxes.ts' '{{image}}' {{x}} {{y}} {{w}} {{h}}
 
+# Fire weapons in a game that runs on a display and measure each muzzle flash (JSON): just e2e-muzzleflash :102 .e2e/muzzle/sven 1000x660+500+240 deagle=weapon_csdeagle
+[group('e2e')]
+[no-cd]
+[positional-arguments]
+e2e-muzzleflash +args:
+  deno run -A '{{justfile_directory()}}/tests/e2e/muzzleflash.ts' "$@"
+
 # Render the HUD sprite contact sheet and check it against a CS 1.6 screenshot: just hud-sheet /abs/cs16-ref-hud.png
 [group('tools')]
 hud-sheet screenshot out=(justfile_directory() / 'docs/hud-sprites/contact-sheet.png'):
