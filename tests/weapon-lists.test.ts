@@ -123,3 +123,14 @@ Deno.test("every sprite the lists use is shipped and precached", async () => {
     ?.map((name) => `cs16/icons/${name.slice(1, -1)}`);
   assertEquals(new Set(precached), used);
 });
+
+Deno.test("the kill feed draws its death icons from the shipped CS sheets in the icons folder", async () => {
+  const killfeed = await Deno.readTextFile(`${repo}scripts/cs16/killfeed.as`);
+  const shipped = (await Deno.readTextFile(`${repo}scripts/cs16/base.as`)).match(/WEAPON_LIST_SPRITES = \{([^}]*)\}/)
+    ?.[1] ?? "";
+  // Player caches can hold other packs' files at sprites/cs16/640hud*.spr, so no path may point there.
+  assert(!/"(sprites\/)?cs16\/640hud/.test(killfeed), "killfeed.as names a sheet outside the icons folder");
+  const sheets = [...killfeed.matchAll(/MakeFrame\("(640hud\d+)"/g)].map(([, sheet]) => sheet);
+  assert(sheets.length > 0, "no MakeFrame sheets found");
+  for (const sheet of sheets) assert(shipped.includes(`"${sheet}"`), `${sheet} is not a shipped list sheet`);
+});

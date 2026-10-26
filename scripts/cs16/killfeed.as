@@ -10,7 +10,8 @@
 //   - Skull sprite (d_skull) for world/fall/suicide kills
 //   - Headshot sprite (d_headshot) drawn after weapon sprite when bHeadshot
 //
-// Sprite sheets required (copy from cstrike/sprites/ to svencoop/sprites/cs16/):
+// Sprite sheets: the CS 1.6 files that "just install" copies to sprites/cs16/icons/ for the weapon lists. Player
+// caches can hold other packs' files at sprites/cs16/640hud*.spr, and a client never downloads a file it has.
 //   640hud1.spr  — contains most weapon kill icons + d_skull + d_headshot
 //   640hud2.spr  — contains d_famas, d_galil
 //   640hud16.spr — contains d_fiveseven, d_sg550, d_ump45
@@ -25,7 +26,7 @@ namespace CS16KILLFEED {
 
 // ── Sprite sheet frame descriptor ──────────────────────────────────────────
     class SpriteFrame {
-        string sheet;   // e.g. "cs16/640hud1.spr"
+        string sheet;   // e.g. "cs16/icons/640hud1.spr"
         uint8  left;    // pixel offset x in sheet
         uint8  top;     // pixel offset y in sheet
         int16  width;   // frame width in pixels
@@ -34,7 +35,7 @@ namespace CS16KILLFEED {
 
     SpriteFrame@ MakeFrame(const string& in sheet, uint8 left, uint8 top, int16 w, int16 h) {
         SpriteFrame@ f = SpriteFrame();
-        f.sheet  = "cs16/" + sheet + ".spr";
+        f.sheet  = CS16BASE::WEAPON_LIST_DIR + sheet + ".spr";
         f.left   = left;
         f.top    = top;
         f.width  = w;
@@ -167,9 +168,9 @@ namespace CS16KILLFEED {
 
 // ── Precache all sprite sheets ─────────────────────────────────────────────
     void PrecacheSprites() {
-        g_Game.PrecacheGeneric("sprites/cs16/640hud1.spr");
-        g_Game.PrecacheGeneric("sprites/cs16/640hud2.spr");
-        g_Game.PrecacheGeneric("sprites/cs16/640hud16.spr");
+        g_Game.PrecacheGeneric(CS16BASE::MAIN_SPRITE_DIR + CS16BASE::WEAPON_LIST_DIR + "640hud1.spr");
+        g_Game.PrecacheGeneric(CS16BASE::MAIN_SPRITE_DIR + CS16BASE::WEAPON_LIST_DIR + "640hud2.spr");
+        g_Game.PrecacheGeneric(CS16BASE::MAIN_SPRITE_DIR + CS16BASE::WEAPON_LIST_DIR + "640hud16.spr");
     }
 
 // ── Per-map reset (call from MapInit) ──────────────────────────────────────
@@ -308,7 +309,7 @@ namespace CS16KILLFEED {
                     hp.flags      = 0;
                     hp.x          = xHS;
                     hp.y          = yNorm;
-                    hp.spritename = "cs16/640hud1.spr";
+                    hp.spritename = CS16BASE::WEAPON_LIST_DIR + "640hud1.spr";
                     hp.left       = 0;
                     hp.top        = 240;
                     hp.width      = 36;

@@ -86,8 +86,13 @@ texture format is normal, not additive, and `640hud10.spr` shows other weapons (
 same folder holds lists of those packs (`weapon_katana.txt`, `weapon_rabbithammer.txt`, `weapon_vulcanus.txt`). After a
 connection to a server that offered the CS 1.6 `sprites/cs16/640hud10.spr`, the cached file still had its old date and
 its old content. So `cstrike-assets.txt` now can give a destination for each import, and `just install` copies the 16
-sheets that the lists use to `sprites/cs16/icons/`. The kill feed still reads `sprites/cs16/640hud1.spr`, `640hud2.spr`
-and `640hud16.spr`; on this client the first two are foreign files.
+sheets that the lists use to `sprites/cs16/icons/`. The kill feed had the same problem: it read
+`sprites/cs16/640hud1.spr`, `640hud2.spr` and `640hud16.spr`, and on this client the first two are foreign files. Their
+death icons happen to be close copies (mean |Δ| below 1.2 in `640hud1`, 3.4 and 4.1 for the Galil and FAMAS in
+`640hud2`), but another pack can put anything there. The kill feed now draws from the same three sheets in
+`sprites/cs16/icons/` (`CS16BASE::WEAPON_LIST_DIR`), so `cstrike-assets.txt` no longer copies them to `sprites/cs16/`.
+In game, a scripted kill of a pinned headcrab drew the CS `d_skull` from `sprites/cs16/icons/640hud1.spr`, and the
+client log has no missing sprite.
 
 The offscreen test client uses the player's own `svencoop_downloads`. A test run that offers an intermediate version of
 a file leaves that version in the player's cache. After this work I removed the files that my intermediate run had put
@@ -192,5 +197,3 @@ CL_DISPLAY=:103 just con drop
   bucket numbers.
 - The native crosshair is the static red cross of `main`; the CS dynamic crosshair is not drawn yet.
 - The magazine pickups keep their own scales, because CS 1.6 has no model to compare.
-- The kill feed sheets `sprites/cs16/640hud1.spr` and `640hud2.spr` can be foreign files in a player's cache (section
-  2).
