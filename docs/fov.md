@@ -171,6 +171,10 @@ give one value per game. A "before" value that differs between zoom levels names
 At 2560 × 1440 the first black pixels of CS's lines are its innermost dots, 23 pixels out; its line gap ends 30 pixels
 out. The zoom-1 circle of the old model reaches the HUD numbers at 1440 lines, which moves its fitted centre.
 
+Black border: outside the circle, between 15 % and 85 % of the screen height, 99.92 % (900 lines) and 99.97 % (1440
+lines) of the pixels are pure black in both games, before and after. The other pixels are a HUD icon at the left edge (x
+14–46). So the black reaches every screen edge, as in CS.
+
 ![AWP zoom 1 at 1600 × 900](fov/scope-awp1-1600x900.png) ![AWP zoom 2 at 1600 × 900](fov/scope-awp2-1600x900.png)
 ![Scout zoom 1 at 1600 × 900](fov/scope-scout1-1600x900.png)
 ![Scout zoom 2 at 1600 × 900](fov/scope-scout2-1600x900.png) ![Reticle at 1600 × 900](fov/reticle-1600x900.png)
