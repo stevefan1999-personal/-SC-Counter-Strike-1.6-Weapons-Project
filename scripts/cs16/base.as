@@ -153,23 +153,6 @@ const float PEN_LOSS_RATE = 0.05f;
 array<int>  g_PlayerArmor(33, 0);
 array<bool> g_PlayerHelmet(33, false);
 
-// Kill feed tracking — last CS16 weapon hit per victim (indexed by victim entindex 1-32)
-array<int>    g_PlayerLastAttacker(33, 0);
-array<string> g_PlayerLastWeapon(33, "");
-array<bool>   g_PlayerLastWasHeadshot(33, false);
-
-// Kill feed tracking — last CS16 weapon fired by each player (indexed by attacker entindex 1-32)
-// Used for monster-kill notices where the victim is not a CBasePlayer.
-array<string> g_AttackerLastWeapon(33, "");
-array<bool>   g_AttackerLastWasHeadshot(33, false);
-
-// Kill feed: per-monster last-hit dictionary (key = monster entindex as string).
-// Fallback for when MonsterKilled's pAttacker is null — happens with friendly NPCs
-// such as scientists whose death code doesn't propagate the attacker entity.
-dictionary g_MonsterLastHitter;   // → attacker player entindex (int)
-dictionary g_MonsterLastWeapon;   // → weapon classname (string)
-dictionary g_MonsterLastHeadshot; // → was headshot (bool)
-
 // WeaponBase gives TraceAttack HITGROUP_GENERIC so that the engine adds no hit-group multiplier of its own, and
 // TraceAttack records that group on the victim. Put the real group back before the damage lands, so the death code
 // sees where the bullet hit: the kill-feed headshot icon and the headshot death animation of monsters.
@@ -595,36 +578,6 @@ mixin class WeaponBase
                         CBasePlayer@ pVictim = cast<CBasePlayer@>( pHit );
                         if( pVictim !is null )
                             flDamage = CS16BASE::ApplyArmorDamage( pVictim, flDamage, tr.iHitgroup );
-
-                        // Kill feed: record who hit whom, with what weapon, and whether it was a headshot.
-                        // tr.iHitgroup still holds the original value here (not yet zeroed).
-                        int iAIdx = m_pPlayer.entindex();
-                        if( pVictim !is null )
-                        {
-                            // Per-victim: used when a player dies to find their last attacker
-                            int iVIdx = pVictim.entindex();
-                            if( iVIdx >= 1 && iVIdx <= 32 )
-                            {
-                                CS16BASE::g_PlayerLastAttacker[iVIdx]    = iAIdx;
-                                CS16BASE::g_PlayerLastWeapon[iVIdx]      = self.pev.classname;
-                                CS16BASE::g_PlayerLastWasHeadshot[iVIdx] = ( tr.iHitgroup == HITGROUP_HEAD );
-                            }
-                        }
-                        // Per-attacker: used when a monster dies to find the killing player's weapon
-                        if( iAIdx >= 1 && iAIdx <= 32 )
-                        {
-                            CS16BASE::g_AttackerLastWeapon[iAIdx]      = self.pev.classname;
-                            CS16BASE::g_AttackerLastWasHeadshot[iAIdx] = ( tr.iHitgroup == HITGROUP_HEAD );
-                        }
-                        // Per-monster dictionary: fallback for friendly NPCs where the engine
-                        // does not propagate pAttacker through the death chain (e.g. scientists).
-                        if( pVictim is null && iAIdx >= 1 && iAIdx <= 32 )
-                        {
-                            string sMKey = "" + pHit.entindex();
-                            CS16BASE::g_MonsterLastHitter.set( sMKey, iAIdx );
-                            CS16BASE::g_MonsterLastWeapon.set( sMKey, self.pev.classname );
-                            CS16BASE::g_MonsterLastHeadshot.set( sMKey, ( tr.iHitgroup == HITGROUP_HEAD ) );
-                        }
 
                         // Zero out hitgroup so the engine does not double-apply its own
                         // hitgroup multipliers on top of ours inside TraceAttack.
