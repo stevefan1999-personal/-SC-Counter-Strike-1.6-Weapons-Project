@@ -9,7 +9,10 @@
 // Works alongside Counter-Life's BuyMenu — writes directly to
 // BuyMenu::BuyPoints and reuses ShowPointsSprite() for HUD display.
 //
-// Usage: plugin_load DamageMoneyScore
+// Usage: not a standalone plugin. cs16/cs16_register.as includes this file and
+// calls DMS_PluginInit()/DMS_MapInit(), because script globals are per plugin
+// module: a separate plugin would get its own copy of BuyMenu::BuyPoints (and
+// a second "buy" command) instead of sharing the buy menu's wallet.
 // Config: plugins/store/DamageMoneyScore.cfg
 // Data:   plugins/store/playerdata/<sanitized_steam_id>.txt
 //=============================================================================
@@ -740,29 +743,30 @@ void DMS_SyncAllOldScore()
 }
 
 //=============================================================================
-// Plugin Entry Points
+// Entry Points (called from cs16/cs16_register.as)
 //=============================================================================
 
 //-----------------------------------------------------------------------------
-// PluginInit — called once when the plugin is loaded
-// Sets up script info and loads configuration.
+// DMS_PluginInit — called once from the CS16 plugin's PluginInit
+// Plugin hooks outlive map changes, so registering them per map would
+// stack duplicate callbacks.
 //-----------------------------------------------------------------------------
-void PluginInit()
+void DMS_PluginInit()
 {
-	g_Module.ScriptInfo.SetAuthor( "DamageMoneyScore Plugin" );
-	g_Module.ScriptInfo.SetContactInfo( "" );
-
-	// Load configuration from file
-	DamageMoneyScore::LoadConfig();
+	g_Hooks.RegisterHook( Hooks::Monster::MonsterTakeDamage, @DMS_MonsterTakeDamage );
+	g_Hooks.RegisterHook( Hooks::Monster::MonsterKilled, @DMS_MonsterKilled );
+	g_Hooks.RegisterHook( Hooks::Player::ClientPutInServer, @DMS_ClientPutInServer );
+	g_Hooks.RegisterHook( Hooks::Player::ClientDisconnect, @DMS_ClientDisconnect );
+	g_Hooks.RegisterHook( Hooks::Player::PlayerSpawn, @DMS_PlayerSpawn );
 }
 
 //-----------------------------------------------------------------------------
-// MapInit — called at the start of each map
-// Clears the damage ledger, registers all hooks, and starts periodic tasks.
+// DMS_MapInit — called from the CS16 plugin's MapInit at the start of each map
+// Clears the damage ledger, reloads the config, and starts periodic tasks.
 // Player data dictionaries are NOT cleared (they persist across maps via
 // plugin state; money survives map changes through in-memory + file storage).
 //-----------------------------------------------------------------------------
-void MapInit()
+void DMS_MapInit()
 {
 	// Clear the damage ledger — no monster tracking carries across maps
 	DamageMoneyScore::g_DamageLedger.deleteAll();
@@ -781,13 +785,6 @@ void MapInit()
 		g_Scheduler.RemoveTimer( DamageMoneyScore::g_pOldScoreSyncTimer );
 		@DamageMoneyScore::g_pOldScoreSyncTimer = null;
 	}
-
-	// Register all hooks
-	g_Hooks.RegisterHook( Hooks::Monster::MonsterTakeDamage, @DMS_MonsterTakeDamage );
-	g_Hooks.RegisterHook( Hooks::Monster::MonsterKilled, @DMS_MonsterKilled );
-	g_Hooks.RegisterHook( Hooks::Player::ClientPutInServer, @DMS_ClientPutInServer );
-	g_Hooks.RegisterHook( Hooks::Player::ClientDisconnect, @DMS_ClientDisconnect );
-	g_Hooks.RegisterHook( Hooks::Player::PlayerSpawn, @DMS_PlayerSpawn );
 
 	// Start periodic auto-save timer
 	@DamageMoneyScore::g_pAutoSaveTimer = g_Scheduler.SetInterval(

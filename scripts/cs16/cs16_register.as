@@ -1,6 +1,7 @@
 #include "weapons"
 #include "BuyMenu"
 #include "killfeed"
+#include "../DamageMoneyScore"
 
 void PluginInit()
 {
@@ -47,6 +48,8 @@ void PluginInit()
     //Register Buy menu stuff
     BuyMenu::RegisterBuyMenuCCVars();
     BuyMenu::RegisterHooks();
+    // Damage-based money writes into the BuyMenu wallet, so it must live in this module.
+    DMS_PluginInit();
 
     g_Hooks.RegisterHook( Hooks::Player::PlayerSpawn,    @CS16_PlayerSpawn );
     g_Hooks.RegisterHook( Hooks::Player::PlayerKilled,   @CS16KILLFEED::OnPlayerKilled );
@@ -159,6 +162,7 @@ void MapInit()
 
     //Initializes per-map state for the Buy Menu (clears points, precaches sprites)
     BuyMenu::MoneyInit();
+    DMS_MapInit();
 
     // Precache CS1.6 death notice sprite sheets (640hud1/2/16.spr)
     CS16KILLFEED::PrecacheSprites();
