@@ -11,7 +11,7 @@ build 10269, Linux) and against stock Counter-Strike 1.6 at 1600×900.
 | Ammo icons (`ammo`)                                        | CS rects in `640hud7.spr` (already identical)                                                                 | the same rects, now in the icon folder; 27 of 27 crops identical                                            |
 | Native crosshair                                           | a red cross of 24 pixels (the whole `crosshairs.spr` frame) for 22 weapons; none for the C4 and the 4 snipers | the same cross for the 23 weapons that have a crosshair in CS 1.6 (now also the C4); none for the 4 snipers |
 | Dropped weapons                                            | `pev.scale` 1.4, or a per-weapon value from 1.0 to 1.6                                                        | 1.0, as in CS 1.6                                                                                           |
-| Ammo pickups without their own scale (M249, Glock 18, USP) | 1.5                                                                                                           | 1.0, as the other 15 magazines that use 1                                                                   |
+| Ammo pickups without their own scale (M249, Glock 18, USP) | 1.5                                                                                                           | 1.0, as the 13 magazines that set 1                                                                         |
 
 Evidence: `tests/weapon-lists.test.ts` (automatic), `tools/audit.ts` (81 of 81 crops with mean |Δ| 0 against CS 1.6),
 and the screenshots in [`weapon-icons/`](weapon-icons/).
@@ -138,10 +138,12 @@ CS 1.6 does not scale weapon world models (`ReGameDLL_CS/regamedll/dlls/wpn_shar
 - `WeaponBase::CommonSpawn` sets `pev.scale = 1.0` (was 1.4).
 - The weapon `Spawn` overrides are removed: Desert Eagle 1.6, AK-47 1.2, P90 1.2, AUG 1.3, M4A1 1.3, SG552 1.3, G3SG1
   1.3, XM1014 1.15, Scout 1.15, MP5 1.1, C4 1, HE grenade 1, FAMAS 1, Galil 1, MAC-10 1, and two lines in comments (TMP,
-  AWP). The other ten weapons used the base 1.4.
-- `AmmoBase::CommonSpawn` no longer sets 1.5. Only the M249, Glock 18 and USP magazines used it; 15 magazines set 1.
-  `models/cs16/ammo/mags.mdl` is not a CS 1.6 model (CS has no ammo pickups), so the other per-magazine values (0.7 to
-  1.2) stay.
+  AWP). The other twelve weapons, TMP and AWP included, used the base 1.4.
+- `AmmoBase::CommonSpawn` no longer sets 1.5. Only the M249, Glock 18 and USP magazines used it; 13 magazines set 1 and
+  8 set 0.7, 1.1 or 1.2. At scale 1 the Glock 18 and USP magazines are 4.6 and 5.4 units long (vertex bounds of their
+  `mags.mdl` submodels), next to 5.3 to 6.5 for the P228, Five-SeveN and Desert Eagle magazines that already used 1; at
+  1.5 they were 6.9 and 8.1. `models/cs16/ammo/mags.mdl` is not a CS 1.6 model (CS has no ammo pickups), so the other
+  per-magazine values (0.7 to 1.2) stay.
 
 All `w_` models except `w_knife.mdl` are byte-identical to CS 1.6 ([`asset-audit.md`](asset-audit.md), (a)). The port's
 `w_knife.mdl` uses the `p_knife` mesh. At scale 1 it is about 19.3 units long; the CS 1.6 `w_knife.mdl` is 20.3 units
