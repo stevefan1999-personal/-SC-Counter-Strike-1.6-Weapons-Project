@@ -98,7 +98,7 @@ export type SpriteSource = {
 };
 
 // Writes the fields in dsprite_t / dspriteframe_t order, so encodeSpr(parseSpr(bytes)) gives the same bytes back.
-// Frames are always written single: the HUD draw path draws no frame of a group (R_GetSpriteFrame, hw.so 0x120390).
+// Frames are always single: a HUD draw shows no frame of a group (R_GetSpriteFrame, Sven hw.so 0x120390).
 export function encodeSpr({ header, palette, frames }: SpriteSource): Uint8Array {
   const code = (names: string[], name: string) => {
     if (!names.includes(name)) throw new Error(`cannot encode sprite value "${name}"`);

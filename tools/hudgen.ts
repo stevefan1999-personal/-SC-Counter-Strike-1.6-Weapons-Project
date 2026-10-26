@@ -70,10 +70,10 @@ export class Sheet {
   }
 }
 
-// The engine resamples a texture to powers of two unless the player sets gl_npot 1 (default 0, hw.so 0x128210), which
+// Sven resamples a texture to powers of two unless the player sets gl_npot 1 (default 0, Sven hw.so 0x128210), which
 // blurs 1:1 HUD pixels. So every frame is a power-of-two canvas with the element at its top-left and black (adds
 // nothing) around it.
-export const powerOfTwo = (size: number) => 2 ** Math.ceil(Math.log2(size));
+const powerOfTwo = (size: number) => 2 ** Math.ceil(Math.log2(size));
 
 export class Canvas {
   readonly pixels: Uint8Array;
@@ -84,7 +84,7 @@ export class Canvas {
 
   // Draws a rect of the sheet the way CS 1.6 shows it. Valve's engine insets the texture coordinates of a sprite rect
   // by half a texel (AdjustSubRect, Half-Life hw.so 0x14a820) and filters bilinearly, so pixel k of a w-wide rect shows
-  // texel k * (w - 1) / w. Sven draws a rect 1:1 (hw.so 0x127AA0), so the frames carry CS's resampled pixels.
+  // texel k * (w - 1) / w. Sven draws a rect 1:1 (Sven hw.so 0x127AA0), so the frames carry CS's resampled pixels.
   // Every CS HUD layer is additive (SPR_DrawAdditive, FillRGBA); with index = brightness, adding indices and clamping
   // at white is that blend.
   add(source: SpriteFrame, rect: Rect, x: number, y: number): this {
@@ -147,7 +147,7 @@ export function hudSprites(sheet: Sheet): HudSprite[] {
   };
   const height = (...rects: Rect[]) => Math.max(...rects.map((rect) => rect.height));
 
-  // CS: cross box at crossW/2, digits from crossW + dw/2 (health.cpp), so the digits start dw/2 + crossW/2 after the cross.
+  // CS: cross box at crossW/2, digits from crossW + dw/2 (health.cpp): the digits start crossW/2 + dw/2 after the cross.
   const cross = sheet.rect("cross");
   const healthDigitsX = cross.width / 2 + cell.width / 2;
 
@@ -255,7 +255,7 @@ export function renderFrames({ frames, content, draw }: HudSprite): SpriteFrame[
   return Array.from({ length: frames }, (_, frame) => {
     const canvas = new Canvas(powerOfTwo(content.width), powerOfTwo(content.height));
     draw(canvas, frame);
-    // Only world sprites read the origin; HUD draws put the frame's top-left at the element (hw.so 0x127B70).
+    // Only world sprites read the origin; HUD draws put the frame's top-left at the element (Sven hw.so 0x127B70).
     return { origin: [0, 0], width: canvas.width, height: canvas.height, interval: 0, pixels: canvas.pixels };
   });
 }
