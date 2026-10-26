@@ -158,9 +158,8 @@ namespace CS16HUD
     ScreenSize@ parsed = ParseScreenSize( value );
     if( !value.IsEmpty() && parsed is null )
     {
-      Tell( player, "\"" + value + "\" is not a screen size. Use .hudres <width>x<height> with a width of "
-        + MIN_SCREEN_WIDTH + "-" + MAX_SCREEN_SIDE + " and a height of " + MIN_SCREEN_HEIGHT + "-" + MAX_SCREEN_SIDE
-        + ", for example .hudres " + DEFAULT_SCREEN + "." );
+      Tell( player, "\"" + value + "\" is not a screen size. Use .hudres <W>x<H> with W " + MIN_SCREEN_WIDTH + "-"
+        + MAX_SCREEN_SIDE + " and H " + MIN_SCREEN_HEIGHT + "-" + MAX_SCREEN_SIDE + "." );
     }
     else
     {

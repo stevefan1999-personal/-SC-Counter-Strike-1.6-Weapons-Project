@@ -583,7 +583,9 @@ void MoneyInit()
     BuyPoints.deleteAll(); //Comment out to keep the points in map change
     OldScore.deleteAll();  //Comment out to keep the points in map change
 
-    g_Game.PrecacheModel( CS16BASE::MAIN_SPRITE_DIR + BuyMenu::MoneySignSpr );
+    // Generic, not model: when the native HUD also loads a sheet that is precached as a model, every HUD sprite drawn
+    // from that sheet becomes a solid block after a changelevel (docs/hud-architecture.md, Precache).
+    g_Game.PrecacheGeneric( CS16BASE::MAIN_SPRITE_DIR + BuyMenu::MoneySignSpr );
 }
 
 final class BuyableItem

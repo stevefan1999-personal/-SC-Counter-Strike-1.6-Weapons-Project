@@ -103,9 +103,13 @@ Known client problems:
 ```sh
 just e2e-killfeed 27017 weapon_m4a1 head   # shoot a scientist, save the kill feed
 just e2e-hud 27017 run1                    # 15 HUD states with crops of each HUD region
+just e2e-hudproof 27017                    # prove the CS HUD foundation (needs a sandbox, see below)
 ```
 
 The scenarios start the server and the client themselves and print a JSON list of the screenshots.
+
+`e2e-hudproof` adds a proof element to the sandbox copy of the plugin, so set `SVEN_SERVER_DIR` to a sandbox. It fails
+on any failed check and writes `report.json` and evidence crops to `.e2e/proof`. See `docs/hud-architecture.md`.
 
 ## Compare with Counter-Strike 1.6
 
