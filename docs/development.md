@@ -50,6 +50,10 @@ The recipes find the installs with these environment variables. The defaults are
    just check 27015
    ```
 
+Sven Co-op prints its own death lines in the top-left notify area. CS 1.6 does not. To remove them, also install metamod
+and the Counter-Life metamod plugin (`just metamod-install`, then `just server-metamod`), see
+[Metamod plugin](metamod.md).
+
 ## Run a server
 
 ```sh
