@@ -172,6 +172,17 @@ namespace CS16KILLFEED {
         g_Game.PrecacheGeneric("sprites/cs16/640hud16.spr");
     }
 
+// ── Per-map reset (call from MapInit) ──────────────────────────────────────
+// g_Engine.time restarts with every map, so a notice from the last map would stay on screen until
+// the new clock reached its old expiry time. Monster hit records are keyed by entindex, which the
+// new map gives to different monsters.
+    void ResetForNewMap() {
+        g_Notices.resize(0);
+        CS16BASE::g_MonsterLastHitter.deleteAll();
+        CS16BASE::g_MonsterLastWeapon.deleteAll();
+        CS16BASE::g_MonsterLastHeadshot.deleteAll();
+    }
+
 // ── PushNotice (mirrors MsgFunc_DeathMsg logic) ────────────────────────────
     void PushNotice(const string& in szKiller, const string& in szVictim,
                     const string& in szWeaponCls, bool bHeadshot, bool bSuicide) {

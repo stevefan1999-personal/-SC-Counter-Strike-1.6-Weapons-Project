@@ -166,6 +166,7 @@ void MapInit()
 
     // Precache CS1.6 death notice sprite sheets (640hud1/2/16.spr)
     CS16KILLFEED::PrecacheSprites();
+    CS16KILLFEED::ResetForNewMap();
 }
 
 // Top-level wrapper so g_Scheduler can resolve "CS16KillfeedDraw" by name
