@@ -298,7 +298,13 @@ fixture-start display=fixture_display resolution='1600x900' port='27049' clientp
 fixture-stop display=fixture_display root=fixture_root:
   #!/usr/bin/env bash
   state='{{state_root}}/fixture-{{trim_start_match(display, ":")}}'
-  test -f "$state/game.pgid" && kill -- "-$(cat "$state/game.pgid")" 2>/dev/null && sleep 3
+  if test -f "$state/game.pgid"; then
+    pgid=$(cat "$state/game.pgid")
+    kill -- "-$pgid" 2>/dev/null
+    # The engine writes its config files while it exits: wait for the exit before the leak check, then force it.
+    for _ in $(seq 1 50); do kill -0 -- "-$pgid" 2>/dev/null || break; sleep 0.2; done
+    kill -9 -- "-$pgid" 2>/dev/null || true
+  fi
   test -f "$state/xvfb.pid" && kill "$(cat "$state/xvfb.pid")" 2>/dev/null
   rm -f "$state/game.pgid" "$state/xvfb.pid"
   test -f "$state/started-at" || exit 0

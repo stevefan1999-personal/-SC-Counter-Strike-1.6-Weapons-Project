@@ -51,10 +51,11 @@ real copies:
   size of `cstrike/maps/de_dust2.bsp`, so the mesh fits the CS 1.6 map. ZBot does not have to generate a mesh.
 - `cstrike/fixture.cfg`: from `tests/fixture`.
 
-`just fixture-stop` checks for leaks. It lists every farm symlink whose target changed after the start of the run. Each
-such file is a write that went into the Steam install. Other programs can also write into the Steam install (another
-session ran CS from it during this work), but they cannot change files that the farm holds as real copies, so the check
-reports only writes through farm symlinks.
+`just fixture-stop` stops the game and waits until it has exited, because the engine writes its config files while it
+exits (after 10 s it kills the game). Then it checks for leaks. It lists every farm symlink whose target changed after
+the start of the run. Each such file is a write that went into the Steam install. Other programs can also write into the
+Steam install (another session ran CS from it during this work), but they cannot change files that the farm holds as
+real copies, so the check reports only writes through farm symlinks.
 
 ### 2.3 Launch
 
