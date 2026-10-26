@@ -101,6 +101,8 @@ moved only the AWP from 10 to 9.
 - `tests/e2e/muzzleflash.ts` records the region `1000x660+500+240` at 60 frames per second while it fires three shots,
   and joins identical recorded frames into game frames. A shot is a game frame that gets brighter and has a white-hot
   core (gain of 200 grey levels or more). For each shot it keeps the frame before, the flash frame and the frame after.
+  A later game frame shows the flash again when it has a white-hot core again and a lit area of at least half the first
+  one (`flashesAgain`). The second flash is at the muzzle of the recoiled gun, 100 to 250 pixels away.
 - Size: the gun, and in CS 1.6 also the light on the gun, are below and right of the muzzle. So the sizes use only the
   part of the flash where the sky is behind it (`measureFlash`). Lit means 32 grey levels above the frame before the
   shot.
@@ -129,6 +131,28 @@ moved only the AWP from 10 to 9.
   width decides: 14 units for 14.4. The P90 at scale 6 measured 239 (+63%); at 3 it would measure about 119 (−19%), so
   it uses 4.
 
+### Re-check in the review
+
+A second run used new scenes: Sven on `testcenter` again, CS 1.6 on `cs_backalley` with the moon near the edge of the
+region `900x660+700+240`. It adds the silenced M4A1.
+
+| Weapon (CS width → Sven width) | Measure | CS 1.6 | Sven | Sven / CS |
+| ------------------------------ | ------- | ------ | ---- | --------- |
+| USP (6.4 → 6)                  | radius  | 67     | 71   | +6%       |
+| MP5 (6.4 → 6)                  | radius  | 55     | 58   | +5%       |
+| Desert Eagle (12.8 → 12)       | radius  | 168    | 154  | −8%       |
+| M3 (12.8 → 12)                 | radius  | 117    | 118  | +1%       |
+| AWP (19.2 → 18)                | radius  | 140    | 131  | −6%       |
+| M4A1 silenced (6.4 → 6)        | radius  | 40     | 41   | +3%       |
+| M4A1 plain (14.4 → 14)         | reach   | 205    | 184  | −10%      |
+| P90 (7.2 → 8)                  | reach   | 165    | 159  | −4%       |
+
+- The Sven values of the two runs agree within 4%. The CS 1.6 values change by up to 9% for the fireball and 18% for the
+  X between the runs, because CS 1.6 picks a random frame and angle for each shot.
+- With the CS 1.6 shots of both runs together, the fireball radii differ from CS 1.6 by −5% (Desert Eagle, AWP) to +4%
+  (USP, MP5). The widths in the table at the top stay as they are.
+- The silenced M4A1 flash is at the tip of the silencer in both games.
+
 ## Duration
 
 Both engines remove the flash 0.01 s after it starts, so a flash shows in the frame in which its event fires. It shows
@@ -140,9 +164,16 @@ the second frame, which shows that it is a new event and not a longer flash.
 | Game, 20 frames per second | Shots | Flash in 1 frame | Flash in 2 frames |
 | -------------------------- | ----- | ---------------- | ----------------- |
 | CS 1.6                     | 29    | 17               | 12 (41%)          |
-| Sven before                | 24    | 11               | 13 (54%)          |
+| Sven before                | 24    | 10               | 14 (58%)          |
 | Sven after                 | 23    | 13               | 10 (43%)          |
-| Sven after, final AWP run  | 12    | 8                | 4 (33%)           |
+| Sven after, final AWP run  | 12    | 7                | 5 (42%)           |
+| CS 1.6, review             | 24    | 16               | 8 (33%)           |
+| Sven after, review         | 39    | 19               | 20 (51%)          |
+
+The first count found the second frame only where it lit the area of the first flash. The review counted the saved
+frames again with `flashesAgain`, which added two second frames to the first runs. Together, CS 1.6 shows two flash
+frames on 20 of 53 shots (38%) and Sven on 35 of 74 shots (47%). With these numbers of shots, the difference is in the
+range of random variation.
 
 ![Two frames with a flash in CS 1.6](muzzle-flash/two-frames-cs.png)
 
@@ -156,12 +187,21 @@ at 20.
 - Sven always draws frame 0 and turns the flash by at most 16°. CS 1.6 picks one of three frames and any angle. The
   fireball looks the same either way. The rifle X always stands as an X in Sven; in CS 1.6 it is sometimes a +.
 - CS 1.6 lights the gun on each shot. Its weapon events call `EV_MuzzleFlash` (Valve client.so 0x62b60), which sets
-  `EF_MUZZLEFLASH` on the view model. `R_StudioClientEvents` then makes a light at the gun (radius 300, 0.05 s; the same
-  code is in Sven's hw.so 0xa70a0). Sven's scripts set the flag on the player and the weapon entity only, so Sven's view
-  model stays dark. A server plugin cannot set it on the client's view model.
+  `EF_MUZZLEFLASH` on the view model. `R_StudioClientEvents` then adds an entity light at attachment 0 for 0.05 s: gold
+  (255, 192, 64), radius 16, which decreases by 320 per second. An entity light lights models only, not the world. The
+  300-unit world light in the same function is only for the `g_bIsTerrorStrike` game. The same code is in Sven's hw.so
+  0xa70a0. Sven's scripts set the flag on the player and the weapon entity only, so Sven's view model stays dark. A
+  server plugin cannot set it on the client's view model. In the review, one shot lit Sven's view model gold: the first
+  MAC-10 shot after a weapon change. The cause is not known.
 - Sven draws the view-model flash with the depth test off, so it also shows in front of a close wall. CS 1.6 hides the
   part of the flash that is inside a wall.
-- Third-person flashes (`p_` models) were not checked.
+- Third-person flashes come from the shoot sequences of the player model. The `p_` and `w_` models have no muzzle events
+  in either game. The CS 1.6 player models fire events 5001 and 5011 with type 10 to 50 (`muzzleflash1.spr`, for example
+  type 40 for `shoot_carbine` and `shoot_ak47`). Sven's `player.mdl` fires its own effects for the animation groups that
+  the port uses: 5001 type 15 for `onehanded`, 5001 and 5031 type 15 for `uzis`, 5005 `muzzle_spaw.txt` for `m16` and
+  `saw`, 5005 `muzzle_MP5.txt` for `mp5`, 5005 `muzzle_SG.txt` for `shotgun`, 5011 and 5021 type 15 for `sniper`. Each
+  player uses the player model on the client, so this change does not touch these flashes. They were not compared in
+  game.
 
 ## Reproduce
 
