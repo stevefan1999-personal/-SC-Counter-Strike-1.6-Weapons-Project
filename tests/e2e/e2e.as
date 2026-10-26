@@ -8,6 +8,8 @@
 //   as_command e2e.health <value>                 set player 1's health
 //   as_command e2e.armor <value>                  set player 1's armour
 //   as_command e2e.hurt <amount>                  damage player 1 from the world (pain, armour absorption)
+//   as_command e2e.respawn                        respawn player 1, also when dead
+//   as_command e2e.notify <text...>               print a line in the top-left notify area of every player
 
 const float DEFAULT_SPAWN_DISTANCE = 160.0f;
 const float LETHAL_DAMAGE = 10000.0f;
@@ -28,6 +30,8 @@ void PluginInit()
   g_Commands.insertLast( CConCommand( "health", "<value> - set player 1 health", @SetHealth ) );
   g_Commands.insertLast( CConCommand( "armor", "<value> - set player 1 armour", @SetArmor ) );
   g_Commands.insertLast( CConCommand( "hurt", "<amount> - damage player 1 from the world", @HurtPlayer ) );
+  g_Commands.insertLast( CConCommand( "respawn", "- respawn player 1, also when dead", @Respawn ) );
+  g_Commands.insertLast( CConCommand( "notify", "<text...> - print a line in the notify area of every player", @NotifyAll ) );
 }
 
 CBasePlayer@ FirstPlayer()
@@ -156,14 +160,21 @@ void GiveItem( const CCommand@ args )
   g_EngineFuncs.ServerPrint( "[e2e] gave " + args.Arg( 1 ) + "\n" );
 }
 
+// The words after the command name, joined by spaces.
+string JoinedArguments( const CCommand@ args )
+{
+  string text = args.Arg( 1 );
+  for( int index = 2; index < args.ArgC(); ++index )
+    text += " " + args.Arg( index );
+  return text;
+}
+
 void StuffText( const CCommand@ args )
 {
   CBasePlayer@ player = FirstPlayer();
   if( player is null || args.ArgC() < 2 )
     return;
-  string command = args.Arg( 1 );
-  for( int index = 2; index < args.ArgC(); ++index )
-    command += " " + args.Arg( index );
+  const string command = JoinedArguments( args );
   NetworkMessage message( MSG_ONE, NetworkMessages::SVC_STUFFTEXT, player.edict() );
   message.WriteString( command + "\n" );
   message.End();
@@ -196,4 +207,23 @@ void HurtPlayer( const CCommand@ args )
   CBaseEntity@ world = g_EntityFuncs.Instance( 0 );
   player.TakeDamage( world.pev, world.pev, atof( args.Arg( 1 ) ), DMG_GENERIC );
   g_EngineFuncs.ServerPrint( "[e2e] hurt to " + player.pev.health + "\n" );
+}
+
+void Respawn( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null )
+    return;
+  g_PlayerFuncs.RespawnPlayer( player, true, true );
+  g_EngineFuncs.ServerPrint( "[e2e] respawned, health " + player.pev.health + "\n" );
+}
+
+// The game sends its own notices, such as vote results, to the same area as its obituaries.
+void NotifyAll( const CCommand@ args )
+{
+  if( args.ArgC() < 2 )
+    return;
+  const string text = JoinedArguments( args );
+  g_PlayerFuncs.ClientPrintAll( HUD_PRINTNOTIFY, text + "\n" );
+  g_EngineFuncs.ServerPrint( "[e2e] notify: " + text + "\n" );
 }

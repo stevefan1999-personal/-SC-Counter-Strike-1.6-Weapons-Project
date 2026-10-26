@@ -235,6 +235,11 @@ sandbox dir:
 e2e-killfeed port='27017' weapon='weapon_csdeagle' aim='head':
   deno run -A '{{justfile_directory()}}/tests/e2e/killfeed.ts' {{port}} {{weapon}} {{aim}}
 
+# Show that Sven's obituaries stay out of the notify area with the metamod plugin: just e2e-obituary 27017
+[group('e2e')]
+e2e-obituary port='27017':
+  deno run -A '{{justfile_directory()}}/tests/e2e/obituary.ts' {{port}}
+
 # Walk through every CS HUD state on testcenter and save shots plus HUD crops: just e2e-hud 27017 hud
 [group('e2e')]
 e2e-hud port='27017' label='hud':
@@ -359,3 +364,63 @@ fixture-killfeed display=fixture_display resolution='1600x900' port='27049' clie
 [no-cd]
 fixture-metrics shot before:
   @deno run -A '{{justfile_directory()}}/tests/fixture/feed-metrics.ts' '{{shot}}' '{{before}}'
+
+# Counter-Life metamod plugin (metamod/counterlife, docs/metamod.md). The metamod-svencoop release is the one that
+# metamod-p-rs pins: plugins built with its headers (interface 5:16) need this release or a newer one.
+metamod_release := 'v20261009a'
+metamod_archive := 'metamod-fallguys-ubuntu-i386.zip'
+metamod_sha256 := '552ae6d1faf184498f29d0c686515f56618eb55229970d7a687d8d5c74ed2d78'
+metamod_url := 'https://github.com/metamod-svencoop/metamod-svencoop/releases/download/' + metamod_release + '/' + metamod_archive
+# The library that "-dll" loads instead of the game DLL, and the plugin; both relative to the game directory (svencoop).
+metamod_dll := 'addons/metamod/dlls/metamod.so'
+metamod_plugin := 'addons/counterlife/counterlife.so'
+
+# Build the Counter-Life metamod plugin for i686 Linux: just metamod-build release
+[group('metamod')]
+[working-directory('metamod/counterlife')]
+metamod-build profile='release':
+  cargo build --profile {{profile}}
+
+# Run the plugin's unit and fake-host tests (cargo nextest): just metamod-test
+[group('metamod')]
+[working-directory('metamod/counterlife')]
+metamod-test *args:
+  cargo nextest run {{args}}
+
+# Check the plugin's formatting and run clippy with warnings as errors: just metamod-lint
+[group('metamod')]
+[working-directory('metamod/counterlife')]
+metamod-lint:
+  cargo fmt --check
+  cargo clippy --all-targets -- -D warnings
+
+# Install metamod-svencoop (pinned, SHA-256 checked) and the plugin into an install's svencoop/addons: just metamod-install
+[group('metamod')]
+metamod-install target=server_dir profile='release': (metamod-build profile)
+  #!/usr/bin/env bash
+  set -euo pipefail
+  # plugins.ini and -dll take paths relative to the game directory.
+  game='{{target}}/svencoop'
+  download='{{state_root}}/metamod/{{metamod_release}}'
+  archive="$download/{{metamod_archive}}"
+  mkdir -p "$download" "$game/{{parent_directory(metamod_dll)}}" "$game/{{parent_directory(metamod_plugin)}}"
+  if ! echo '{{metamod_sha256}}  '"$archive" | sha256sum --check --status 2>/dev/null; then
+    curl -fsSL -o "$archive" '{{metamod_url}}'
+    echo '{{metamod_sha256}}  '"$archive" | sha256sum --check
+  fi
+  rm -rf "$download/unpacked" && unzip -q "$archive" -d "$download/unpacked"
+  # --remove-destination replaces a sandbox symlink instead of writing through it into the shared install.
+  cp --remove-destination "$download"/unpacked/build/addons/metamod/dlls/* "$game/{{parent_directory(metamod_dll)}}/"
+  cp --remove-destination \
+    '{{justfile_directory()}}/metamod/counterlife/target/i686-unknown-linux-gnu/{{ if profile == "dev" { "debug" } else { profile } }}/libcounterlife.so' \
+    "$game/{{metamod_plugin}}"
+  # Keep the plugins that plugins.ini already loads; the plugins of the release stay off.
+  ini="$game/addons/metamod/plugins.ini"
+  if test -L "$ini"; then cp --remove-destination "$(readlink -f "$ini")" "$ini"; fi
+  touch "$ini" && sed -i -e '$a\' "$ini"
+  rg -qxF 'linux {{metamod_plugin}}' "$ini" || echo 'linux {{metamod_plugin}}' >> "$ini"
+  echo "metamod {{metamod_release}} and the Counter-Life plugin are in $game/addons"
+
+# Start a dedicated server with metamod (install it first with metamod-install): just server-metamod 27015 testcenter
+[group('metamod')]
+server-metamod port='27015' map='hl_c01_a1' *args: (server port map '-dll' metamod_dll args)
