@@ -302,10 +302,10 @@ plugins (the hook namespaces are `Game`, `Monster`, `PickupObject`, `Player` and
 
 Measured on the test server and client (the proof logs the rates every 5 s):
 
-- Tick: 18.0–19.1 per second in three runs, not 20. The scheduler runs only in server frames, so each period is a little
+- Tick: 17.6–19.1 per second in five runs, not 20. The scheduler runs only in server frames, so each period is a little
   longer than 0.05 s. `OnTick` gets the real time step as `dt`.
-- `PlayerPostThink`: 24–87 per second, the frame rate of the test client. A fast client gives more calls. An every-frame
-  element must send only when its picture changes.
+- `PlayerPostThink`: 5–87 per second, the frame rate of the test client (the low values when other test clients loaded
+  the machine). A fast client gives more calls. An every-frame element must send only when its picture changes.
 
 ### When elements draw again
 
@@ -366,7 +366,7 @@ Evidence (the proof element on testcenter before the merge of `fc34436`, a shot 
 | the same, and the proof also precaches the sheet as a model                                | solid blocks                                                     |
 | `cs16/640hud7.spr`: generic precache, weapon txts. A copy: model precache, custom elements | all sprites correct                                              |
 | a copy only for the proof: generic precache, custom elements                               | proof sprites correct, money sign on `640hud7.spr` a solid block |
-| this branch: `cs16/640hud7.spr` with generic precache, weapon txts, custom elements        | all sprites correct (the proof)                                  |
+| `cs16/640hud7.spr`: generic precache (the `BuyMenu.as` fix), weapon txts, custom elements  | all sprites correct (the proof)                                  |
 
 The cause is not proved in the client binary. A model precache seems to give the sheet the lifetime of a level model,
 while the HUD sprite table keeps its handle across levels (`sven-client-hud.md` 1.12). The solid block is what the
@@ -420,8 +420,9 @@ The scenario writes `report.json` and the crops to `.e2e/proof`. It exits with a
 
 ### Results
 
-Last run: map testcenter, client at 1600×900 on Xvfb (Mesa llvmpipe), `hud_bordersize` 16. All 55 checks passed. In each
-crop below, the top part is with `cs16_hud 1` and the next part is with `cs16_hud 0`.
+Last run: this branch after the merge of `main`, map testcenter, client at 1600×900 on Xvfb (Mesa llvmpipe),
+`hud_bordersize` 16, machine load average 66 from other test clients. All 55 checks passed. In each crop below, the top
+part is with `cs16_hud 1` and the next part is with `cs16_hud 0`.
 
 **(a) Raw sprites at exact pixels.** With `ABSOLUTE` and `NO_BORDER`, x ≥ 0 is the left edge and a negative x puts the
 right edge −x pixels from the screen edge (`sven-client-hud.md` 1.5). Thus the cross rect starts at (100, 200) and the
@@ -467,8 +468,8 @@ the same place and view. The sprite boxes after these events are in (a).
 
 ![texts after changelevel, cs16_hud 0 and 1](hud-architecture/d-changelevel-texts.png)
 
-Before the precache fix, the same `changelevel` broke every sprite from `640hud7.spr` (row 1: before, row 2: after the
-`changelevel` with the model precache, row 3: after the `changelevel` with this branch):
+Before the merge of `fc34436` and without the precache fix, the same `changelevel` broke every sprite from `640hud7.spr`
+(row 1: before, row 2: after the `changelevel` with the model precache, row 3: after it with the generic precache):
 
 ![changelevel with and without the model precache](hud-architecture/f-changelevel-model-precache.png)
 
