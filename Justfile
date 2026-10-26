@@ -214,6 +214,11 @@ sandbox dir:
 e2e-killfeed port='27017' weapon='weapon_csdeagle' aim='head':
   deno run -A '{{justfile_directory()}}/tests/e2e/killfeed.ts' {{port}} {{weapon}} {{aim}}
 
+# Show that Sven's obituaries stay out of the notify area with the metamod plugin: just e2e-obituary 27017 weapon_csdeagle
+[group('e2e')]
+e2e-obituary port='27017' weapon='weapon_csdeagle':
+  deno run -A '{{justfile_directory()}}/tests/e2e/obituary.ts' {{port}} {{weapon}}
+
 # Walk through every CS HUD state on testcenter and save shots plus HUD crops: just e2e-hud 27017 hud
 [group('e2e')]
 e2e-hud port='27017' label='hud':

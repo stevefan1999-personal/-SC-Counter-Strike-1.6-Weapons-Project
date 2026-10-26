@@ -28,8 +28,9 @@ export class Server {
     return `${stateRoot}/server-${this.port}/server.log`;
   }
 
-  async start(map: string) {
-    await just("server", String(this.port), map);
+  // `recipe` is a Justfile recipe with the parameters of `server`, such as `server-metamod`.
+  async start(map: string, recipe = "server") {
+    await just(recipe, String(this.port), map);
   }
 
   async command(command: string) {

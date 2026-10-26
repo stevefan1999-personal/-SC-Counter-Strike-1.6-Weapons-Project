@@ -90,7 +90,9 @@ Known client problems:
 | `e2e.kill [head\|body] [n] [class]` | kill the nearest monsters with the held weapon as the inflictor          |
 | `e2e.give <class>`                  | give player 1 an item                                                    |
 | `e2e.health <n>`, `e2e.armor <n>`   | set health or armour                                                     |
-| `e2e.hurt <n>`                      | damage player 1 from the world                                           |
+| `e2e.hurt <n>`                      | damage player 1 from the world; armour absorbs most of it                |
+| `e2e.respawn`                       | respawn player 1, also when dead                                         |
+| `e2e.notify <text>`                 | print a line in the top-left notify area of every player                 |
 | `e2e.stuff <command>`               | run a console command on the client (the client can refuse some of them) |
 
 ## Scenarios
@@ -98,6 +100,7 @@ Known client problems:
 ```sh
 just e2e-killfeed 27017 weapon_m4a1 head   # shoot a scientist, save the kill feed
 just e2e-hud 27017 run1                    # 15 HUD states with crops of each HUD region
+just e2e-obituary 27017                    # metamod plugin: no Sven death lines, see docs/metamod.md
 ```
 
 The scenarios start the server and the client themselves and print a JSON list of the screenshots.
