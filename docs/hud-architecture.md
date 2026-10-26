@@ -212,7 +212,7 @@ hold time. Send the element again to show it.
 | 6–13  | 8 bytes | r1 g1 b1 a1 r2 g2 b2 a2 | as given                                        |
 | 14–16 | short   | fadein, fadeout, hold   | `int(seconds × 256)`, clamped to 0–65535        |
 | 17    | short   | fxTime                  | `int(seconds × 256)`, written only for effect 2 |
-| 18    | string  | text                    | cut to 511 bytes                                |
+| 18    | string  | text                    | cut to 267 bytes (the client line buffer, below) |
 
 The time fields are unsigned on the client, but `WriteShort` takes an `int16`. AngelScript wraps `int16(51200)` to
 −14336 (measured on the server), so the client reads the same 16 bits as 51200, which is 200 s.
@@ -220,6 +220,11 @@ The time fields are unsigned on the client, but `WriteShort` takes an `int16`. A
 A channel above 31 makes the client write past its element array (`sven-client-hud.md` 1.3). Thus `SendSprite` and
 `HideElement` refuse it, and `SendText` refuses a slot above 7. The server log then shows a line such as
 `[CS16HUD] refused sprite channel 32 (valid: 0-31) for <player>`.
+
+The client copies each text line into a 268-byte stack buffer with no length check (`client.so` 0xE9F7E), so a longer
+line overruns the stack and crashes the client. A single 300-byte line segfaults the Sven 5.26 client; 267 bytes is
+safe. The server also drops any `TE_TEXTMESSAGE` above its 512-byte message buffer. Thus `SendText` cuts the text to 267
+bytes, which fits the line buffer and always sends. An element that needs more text uses more than one slot.
 
 The senders record each client channel and text slot that they used for each player. `cs16_hud 0` hides these channels
 and sends an empty text with no hold to these slots. It does not touch the elements of maps or other plugins.
