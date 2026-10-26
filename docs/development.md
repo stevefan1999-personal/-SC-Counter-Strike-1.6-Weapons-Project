@@ -101,11 +101,13 @@ Known client problems:
 ## Scenarios
 
 ```sh
-just e2e-killfeed 27017 weapon_m4a1 head   # shoot a scientist, save the kill feed
+just e2e-killfeed 27017 weapon_m4a1 head   # shoot a scientist (head, body) or die from the world (world)
 just e2e-hud 27017 run1                    # 15 HUD states with crops of each HUD region
 ```
 
-The scenarios start the server and the client themselves and print a JSON list of the screenshots.
+The scenarios start the server and the client themselves and print a JSON list of the screenshots. The kill-feed
+scenario also saves the same view once the notice is gone (`-clear`). The server gets the client size (`CL_RESOLUTION`)
+as `cs16_hud_res`, because the CS HUD places its icons in screen pixels.
 
 ## Compare with Counter-Strike 1.6
 
@@ -127,7 +129,7 @@ way, against a frame of the same view without notices:
 
 ```sh
 just fixture-killfeed :96 2560x1440
-just fixture-metrics .e2e/shots/run1-killfeed.png .e2e/shots/run1-killfeed-before.png
+just fixture-metrics .e2e/shots/killfeed-weapon_m4a1-head.png .e2e/shots/killfeed-weapon_m4a1-head-clear.png
 ```
 
 [CS 1.6 kill-feed reference](research/cs16-killfeed-reference.md) describes the fixture and the measured layout.

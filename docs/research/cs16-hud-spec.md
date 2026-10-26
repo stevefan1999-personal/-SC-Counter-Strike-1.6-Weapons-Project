@@ -1094,7 +1094,9 @@ A Deno tool can build these files from the local CS install during `just install
    changes the channel plan (§5.5).
 2. Answered: yes. Sven interpolates R, G, B and A, then multiplies RGB by A (U9). Raw RGBA endpoints give the exact CS
    money colours (§5.4).
-3. Which font and glyph widths does Sven use for `HudMessage`? This decides the kill feed layout.
+3. Which font and glyph widths does Sven use for `HudMessage`? This decides the kill feed layout. Answered in
+   [hud.md](../hud.md) (Kill feed): Bitstream Vera Sans Bold on Linux, through the fallback of VGUI2, with a measured
+   width table.
 4. Is a client resolution or a userinfo key available for the crosshair scale?
 5. Answered by `docs/research/asset-audit.md` §3 (branch `feat/asset-audit`, not checked again): the engine ignores a
    rect outside the sprite and draws the whole frame; commit `584b15d` changed the rect to `0 0 256 256`. With bit 256

@@ -211,7 +211,7 @@ sandbox dir:
   done
   echo 'sandbox ready; use it with: export SVEN_SERVER_DIR={{dir}}'
 
-# Shoot a pinned scientist with a CS weapon and capture the kill feed: just e2e-killfeed 27017 weapon_csdeagle head
+# Kill a pinned scientist with a CS weapon (head|body), or die from the world (world), and capture the kill feed: just e2e-killfeed 27017 weapon_m4a1 head
 [group('e2e')]
 e2e-killfeed port='27017' weapon='weapon_csdeagle' aim='head':
   deno run -A '{{justfile_directory()}}/tests/e2e/killfeed.ts' {{port}} {{weapon}} {{aim}}

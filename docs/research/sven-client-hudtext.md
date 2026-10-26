@@ -211,6 +211,11 @@ The face:
 - "Ariel" is a typing error for "Arial" and is not a real family. The operating system chooses a substitute. On Linux,
   `hw.so` uses fontconfig and FreeType (it imports `FcFontMatch`, `FcConfigSubstitute`, `FT_New_Face`). On this machine
   `fc-match Ariel` gives Noto Sans. On Windows the GDI font mapper chooses. Thus glyph widths differ between players.
+- Correction (kill feed, [hud.md](../hud.md)): `hw.so` passes the weight 600 to fontconfig as it is and then selects the
+  Apple Roman cmap of the face (`FT_Select_Charmap(face, 'armn')`, 0x1CA27B). Noto Sans has no Apple Roman cmap, so the
+  client logs `Unable to create font 'Ariel': Can't select charmap` and uses the fallback "Tahoma", which `hw.so` asks
+  for as "Bitstream Vera Sans" (`VeraBd.ttf` on this machine). A byte is an Apple Roman code, not a Latin-1 one. The
+  `hud_debug 2` line widths that the client draws agree with that face.
 - Each **byte** is one glyph (`wint_t` = byte value, 0xDA4B0). UTF-8 names show as Latin-1 characters, one for each
   byte. A byte that `iswprint` refuses is not drawn but still moves x by its width (`hw.so 0x1BCC8E`, 0x1BCD9E).
 - The width of a name in pixels is the sum of the advances of its bytes in the substitute face at the tall above. The
