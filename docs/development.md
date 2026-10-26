@@ -9,7 +9,8 @@ them.
 - Sven Co-op and the Sven Co-op Dedicated Server (Steam).
 - Half-Life with Counter-Strike 1.6 (Steam). The install recipe copies some CS 1.6 files from it. These files are not in
   git.
-- `just`, `deno`, `rsync`, `rg`, `fd`, `Xvfb`, `xdotool`, `xdpyinfo` and ImageMagick (`magick`, `import`).
+- `just`, `deno`, `rsync`, `rg`, `fd`, `Xvfb`, `xdotool`, `xdpyinfo`, ImageMagick (`magick`, `import`) and `ffmpeg`
+  (screen recordings of `e2e-elements`).
 - Steam must run, because the game clients ask Steam for the login.
 
 ## Paths
@@ -86,7 +87,8 @@ Known client problems:
 
 ## Test plugin
 
-`just install-e2e` adds `tests/e2e/e2e.as` to the server. Use it from the server console with `as_command`:
+`just install-e2e` adds `tests/e2e/e2e.as` to the server. Use it from the server console with `as_command`. "Player 1"
+is the first connected player:
 
 | Command                             | Effect                                                                   |
 | ----------------------------------- | ------------------------------------------------------------------------ |
@@ -97,12 +99,18 @@ Known client problems:
 | `e2e.health <n>`, `e2e.armor <n>`   | set health or armour                                                     |
 | `e2e.hurt <n>`                      | damage player 1 from the world                                           |
 | `e2e.stuff <command>`               | run a console command on the client (the client can refuse some of them) |
+| `e2e.ammo <clip> <reserve>`         | set the clip and the reserve of the held weapon; prints the weapon       |
+| `e2e.frags <n>`                     | set the score; the CS16 buy menu pays $10 for each point of score        |
+| `e2e.battery <percent>`             | set the flashlight battery                                               |
+| `e2e.suit <0\|1>`                   | take away or give back the HEV suit                                      |
+| `e2e.backdrop [<r> <g> <b>]`        | one colour under the HUD (a screen fade); without a colour, remove it    |
 
 ## Scenarios
 
 ```sh
 just e2e-killfeed 27017 weapon_m4a1 head   # shoot a scientist, save the kill feed
 just e2e-hud 27017 run1                    # 15 HUD states with crops of each HUD region
+just e2e-elements 27017 run1 /abs/crops    # status elements against CS 1.6, with checks (docs/hud.md)
 ```
 
 The scenarios start the server and the client themselves and print a JSON list of the screenshots.
