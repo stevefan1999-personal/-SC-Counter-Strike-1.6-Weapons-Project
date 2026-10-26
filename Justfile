@@ -216,6 +216,11 @@ e2e-killfeed port='27017' weapon='weapon_csdeagle' aim='head':
 e2e-hud port='27017' label='hud':
   deno run -A '{{justfile_directory()}}/tests/e2e/hud.ts' {{port}} {{label}}
 
+# Prove the CS HUD foundation in game on a sandbox (SVEN_SERVER_DIR): just e2e-hudproof 27017 .e2e/proof
+[group('e2e')]
+e2e-hudproof port='27017' evidence=(state_root / 'proof'):
+  deno run -A '{{justfile_directory()}}/tests/e2e/hudproof.ts' {{port}} '{{evidence}}'
+
 # Measure HUD-coloured glyph boxes in a screen region (JSON): just hudboxes .e2e/reference/cs16-ref-hud.png 0 820 460 80
 [group('e2e')]
 hudboxes image x y w h:
