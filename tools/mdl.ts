@@ -142,28 +142,51 @@ export function parseMdl(bytes: Uint8Array) {
     };
   });
 
-  // Frame 0 of sequence 0 is the pose a view model idles in; its submodel bounds show where geometry sits on screen.
-  // Only sequence group 0 lives in this file, so other groups fall back to the bind pose.
-  const animated = numSequences > 0 && read.int(sequenceIndex + SEQUENCE_GROUP_FIELD_OFFSET) === 0;
-  const animIndex = animated
-    ? read.int(sequenceGroupIndex + SEQUENCE_GROUP_DATA_OFFSET) + read.int(sequenceIndex + SEQUENCE_ANIM_OFFSET)
-    : 0;
-  const frameZero = (bone: number, boneAt: number, channel: number) => {
-    const value = read.float(boneAt + BONE_VALUE_OFFSET + channel * INT_SIZE);
-    const boneAnimAt = animIndex + bone * BONE_CHANNELS * SHORT_SIZE; // mstudioanim_t: one offset per channel
-    const valuesOffset = animated ? read.ushort(boneAnimAt + channel * SHORT_SIZE) : 0;
-    if (valuesOffset === 0) return value;
-    const valuesAt = boneAnimAt + valuesOffset;
-    const firstValue = bytes[valuesAt] > 0 ? SHORT_SIZE : 0; // mstudioanimvalue_t: {valid, total} header, then values
-    return value + read.short(valuesAt + firstValue) * read.float(boneAt + BONE_SCALE_OFFSET + channel * INT_SIZE);
+  // Poses follow StudioCalcBonePosition/StudioCalcBoneQuaternion. Only sequence group 0 lives in this file, so
+  // sequences stored in other groups fall back to the bind pose.
+  const animOf = (sequence: number): number | undefined => {
+    const at = sequenceIndex + sequence * SIZE.sequence;
+    if (sequence >= numSequences || read.int(at + SEQUENCE_GROUP_FIELD_OFFSET) !== 0) return undefined;
+    return read.int(sequenceGroupIndex + SEQUENCE_GROUP_DATA_OFFSET) + read.int(at + SEQUENCE_ANIM_OFFSET);
   };
-  const pose = read.table(numBones, boneIndex, SIZE.bone, (at) => at).reduce<Affine[]>((transforms, boneAt, bone) => {
-    const local = boneMatrix(Array.from({ length: BONE_CHANNELS }, (_, channel) => frameZero(bone, boneAt, channel)));
-    const parent = read.int(boneAt + 32);
-    transforms.push(parent >= 0 && transforms[parent] ? concat(transforms[parent], local) : local);
-    return transforms;
-  }, []);
-  const idleBounds = (numVerts: number, vertInfoIndex: number, vertIndex: number) => {
+  const channelValue = (anim: number | undefined, bone: number, boneAt: number, channel: number, frame: number) => {
+    const value = read.float(boneAt + BONE_VALUE_OFFSET + channel * INT_SIZE);
+    const boneAnimAt = (anim ?? 0) + bone * BONE_CHANNELS * SHORT_SIZE; // mstudioanim_t: one offset per channel
+    const valuesOffset = anim === undefined ? 0 : read.ushort(boneAnimAt + channel * SHORT_SIZE);
+    if (valuesOffset === 0) return value;
+    // mstudioanimvalue_t runs: a {valid, total} header, then `valid` values; later frames of a run repeat the last one.
+    let run = boneAnimAt + valuesOffset;
+    let remaining = frame;
+    while (bytes[run + 1] <= remaining) {
+      remaining -= bytes[run + 1];
+      run += (bytes[run] + 1) * SHORT_SIZE;
+    }
+    const index = bytes[run] > remaining ? remaining + 1 : bytes[run];
+    return value + read.short(run + index * SHORT_SIZE) * read.float(boneAt + BONE_SCALE_OFFSET + channel * INT_SIZE);
+  };
+  const boneAts = read.table(numBones, boneIndex, SIZE.bone, (at) => at);
+  const framePose = (sequence: number, frame: number) => {
+    const anim = animOf(sequence);
+    return boneAts.reduce<Affine[]>((transforms, boneAt, bone) => {
+      const values = Array.from(
+        { length: BONE_CHANNELS },
+        (_, channel) => channelValue(anim, bone, boneAt, channel, frame),
+      );
+      const parent = read.int(boneAt + 32);
+      transforms.push(
+        parent >= 0 && transforms[parent] ? concat(transforms[parent], boneMatrix(values)) : boneMatrix(values),
+      );
+      return transforms;
+    }, []);
+  };
+  const submodels = read.table(
+    numBodyParts,
+    bodyPartIndex,
+    SIZE.bodyPart,
+    (at) => read.table(read.int(at + 64), read.int(at + 72), SIZE.model, (model) => model),
+  ).flat();
+  const boundsIn = (pose: Affine[], model: number) => {
+    const [numVerts, vertInfoIndex, vertIndex] = [80, 84, 88].map((field) => read.int(model + field));
     const points = read.table(numVerts, vertIndex, VEC3_SIZE, (at) => {
       const bone = bytes[vertInfoIndex + (at - vertIndex) / VEC3_SIZE];
       if (!pose[bone]) throw new RangeError(`vertex at ${at} uses missing bone ${bone}`);
@@ -171,7 +194,13 @@ export function parseMdl(bytes: Uint8Array) {
     });
     const extreme = (pick: (...values: number[]) => number) =>
       [0, 1, 2].map((axis) => roundBounds(pick(...points.map((point) => point[axis]))));
-    return points.length > 0 ? { idleBounds: { min: extreme(Math.min), max: extreme(Math.max) } } : {};
+    return points.length > 0 ? { min: extreme(Math.min), max: extreme(Math.max) } : undefined;
+  };
+  // Frame 0 of sequence 0 is the pose a view model idles in; its bounds show where geometry sits on screen.
+  const pose = framePose(0, 0);
+  const idleBounds = (model: number) => {
+    const bounds = boundsIn(pose, model);
+    return bounds ? { idleBounds: bounds } : {};
   };
 
   return {
@@ -231,7 +260,7 @@ export function parseMdl(bytes: Uint8Array) {
         name: read.text(model, 64),
         numVerts: read.int(model + 80),
         numNorms: read.int(model + 92),
-        ...idleBounds(read.int(model + 80), read.int(model + 84), read.int(model + 88)),
+        ...idleBounds(model),
         meshes: read.table(read.int(model + 72), read.int(model + 76), SIZE.mesh, (mesh) => ({
           numTris: read.int(mesh),
           skinRef: read.int(mesh + 8),
@@ -244,6 +273,11 @@ export function parseMdl(bytes: Uint8Array) {
       const idleOrigin = pose[bone] ? transformPoint(pose[bone], origin).map(roundBounds) : origin;
       return { name: read.text(at, 32), bone, origin, idleOrigin };
     }),
+    // Bounds of every submodel (body part order) at one frame of one sequence; JSON output leaves it out.
+    submodelBounds: (sequence: number, frame: number) => {
+      const posed = framePose(sequence, frame);
+      return submodels.map((model) => boundsIn(posed, model));
+    },
   };
 }
 
@@ -282,7 +316,11 @@ Deno.test("parses a synthetic studio model", async () => {
   const submodelAt = bodyPartAt + SIZE.bodyPart;
   const vertInfoAt = submodelAt + SIZE.model;
   const vertAt = vertInfoAt + INT_SIZE;
-  const bytes = new Uint8Array(vertAt + VEC3_SIZE);
+  const sequenceGroupAt = vertAt + VEC3_SIZE;
+  const sequenceAt = sequenceGroupAt + SIZE.sequenceGroup;
+  const animAt = sequenceAt + SIZE.sequence;
+  const valuesAt = animAt + BONE_CHANNELS * SHORT_SIZE;
+  const bytes = new Uint8Array(valuesAt + 3 * SHORT_SIZE);
   const view = new DataView(bytes.buffer);
   const putText = (offset: number, text: string) => bytes.set(new TextEncoder().encode(text), offset);
   const putInts = (pairs: number[][]) => pairs.forEach(([offset, value]) => view.setInt32(offset, value, true));
@@ -291,7 +329,7 @@ Deno.test("parses a synthetic studio model", async () => {
   putInts([[4, STUDIO_VERSION], [72, bytes.length]]);
   // numbones/boneindex, numtextures/textureindex, numskinref/numskinfamilies/skinindex, numbodyparts/bodypartindex
   putInts([[140, 1], [144, boneAt], [180, 1], [184, textureAt], [192, 1], [196, 1], [200, skinAt], [204, 1]]);
-  putInts([[208, bodyPartAt]]);
+  putInts([[208, bodyPartAt], [164, 1], [168, sequenceAt], [172, 1], [176, sequenceGroupAt]]);
   // One submodel vertex at (1, 0, 0) on a bone translated by (1, 2, 3) and turned 90 degrees in yaw.
   putInts([[bodyPartAt + 64, 1], [bodyPartAt + 68, 1], [bodyPartAt + 72, submodelAt], [submodelAt + 80, 1]]);
   putInts([[submodelAt + 84, vertInfoAt], [submodelAt + 88, vertAt], [boneAt + 32, -1]]);
@@ -299,6 +337,12 @@ Deno.test("parses a synthetic studio model", async () => {
   [1, 2, 3, 0, 0, Math.PI / 2].forEach((value, channel) =>
     view.setFloat32(boneAt + BONE_VALUE_OFFSET + channel * INT_SIZE, value, true)
   );
+  // A 3-frame sequence whose x channel is one run {valid 2, total 3} of 10, 20: frame 2 repeats 20.
+  putInts([[sequenceAt + 56, 3], [sequenceAt + 124, animAt]]);
+  view.setUint16(animAt, valuesAt - animAt, true);
+  bytes.set([2, 3], valuesAt);
+  [10, 20].forEach((value, index) => view.setInt16(valuesAt + (1 + index) * SHORT_SIZE, value, true));
+  view.setFloat32(boneAt + BONE_SCALE_OFFSET, 1, true);
   putText(boneAt, "Bip01 R Hand");
   putText(textureAt, "chrome_lens.bmp");
   const flags = TEXTURE_FLAGS.chrome | TEXTURE_FLAGS.masked | 0x100;
@@ -317,7 +361,8 @@ Deno.test("parses a synthetic studio model", async () => {
   }]);
   assertEquals(model.skinFamilies, [[0]]);
   assertEquals(model.bones, [{ name: "Bip01 R Hand", parent: -1 }]);
-  assertEquals(model.bodyParts[0].models[0].idleBounds, { min: [1, 3, 3], max: [1, 3, 3] });
+  assertEquals(model.bodyParts[0].models[0].idleBounds, { min: [11, 3, 3], max: [11, 3, 3] });
+  assertEquals(model.submodelBounds(0, 2), [{ min: [21, 3, 3], max: [21, 3, 3] }]);
   putInts([[textureAt + 76, bytes.length]]);
   assertThrows(() => parseMdl(bytes), RangeError);
 });

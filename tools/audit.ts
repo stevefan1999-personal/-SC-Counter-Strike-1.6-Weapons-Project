@@ -32,6 +32,11 @@ const DECIMAL = 10;
 // 5005/5006 read a muzzle flash description from events/<options> instead (client.so 0xb62a4).
 const SCRIPTED_MUZZLE_EVENTS = [5005, 5006];
 const SOUND_EVENT = 5004;
+// The CS client mirrors view models left-right (cs16-client cl_dll/StudioModelRenderer.cpp:713) except the knife
+// and shield (:903), so CS's own files are compared the way CS players see them.
+const MIRROR_EXEMPT = /knife|shield/;
+const ANIMATION_TOLERANCE = 0.05; // units; recompiled float data rounds slightly
+type Bounds = { min: number[]; max: number[] };
 const MISSING = "MISSING";
 
 const repo = new URL("..", import.meta.url).pathname;
@@ -137,6 +142,39 @@ const weaponSide = (model: StudioModel) => {
   return `${side} (${largest.name} y ${bounds.min[1]}..${bounds.max[1]})`;
 };
 
+// Largest per-frame difference of submodel bounds over every frame of every sequence.
+const animationDrift = (ours: StudioModel, theirs: StudioModel, mirrored: boolean) => {
+  const mirror = ({ min, max }: Bounds): Bounds =>
+    mirrored ? { min: [min[0], -max[1], min[2]], max: [max[0], -min[1], max[2]] } : { min, max };
+  const drift = (port: (Bounds | undefined)[], cs: (Bounds | undefined)[]) =>
+    Math.max(
+      0,
+      ...port.flatMap((bounds, submodel) => {
+        const other = cs[submodel];
+        if (!bounds || !other) return [Infinity];
+        const seen = mirror(other);
+        return [0, 1, 2].flatMap((axis) =>
+          [bounds.min[axis] - seen.min[axis], bounds.max[axis] - seen.max[axis]].map(Math.abs)
+        );
+      }),
+    );
+  const drifts = (ours.sequences ?? []).flatMap((sequence, index) => {
+    const csFrames = theirs.sequences?.[index]?.numFrames;
+    if (csFrames !== sequence.numFrames) return [`${sequence.label} frames ${csFrames} → ${sequence.numFrames}`];
+    const worst = Math.max(
+      0,
+      ...Array.from(
+        { length: sequence.numFrames },
+        (_, frame) => drift(ours.submodelBounds!(index, frame), theirs.submodelBounds!(index, frame)),
+      ),
+    );
+    return worst > ANIMATION_TOLERANCE ? [`${sequence.label} ${round(worst)}`] : [];
+  });
+  return drifts.length
+    ? `drift over ${ANIMATION_TOLERANCE}: ${drifts.join(", ")}`
+    : `every frame within ${ANIMATION_TOLERANCE}`;
+};
+
 async function auditModels(): Promise<string[]> {
   const models = await listFiles(join(repo, "models"), [".mdl"]);
   return (await Promise.all(models.map(async (path) => {
@@ -163,8 +201,14 @@ async function auditModels(): Promise<string[]> {
     const attachments = port.attachments.join(" | ") === cs.attachments.join(" | ")
       ? "same"
       : `CS [${cs.attachments.join(" | ")}] → ours [${port.attachments.join(" | ")}]`;
+    const mirrored = !MIRROR_EXEMPT.test(csName);
     const side = basename(path).startsWith("v_")
-      ? [`- idle weapon side: ours ${weaponSide(ourModel)}, CS ${weaponSide(theirModel)}`]
+      ? [
+        `- idle weapon side: ours ${weaponSide(ourModel)}, CS ${weaponSide(theirModel)}`,
+        `- animation vs CS as drawn in CS${mirrored ? " (mirrored)" : ""}: ${
+          animationDrift(ourModel, theirModel, mirrored)
+        }`,
+      ]
       : [];
     return [
       `### ${name} ≠ cstrike/models/${csName}`,
