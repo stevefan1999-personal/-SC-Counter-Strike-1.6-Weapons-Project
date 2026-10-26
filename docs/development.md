@@ -30,8 +30,10 @@ The recipes find the installs with these environment variables. The defaults are
 
 ## Install on a server
 
-1. Make an isolated server root. It contains symbolic links to the real server and its own `svencoop_addon`, logs and
-   plugin store, so parallel runs do not change the shared install:
+1. Make an isolated server root. It contains symbolic links to the real server, its own `svencoop_addon`, logs and
+   plugin store, and copies of the files that the server rewrites (node graphs, sound caches, spray decals, the Steam
+   app id), so parallel runs do not change the shared install. Run the recipe again to repair an older sandbox.
+   `just stop` prints a warning when a run wrote through a link into the shared install:
 
    ```sh
    just sandbox "$PWD/../.svends-dev"
