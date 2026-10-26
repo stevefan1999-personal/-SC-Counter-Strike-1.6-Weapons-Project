@@ -92,34 +92,41 @@ script gets 0–15 (`sven-client-hud.md` 1.3). The raw senders write the client 
 both groups. The client draws channel 0 first and channel 31 last. One channel holds one element. A message of another
 element type on a used channel deletes the old element.
 
-| Client channel | Group  | Constant                      | Element                           | Owner     |
-| -------------- | ------ | ----------------------------- | --------------------------------- | --------- |
-| 0–3            | map    | `KILLFEED_HEADSHOT_FIRST` + n | kill feed headshot icon, rows 1–4 | kill feed |
-| 4              | map    | `MONEY_DELTA_HIGH`            | money change, high part           | status    |
-| 5              | map    | `MONEY_DELTA_LOW`             | money change, low part            | status    |
-| 6              | map    | `FLASHLIGHT`                  | flashlight                        | status    |
-| 7              | map    | `RADAR_BACKGROUND`            | radar background                  | none yet  |
-| 8–13           | map    | `RADAR_DOT_FIRST` + n         | radar dots (`RADAR_DOTS` = 6)     | none yet  |
-| 14             | map    | `ARMOUR_FULL`                 | armour, full part                 | status    |
-| 15             | map    | `FLASHLIGHT_ENERGY`           | flashlight, energy part           | status    |
-| 16             | plugin | `CROSSHAIR_WEST`              | crosshair, west line              | crosshair |
-| 17             | plugin | `CROSSHAIR_EAST`              | crosshair, east line              | crosshair |
-| 18             | plugin | `CROSSHAIR_NORTH`             | crosshair, north line             | crosshair |
-| 19             | plugin | `CROSSHAIR_SOUTH`             | crosshair, south line             | crosshair |
-| 20–23          | plugin | `KILLFEED_ICON_FIRST` + n     | kill feed weapon icon, rows 1–4   | kill feed |
-| 24             | plugin | `HEALTH`                      | health                            | status    |
-| 25             | plugin | `ARMOUR`                      | armour                            | status    |
-| 26             | plugin | `CLIP`                        | ammo in the clip                  | status    |
-| 27             | plugin | `RESERVE_HIGH`                | reserve ammo, high part           | status    |
-| 28             | plugin | `RESERVE_LOW`                 | reserve ammo, low part            | status    |
-| 29             | plugin | `AMMO_ICON`                   | ammo icon                         | status    |
-| 30             | plugin | `MONEY_HIGH`                  | money, high part                  | status    |
-| 31             | plugin | `MONEY_LOW`                   | money, low part                   | status    |
+| Client channel | Group  | Constant                         | Element                           | Owner     |
+| -------------- | ------ | -------------------------------- | --------------------------------- | --------- |
+| 0              | map    | `KILLFEED_ICON_ROW4`             | kill feed weapon icon, row 4      | kill feed |
+| 1–4            | map    | `KILLFEED_HEADSHOT_FIRST` + n    | kill feed headshot icon, rows 1–4 | kill feed |
+| 5              | map    | `MONEY_DELTA_HIGH`               | money change, high part           | status    |
+| 6              | map    | `MONEY_DELTA_LOW`                | money change, low part            | status    |
+| 7              | map    | `FLASHLIGHT`                     | flashlight                        | status    |
+| 8              | map    | `FLASHLIGHT_ENERGY`              | flashlight, energy part           | status    |
+| 9              | map    | `STATUS_ICON`                    | status icon (the carried C4)      | status    |
+| 10             | map    | `RADAR_BACKGROUND`               | radar background                  | none yet  |
+| 11–15          | map    | `RADAR_DOT_FIRST` + n            | radar dots (`RADAR_DOTS` = 5)     | none yet  |
+| 16             | plugin | `CROSSHAIR_WEST`                 | crosshair, west line              | crosshair |
+| 17             | plugin | `CROSSHAIR_EAST`                 | crosshair, east line              | crosshair |
+| 18             | plugin | `CROSSHAIR_NORTH`                | crosshair, north line             | crosshair |
+| 19             | plugin | `CROSSHAIR_SOUTH`                | crosshair, south line             | crosshair |
+| 20             | plugin | `HEALTH`                         | health                            | status    |
+| 21             | plugin | `ARMOUR`                         | armour                            | status    |
+| 22             | plugin | `ARMOUR_FULL`                    | armour, full part                 | status    |
+| 23             | plugin | `CLIP`                           | ammo in the clip                  | status    |
+| 24             | plugin | `RESERVE_HIGH`                   | reserve ammo, high part           | status    |
+| 25             | plugin | `RESERVE_LOW`                    | reserve ammo, low part            | status    |
+| 26             | plugin | `AMMO_ICON`                      | ammo icon                         | status    |
+| 27             | plugin | `MONEY_HIGH`                     | money, high part                  | status    |
+| 28             | plugin | `MONEY_LOW`                      | money, low part                   | status    |
+| 29–31          | plugin | `KILLFEED_ICON_PLUGIN_FIRST` + n | kill feed weapon icon, rows 1–3   | kill feed |
 
-Channels 14 and 15 were radar dots in the first plan. The generated sprites then changed (`docs/hud-sprites.md`, merged
-from `feat/hud-sprites`): armour and flashlight are two elements each, because their bright part overlaps the base icon.
-No other channel was free, and the radar has no owner, so the two radar dot channels at the top of the range carry the
-second parts. Both parts of an element draw additively, so their order on the client does not change the picture.
+`KillfeedIconChannel(row)` gives the weapon icon channel of a kill feed row (row 0 is the oldest line on screen).
+
+Armour and flashlight are two elements each, because their bright part overlaps the base icon (`docs/hud-sprites.md`).
+So the always-visible HUD needs 17 elements: the 4 crosshair lines, health, both armour parts, clip, both reserve parts,
+the ammo icon, both money parts and the kill feed weapon icons. That is one more than the plugin group holds. Everything
+that is always on screen stays in the plugin group, with kill feed rows 1–3. The transient or optional parts (row 4, the
+headshot icons, the money change, the flashlight, the status icon and the radar) go to the map group, which the few
+stock maps with their own HUD can share (see [Conflicts](#conflicts)). Both parts of an element draw additively, so
+their order on the client does not change the picture.
 
 The engine keeps 8 text slots. The stock API gives plugins slots 0–3 and map scripts slots 4–7 (`sven-client-hudtext.md`
 1.2). A new text on a slot replaces the old text on that slot. Text and custom elements never share a slot.
@@ -138,16 +145,17 @@ player who kills a monster, or a monster or the world that kills a player.
 
 These stock maps load map scripts that draw custom elements (map group) or texts (map slots):
 
-| Map            | Map script                                     | Client channels                                     | Text slot | Our elements on the same targets                                      |
-| -------------- | ---------------------------------------------- | --------------------------------------------------- | --------- | --------------------------------------------------------------------- |
-| `polar_rescue` | `scripts/maps/polar_rescue.as`                 | 0 timer (time display), 1–5 objective sprites       | none      | headshot icons rows 1–4, money change high and low                    |
-| `th_escape`    | `scripts/maps/th_escape/CustomHUD.as`          | 0 timer (time display), 1–3 item sprites            | 4         | headshot icons rows 1–4, killer name row 1                            |
-| `suspension`   | `scripts/maps/bridge/CustomHUD.as` (`bridge3`) | 0 tickets (number display), 1 award sprite          | 4         | headshot icons rows 1–2, killer name row 1                            |
-| `snd`          | `scripts/maps/snd/CustomHUD.as`                | 0–1 tickets and caches (number displays), 2–5 zones | 4         | headshot icons rows 1–4, money change high and low, killer name row 1 |
-| `bm_sts`       | `scripts/maps/bm_sts/bm_sts_hudtimer.as`       | 1 timer sprite                                      | none      | headshot icon row 2                                                   |
+| Map            | Map script                                     | Client channels                                     | Text slot | Our elements on the same targets                                                         |
+| -------------- | ---------------------------------------------- | --------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------- |
+| `polar_rescue` | `scripts/maps/polar_rescue.as`                 | 0 timer (time display), 1–5 objective sprites       | none      | kill feed icon row 4, headshot icons rows 1–4, money change high part                    |
+| `th_escape`    | `scripts/maps/th_escape/CustomHUD.as`          | 0 timer (time display), 1–3 item sprites            | 4         | kill feed icon row 4, headshot icons rows 1–3, killer name row 1                         |
+| `suspension`   | `scripts/maps/bridge/CustomHUD.as` (`bridge3`) | 0 tickets (number display), 1 award sprite          | 4         | kill feed icon row 4, headshot icon row 1, killer name row 1                             |
+| `snd`          | `scripts/maps/snd/CustomHUD.as`                | 0–1 tickets and caches (number displays), 2–5 zones | 4         | kill feed icon row 4, headshot icons rows 1–4, money change high part, killer name row 1 |
+| `bm_sts`       | `scripts/maps/bm_sts/bm_sts_hudtimer.as`       | 1 timer sprite                                      | none      | headshot icon row 1                                                                      |
 
 The map files are in `svencoop/maps/<map>.cfg` (`map_script` lines) of the dedicated server. No stock map uses client
-channels 6–15 or text slots 5–7. Thus the flashlight and the radar have no conflict with stock maps.
+channels 6–15 or text slots 5–7. Thus the money change low part, the flashlight, the status icon and the radar have no
+conflict with stock maps.
 
 On these maps the map script and this plugin write the same targets:
 
@@ -164,17 +172,17 @@ or avoid it. Two ways to avoid it: merge the headshot icon into the weapon icon 
 
 On `main` these users take channels that the map above gives to other elements:
 
-| User                                                      | API channel    | Client channel or slot | Element of the map                 |
-| --------------------------------------------------------- | -------------- | ---------------------- | ---------------------------------- |
-| money number display (`scripts/cs16/BuyMenu.as:100`)      | plugin 0       | 16                     | crosshair, west line               |
-| C4 status icon (`scripts/cs16/misc/weapon_c4.as:130`)     | plugin 4       | 20                     | kill feed icon, row 1              |
-| kill feed weapon icons (`scripts/cs16/killfeed.as:291`)   | plugin 5–8     | 21–24                  | kill feed icons rows 2–4, health   |
-| kill feed headshot icons (`scripts/cs16/killfeed.as:308`) | plugin 9–12    | 25–28                  | armour, clip, reserve high and low |
-| kill feed names (`scripts/cs16/killfeed.as:324`, `341`)   | text 1–4, 9–12 | engine slots 0–3       | victim names rows 1–4              |
+| User                                                      | API channel    | Client channel or slot | Element of the map                         |
+| --------------------------------------------------------- | -------------- | ---------------------- | ------------------------------------------ |
+| money number display (`scripts/cs16/BuyMenu.as:100`)      | plugin 0       | 16                     | crosshair, west line                       |
+| C4 status icon (`scripts/cs16/misc/weapon_c4.as:130`)     | plugin 4       | 20                     | health                                     |
+| kill feed weapon icons (`scripts/cs16/killfeed.as:291`)   | plugin 5–8     | 21–24                  | armour, armour full, clip, reserve high    |
+| kill feed headshot icons (`scripts/cs16/killfeed.as:308`) | plugin 9–12    | 25–28                  | reserve low, ammo icon, money high and low |
+| kill feed names (`scripts/cs16/killfeed.as:324`, `341`)   | text 1–4, 9–12 | engine slots 0–3       | victim names rows 1–4                      |
 
 - The status element must remove the money number display of `BuyMenu.as` when it draws the money.
 - The kill feed element replaces the kill feed of `killfeed.as`.
-- The C4 status icon has no channel in the map. Its owner must give it one, for example a radar dot channel (8–13).
+- The C4 status icon moves to `STATUS_ICON` (9).
 - Other plugins on the same server that use the stock API also draw on client channels 16–31.
 
 ## Raw senders
@@ -203,15 +211,15 @@ hold time. Send the element again to show it.
 
 `SendText` writes `SVC_TEMPENTITY` with `TE_TEXTMESSAGE` (29) in the layout of `sven-client-hudtext.md` 1.1:
 
-| #     | Type    | Field                   | What `SendText` does                            |
-| ----- | ------- | ----------------------- | ----------------------------------------------- |
-| 1     | byte    | `TE_TEXTMESSAGE`        |                                                 |
-| 2     | byte    | engine slot             | refuses a slot above 7                          |
-| 3–4   | short   | x, y                    | `int(value × 8192)`, clamped to −32768–32767    |
-| 5     | byte    | effect                  | as given                                        |
-| 6–13  | 8 bytes | r1 g1 b1 a1 r2 g2 b2 a2 | as given                                        |
-| 14–16 | short   | fadein, fadeout, hold   | `int(seconds × 256)`, clamped to 0–65535        |
-| 17    | short   | fxTime                  | `int(seconds × 256)`, written only for effect 2 |
+| #     | Type    | Field                   | What `SendText` does                             |
+| ----- | ------- | ----------------------- | ------------------------------------------------ |
+| 1     | byte    | `TE_TEXTMESSAGE`        |                                                  |
+| 2     | byte    | engine slot             | refuses a slot above 7                           |
+| 3–4   | short   | x, y                    | `int(value × 8192)`, clamped to −32768–32767     |
+| 5     | byte    | effect                  | as given                                         |
+| 6–13  | 8 bytes | r1 g1 b1 a1 r2 g2 b2 a2 | as given                                         |
+| 14–16 | short   | fadein, fadeout, hold   | `int(seconds × 256)`, clamped to 0–65535         |
+| 17    | short   | fxTime                  | `int(seconds × 256)`, written only for effect 2  |
 | 18    | string  | text                    | cut to 267 bytes (the client line buffer, below) |
 
 The time fields are unsigned on the client, but `WriteShort` takes an `int16`. AngelScript wraps `int16(51200)` to
@@ -228,9 +236,9 @@ bytes, which fits the line buffer and always sends. An element that needs more t
 
 The senders record each client channel and text slot that they used for each player, and the last position of each text.
 `cs16_hud 0` hides these channels and sends an empty text with no hold to these slots. The empty text goes to the
-recorded position, because the client clears every other text at the position of a new text
-(`sven-client-hudtext.md` 1.4); an empty text at the default centred position would clear a map or plugin text that sits
-there. Thus turning the CS HUD off does not touch the elements or texts of maps or other plugins.
+recorded position, because the client clears every other text at the position of a new text (`sven-client-hudtext.md`
+1.4); an empty text at the default centred position would clear a map or plugin text that sits there. Thus turning the
+CS HUD off does not touch the elements or texts of maps or other plugins.
 
 ## Screen size
 
