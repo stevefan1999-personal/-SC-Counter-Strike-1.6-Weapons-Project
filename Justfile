@@ -306,6 +306,11 @@ e2e-muzzleflash +args:
 hud-sheet screenshot out=(justfile_directory() / 'docs/hud-sprites/contact-sheet.png'):
   deno run -R -W --allow-run=magick '{{justfile_directory()}}/tools/hudsheet.ts' '{{cstrike_dir}}' '{{screenshot}}' '{{out}}'
 
+# Build the sniper-scope view model from CS 1.6's reticle sprite (docs/fov.md); a changed model needs a new path: just scope-model /abs/out.mdl
+[group('tools')]
+scope-model out=(justfile_directory() / 'models/cs16/scope/cs_scope.mdl'):
+  deno run -R='{{cstrike_dir}}' -W='{{out}}' '{{justfile_directory()}}/tools/scopegen.ts' '{{cstrike_dir}}' '{{out}}'
+
 # CS 1.6 kill-feed reference fixture: Valve's CS 1.6 client against a ReGameDLL_CS listen server (bots and "give").
 hl_dir := env('HL_DIR', steam_common / 'Half-Life')
 # Worktrees share the main checkout's .git, so its parent is the project root that holds ReGameDLL_CS.
