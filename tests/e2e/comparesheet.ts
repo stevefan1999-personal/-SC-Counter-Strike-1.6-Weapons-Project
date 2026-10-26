@@ -10,6 +10,7 @@ export type Sheet = { name: string; ours: string; cs: string; region: Region };
 const ZOOM_PERCENT = 200;
 const SCALE_BASE_HEIGHT = 480; // CS lays out the kill feed and the crosshair in units of a 480-line screen
 const GAP_PX = 8;
+const SHEET_COLOURS = 256;
 const CAPTION_POINTS = 14;
 const BACKGROUND = "#202020";
 const CAPTION_COLOUR = "#e0e0e0";
@@ -109,6 +110,10 @@ export function sheetArgs(oursPath: string, csPath: string, region: Region, out:
     BACKGROUND,
     "+smush",
     String(GAP_PX),
+    // 256 colours keep the sheets small for the docs; measure on the screenshots, not on the sheets.
+    "+dither",
+    "-colors",
+    String(SHEET_COLOURS),
     "-strip",
     out,
   ];
