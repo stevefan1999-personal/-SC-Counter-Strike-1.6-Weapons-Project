@@ -213,3 +213,8 @@ sandbox dir:
 [group('e2e')]
 e2e-killfeed port='27017' weapon='weapon_csdeagle' aim='head':
   deno run -A '{{justfile_directory()}}/tests/e2e/killfeed.ts' {{port}} {{weapon}} {{aim}}
+
+# Render the HUD sprite contact sheet and check it against a CS 1.6 screenshot: just hud-sheet /abs/cs16-ref-hud.png
+[group('tools')]
+hud-sheet screenshot out=(justfile_directory() / 'docs/hud-sprites/contact-sheet.png'):
+  deno run -R -W --allow-run=magick '{{justfile_directory()}}/tools/hudsheet.ts' '{{cstrike_dir}}' '{{screenshot}}' '{{out}}'
