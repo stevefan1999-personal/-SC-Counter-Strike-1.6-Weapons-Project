@@ -10,14 +10,14 @@ namespace CS16HUD
   // One HUD part. Each callback runs only while cs16_hud is 1 and the player can receive messages.
   interface IHudElement
   {
-    // After a spawn or a revive.
+    // After a respawn or a revive, before the client resets its HUD: update state here, draw in OnResend.
     void OnSpawn( CBasePlayer@ player );
     void OnDeath( CBasePlayer@ player );
     // Every TICK_PERIOD, or every player frame for elements registered with everyFrame.
     void OnTick( CBasePlayer@ player, float dt );
     // The client lost or never had this element: draw it again from the player's current state. Runs after each
-    // connection and map change (the client deletes all custom elements then), after cs16_hud goes back to 1 and
-    // after each .hudres or cs16_hud_res change.
+    // connection and map change (the client deletes all custom elements then), after each spawn once the client has
+    // reset its HUD (that clears all HUD texts), after cs16_hud goes back to 1 and after .hudres or cs16_hud_res.
     void OnResend( CBasePlayer@ player );
   }
 
@@ -29,6 +29,11 @@ namespace CS16HUD
   // Sprites that tools/hudgen.ts writes at install time (docs/hud-sprites.md), relative to sprites/.
   const string GENERATED_SPRITE_DIR = "cs16/hud/";
 
+  // After a spawn the server sends ResetHUD from the player's next PreThink, and ResetHUD makes the client clear
+  // every HUD text (CHudMessage::Reset, client.so 0xE99B2) but no custom element. Two PostThinks after the spawn that
+  // message is out, so a resend from then on arrives after it, whether the spawn ran inside or before a PreThink.
+  const int POST_THINKS_UNTIL_HUD_RESET = 2;
+
   array<IHudElement@> g_Elements;
   array<IHudElement@> g_TickElements;
   array<IHudElement@> g_FrameElements;
@@ -36,9 +41,11 @@ namespace CS16HUD
   CCVar@ g_EnabledCvar;
   CScheduledFunction@ g_TickTimer;
   float g_LastTickTime;
-  // Per player slot: put in the server on this map (so messages are safe), and waiting for a resend.
+  // Per player slot: put in the server on this map (so messages are safe), waiting for a resend, and PostThinks left
+  // until the client has reset its HUD after a spawn.
   array<bool> g_Ready( MAX_PLAYERS + 1 );
   array<bool> g_ResendPending( MAX_PLAYERS + 1 );
+  array<int> g_PostThinksUntilHudReset( MAX_PLAYERS + 1 );
   array<float> g_LastFrameTime( MAX_PLAYERS + 1 );
 
   // everyFrame: OnTick runs from PlayerPostThink, once per user command of the player, instead of every TICK_PERIOD.
@@ -108,6 +115,7 @@ namespace CS16HUD
         continue;
       g_OwnedHideBits[slot] = player.m_iHideHUD & NATIVE_HIDE_BITS;
       MarkReady( player );
+      RequestResend( player );
     }
   }
 
@@ -116,10 +124,14 @@ namespace CS16HUD
     const int slot = player.entindex();
     g_Ready[slot] = true;
     g_LastFrameTime[slot] = g_Engine.time;
-    // From the next tick, after the InitHUD and ResetHUD messages of this connection or map.
-    RequestResend( player );
     if( IsEnabled() )
       HideNative( player );
+  }
+
+  // Resend once the client has reset its HUD after this spawn (see POST_THINKS_UNTIL_HUD_RESET).
+  void ResendAfterHudReset( CBasePlayer@ player )
+  {
+    g_PostThinksUntilHudReset[player.entindex()] = POST_THINKS_UNTIL_HUD_RESET;
   }
 
   // Every element of the player is drawn again at the next tick that finds the player active. One path for all
@@ -156,6 +168,8 @@ namespace CS16HUD
     ForgetNative( player );
     LoadPlayerScreen( player );
     MarkReady( player );
+    // The first spawn of a connection runs before this hook, so it never reaches OnPlayerSpawn.
+    ResendAfterHudReset( player );
     return HOOK_CONTINUE;
   }
 
@@ -172,6 +186,7 @@ namespace CS16HUD
     HideNative( player );
     for( uint index = 0; index < g_Elements.length(); ++index )
       g_Elements[index].OnSpawn( player );
+    ResendAfterHudReset( player );
     return HOOK_CONTINUE;
   }
 
@@ -186,9 +201,11 @@ namespace CS16HUD
 
   HookReturnCode OnPlayerPostThink( CBasePlayer@ player )
   {
+    const int slot = player.entindex();
+    if( g_PostThinksUntilHudReset[slot] > 0 && --g_PostThinksUntilHudReset[slot] == 0 )
+      RequestResend( player );
     if( g_FrameElements.isEmpty() || !IsActive( player ) )
       return HOOK_CONTINUE;
-    const int slot = player.entindex();
     const float dt = g_Engine.time - g_LastFrameTime[slot];
     g_LastFrameTime[slot] = g_Engine.time;
     for( uint index = 0; index < g_FrameElements.length(); ++index )
