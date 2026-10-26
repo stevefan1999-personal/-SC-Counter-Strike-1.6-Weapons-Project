@@ -29,9 +29,9 @@ install target=server_dir:
   rsync -a '{{justfile_directory()}}'/{models,sprites,sound,events,maps} "$addon/"
   cp '{{justfile_directory()}}/default_plugins.txt' "$addon/default_plugins.txt"
   # CS 1.6 assets come from the local Counter-Strike install, not from git.
-  rg -v '^\s*(#|$)' '{{justfile_directory()}}/cstrike-assets.txt' | while read -r asset; do
+  rg -v '^\s*(#|$)' '{{justfile_directory()}}/cstrike-assets.txt' | while read -r asset destination; do
     test -f '{{cstrike_dir}}/'"$asset" || { echo "missing CS 1.6 asset: {{cstrike_dir}}/$asset" >&2; exit 1; }
-    install -D -m 644 '{{cstrike_dir}}/'"$asset" "$addon/$(dirname "$asset")/cs16/$(basename "$asset")"
+    install -D -m 644 '{{cstrike_dir}}/'"$asset" "$addon/${destination:-$(dirname "$asset")/cs16/$(basename "$asset")}"
   done
   # The CS HUD number sprites are composed from the same install (docs/hud-sprites.md).
   deno run -R='{{cstrike_dir}}' -W="$addon/sprites/cs16/hud" '{{justfile_directory()}}/tools/hudgen.ts' \
@@ -95,12 +95,14 @@ check port='27015' map='hl_c01_a1':
   #!/usr/bin/env bash
   set -euo pipefail
   logdir='{{server_dir}}/svencoop/logs/Angelscript'
-  # The AngelScript log is one file per day, so only read what this run appends.
-  before=$(cat "$logdir"/* 2>/dev/null | wc -l)
+  # The AngelScript log is one file per day, so only read what this run appends. A new sandbox has no log until a
+  # script prints something, so an empty glob must read as no lines (/dev/null keeps cat off stdin).
+  shopt -s nullglob
+  before=$(cat "$logdir"/* /dev/null | wc -l)
   just install && just server {{port}} {{map}}
   sleep 3
   just stop {{port}}
-  fresh=$(cat "$logdir"/* | tail -n +$((before + 1)))
+  fresh=$(cat "$logdir"/* /dev/null | tail -n +$((before + 1)))
   echo "$fresh"
   if rg -q 'ERROR|failed' <<< "$fresh"; then exit 1; fi
   echo 'plugins compiled cleanly'

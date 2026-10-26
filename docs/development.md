@@ -44,6 +44,11 @@ The recipes find the installs with these environment variables. The defaults are
    just install
    ```
 
+   Each line of `cstrike-assets.txt` is a path in `cstrike/` and an optional destination in `svencoop_addon/`. Without a
+   destination, the file goes to `<dir>/cs16/<file>`. A client does not download a file again when it has a file with
+   that path, so a changed file must get a new path. Use a path that other packs do not use: player caches can hold
+   other files at `sprites/cs16/640hud*.spr`, so the weapon list sheets go to `sprites/cs16/icons/`.
+
 3. Do a compile check. The recipe starts a server, reads the AngelScript log of this run only, and fails on an error:
 
    ```sh

@@ -1,0 +1,6 @@
+5
+weapon	640	cs16/icons/640hud14	0	180	170	45
+weapon_s	640	cs16/icons/640hud15	0	180	170	45
+ammo	640	cs16/icons/640hud7	0	96	24	24
+crosshair	640	cs16/icons/crosshairs	0	0	1	1
+zoom	640	cs16/icons/crosshairs	0	0	1	1
