@@ -51,7 +51,8 @@ Scope: Sven Co-op 5.26, engine build 10269, Linux, 32-bit.
 7. By default (`cl_filterstuffcmd 0`) a server can set `cl_bob*`, `hud_*` and
    `crosshair` with stufftext. With the filter on, the `cl_` and `hud_`
    prefixes are blocked, but `crosshair` is not. AngelScript `NetworkMessage`
-   does not refuse `SVC_STUFFTEXT`.
+   does not refuse `SVC_STUFFTEXT`. The project's test client has the filter
+   on (`cl_filterstuffcmd "1"` in `svencoop/autoexec.cfg:18`), see 5.
 8. Causes of glitched icons: a missing `.spr` becomes `sprites/error.spr`; an
    empty or out-of-frame rect draws the whole sheet; a sprite handle of 0 draws
    the previous sprite again. The killfeed in this repository sends rects that
@@ -209,10 +210,12 @@ Clamp (fraction modes only, 0xDB3E8–0xDB3FA and 0xDB43B): if
 Results:
 - `v = −1` gives `p = b − s`, which the clamp moves to `b`. The element is at
   the left (or top) border. It is not centred. The API text
-  "-1.0 = centered" (`outputdocs.txt:2101`, `2106`, `2214`) is wrong for this
-  client. Both parameter constructors set x = y = −1 (`server.so` 0x2BCFD0 and
-  0x2BCED4). Thus an element that does not set x and y appears in the top-left
-  corner.
+  "-1.0 = centered" (`outputdocs.txt:2101`, `2106`, `2214`, `2219`) is wrong
+  for these elements. The same text for `HUDTextParams`
+  (`outputdocs.txt:2357`, `2362`) is about `HudMessage`, which `CHudMessage`
+  draws; that path is not checked here. Both parameter constructors set
+  x = y = −1 (`server.so` 0x2BCFD0 and 0x2BCED4). Thus an element that does
+  not set x and y appears in the top-left corner.
 - The size `s` of a sprite is its rect width or height (0xB4A80, 0xB4A8C).
   The width of a number is icon width + 4 + digits (+ separator) (0xEBB96). The
   width of a time display is computed in 0xEBA18. The height of a number or a
@@ -238,9 +241,9 @@ There is no scaling.
 - The custom elements draw with `CHud::DrawHudSprite (0xDA9CE)`, which calls
   `SPR_Set` and then `SPR_Draw`, `SPR_DrawHoles` or `SPR_DrawAdditive` with the
   rect.
-- In `hw.so`, `SPR_Draw (0x102E90)` calls `Draw_SpriteFrame (0x127B70)`. That
-  function draws a quad with the frame or rect size in pixels. The 2D
-  projection `GL_Set2D (0x12A300)` is
+- In `hw.so`, `SPR_Draw (0x102E90)` calls `Draw_SpriteFrame (0x127B70)`
+  through the thunk 0x127DB0. That function draws a quad with the frame or
+  rect size in pixels. The 2D projection `GL_Set2D (0x12A300)` is
   `glOrtho(0, viewport width, viewport height, 0)`, so one HUD unit is one
   screen pixel.
 - `client.so` has no HUD scale cvar. The only `hud_*` cvars are listed in 2.4.
@@ -383,9 +386,12 @@ at 0xD6A27 and 0xD6A4B, both archived client cvars). The API calls the first one
   x 340 and 510. Width and height are clamped to 0–512 by the server.
 - `HUD_SPR_PLAY_ONCE` (0x40000) and `HUD_SPR_HIDE_WHEN_STOPPED` (0x80000) are
   never read. `CHudCustomSprite::Draw (0xB495A)` uses
-  `frame + int(framerate * t) mod numframes` and has no other flag test (95
-  instructions). `Start (0xB48EE)` reads only 0x10000 and 0x20000. Animations
-  always loop.
+  `frame + (int(framerate * t) mod numframes)`, only when `numframes > 1` and
+  `framerate > 0`, and has no other flag test (95 instructions). The sum is a
+  byte (0xB49E6), so the drawn frame goes from `frame` to
+  `frame + numframes − 1`: `numframes` is the loop length from `frame`, not
+  the frame count of the file. `Start (0xB48EE)` reads only 0x10000 and
+  0x20000. Animations always loop.
 - Engine limit: 256 different HUD sprite paths. `SPR_Load (hw.so 0x102880)`
   calls the fatal error routine `0xAF0A0` with "Cannot allocate more than %d
   HUD sprites" (256). The `hud.txt` sheets, each weapon txt sprite, `pain.spr`
@@ -558,12 +564,15 @@ must be drawn by script.
   (0xBBAAD–0xBBAC6, 0xCE968–0xCE976).
 - Hide: `HIDEHUD_WEAPONS` or `HIDEHUD_CROSSHAIR` (0xA005F), `crosshair 0`,
   `HIDEHUD_ALL`, `hud_draw 0`.
-- This repository: 23 weapon txts set `crosshair 640 cs16/crosshairs 256 0 256 256`.
+- This repository: 22 weapon txts (not 23; `rg` and `spr-check.ts` agree)
+  set `crosshair 640 cs16/crosshairs 256 0 256 256`.
   `sprites/cs16/crosshairs.spr` is one 256×256 frame and every pixel is index
   255 (`spr-stats.ts`). The rect is fully outside the frame, so the engine draws
   the whole frame (4.5, item 3), which is transparent. The native crosshair is
-  therefore invisible. This works only because of the engine clamp. The sniper
-  txts use `0 0 1 1`, which is cleaner.
+  therefore invisible. This works only because of the engine clamp. The 4
+  sniper txts use `0 0 1 1` for `crosshair` and `zoom`, which is cleaner.
+  `misc/weapon_c4.txt` has no `crosshair` row: its handle is 0, so
+  `CHudCrosshair::Draw` (test at 0xB471E) draws no crosshair for the C4.
 
 ## 4. Weapon selection and weapon txt files
 
@@ -654,7 +663,9 @@ must be drawn by script.
 
 Check of this repository with `.re/tools/spr-check.ts`: 27 weapon txts. All
 rows are 640, the counts are correct and the sprites exist. The only finding is
-the `crosshair` rect outside `crosshairs.spr` in 23 files (see 3).
+the `crosshair` rect outside `crosshairs.spr` in 22 files (see 3). The tool
+checks only the rows that exist, so it does not report the missing `crosshair`
+row of `misc/weapon_c4.txt`, and it checks only frame 0 of each sprite.
 
 A related defect is in the killfeed (custom elements, 1.4).
 `scripts/cs16/killfeed.as:322–326` sends the `left`/`top` of a `d_*` sprite
@@ -698,6 +709,11 @@ Client engine (`hw.so`):
     unless an internal check (`sub_B2860(2)`) passes.
 - `cl_filterstuffcmd`: cvar_t at 0x2F11EC, default "0", flags 1 (archived).
   The filter is off by default; a player can turn it on and it stays on.
+- On the project's test client the filter is on: `svencoop/autoexec.cfg:18`
+  and `svencoop/config.cfg:80` contain `cl_filterstuffcmd "1"`. This
+  `autoexec.cfg` has a whole-second mtime (2026-03-14) and CRLF line ends,
+  but the Steam files have 2025-12-05 sub-second mtimes. Thus it is probably a
+  user file. UNVERIFIED: whether a clean Sven install ships this line.
 - `Cvar_Command (0x64920)` refuses only flag 0x40 ("Can't set %s in
   multiplayer") and flag 0x400 ("Can't set %s with cheats disabled"). It does
   not check where the command came from.
@@ -711,9 +727,10 @@ Target cvars:
   so a value that a server stuffs is saved in the player's `config.cfg`.
 - `crosshair`: engine cvar, archived.
 
-Result: with the filter off (the default) a server can set `cl_bob`,
+Result: with the filter off (the engine default) a server can set `cl_bob`,
 `cl_bobcycle`, `cl_bobup`, every `hud_*` cvar and `crosshair`. With the filter
-on, `cl_*` and `hud_*` are blocked, but `crosshair` is still allowed.
+on, `cl_*` and `hud_*` are blocked, but `crosshair` is still allowed. The
+test client has the filter on, so there only `crosshair` of these works.
 
 Server (`server.so`):
 - The `NetworkMessage(dest, type, …)` factories (0x1C24DA, 0x1C2090) call the
@@ -759,8 +776,9 @@ Possible from a server script (AngelScript plugin):
    `HudCustomSprite` using `ABSOLUTE` + `SCR_CENTER_X/Y` offsets (4 channels);
    each gap change needs 4 messages. The simple option is a static CS crosshair
    sprite in each weapon txt.
-8. Stufftext works only for players with `cl_filterstuffcmd 0`, and archived
-   cvars stay changed in the player's config. Do not rely on it for the look.
+8. Stufftext works only for players with `cl_filterstuffcmd 0` (the test
+   client has 1, see 5), and archived cvars stay changed in the player's
+   config. Do not rely on it for the look.
    The view bob is already the same as in CS.
 
 Not possible from the server:
