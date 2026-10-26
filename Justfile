@@ -284,6 +284,11 @@ e2e-obituary port='27017':
 e2e-hud port='27017' label='hud':
   deno run -A '{{justfile_directory()}}/tests/e2e/hud.ts' {{port}} {{label}}
 
+# Capture view models, scopes and turned views of the CS weapons on testcenter (docs/fov.md): just e2e-fov 27017 /abs/out
+[group('e2e')]
+e2e-fov port='27017' out=(state_root / 'fov' / 'counter-life'):
+  deno run -A '{{justfile_directory()}}/tests/e2e/fov.ts' {{port}} '{{out}}'
+
 # Measure HUD-coloured glyph boxes in a screen region (JSON): just hudboxes .e2e/reference/cs16-ref-hud.png 0 820 460 80
 [group('e2e')]
 hudboxes image x y w h:
