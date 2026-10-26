@@ -45,6 +45,7 @@ server port='27015' map='hl_c01_a1' *args: (stop port)
   set -euo pipefail
   state='{{state_root}}/server-{{port}}'
   mkdir -p "$state" && rm -f "$state/in" && mkfifo "$state/in"
+  printf '%s\n%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" '{{server_dir}}' > "$state/run"
   cd '{{server_dir}}'
   export LD_LIBRARY_PATH="$PWD:$PWD/redist:${LD_LIBRARY_PATH:-}"
   # The holder keeps the pipe open so the server never reads EOF between commands.
@@ -74,11 +75,20 @@ log port='27015' lines='60':
 stop port='27015':
   #!/usr/bin/env bash
   state='{{state_root}}/server-{{port}}'
+  server=$(cat "$state/server.pid" 2>/dev/null || true)
   for pidfile in "$state/server.pid" "$state/holder.pid"; do
     test -f "$pidfile" && kill "$(cat "$pidfile")" 2>/dev/null || true
     rm -f "$pidfile"
   done
   rm -f "$state/in"
+  test -f "$state/run" || exit 0
+  # After the exit, a farm symlink whose target changed during the run means the server wrote into the shared
+  # install: that path needs a copy in the sandbox recipe.
+  for _ in $(seq 1 50); do test -n "$server" && kill -0 "$server" 2>/dev/null || break; sleep 0.1; done
+  { read -r started; read -r dir; } < "$state/run"
+  rm -f "$state/run"
+  escaped=$(fd -L -HI -t f --changed-within "$started" . "$dir" | while read -r path; do test -L "$path" && echo "$path"; done)
+  test -z "$escaped" || printf 'WARNING: the server wrote through sandbox symlinks into the shared install:\n%s\n' "$escaped" >&2
 
 # Show errors and warnings from the newest AngelScript log of an install: just aslog
 [group('server')]
@@ -203,11 +213,20 @@ install-e2e target=server_dir:
 sandbox dir:
   #!/usr/bin/env bash
   set -euo pipefail
-  test -d '{{dir}}/svencoop' && { echo 'sandbox already exists: {{dir}}'; exit 0; }
-  cp -as '{{server_base}}' '{{dir}}'
-  # Paths our install or the server writes must be real directories so a run never touches the shared install.
-  for writable in svencoop_addon svencoop/logs svencoop/scripts/plugins/store; do
-    rm -rf '{{dir}}'/"$writable" && mkdir -p '{{dir}}'/"$writable"
+  if ! test -d '{{dir}}/svencoop'; then
+    cp -as '{{server_base}}' '{{dir}}'
+    # Paths our install or the server writes must be real directories so a run never touches the shared install.
+    for writable in svencoop_addon svencoop/logs svencoop/scripts/plugins/store; do
+      rm -rf '{{dir}}'/"$writable" && mkdir -p '{{dir}}'/"$writable"
+    done
+  fi
+  # The server rewrites some files in place (node graphs, sound caches, spray decals and their log, the Steam app id),
+  # and it writes through a farm symlink into the shared install. Replace those links with copies; this also repairs
+  # old sandboxes.
+  cd '{{dir}}'
+  rewritten='svencoop/maps/graphs svencoop/maps/soundcache svencoop/custom.hpk svencoop/custom.hpk.log steam_appid.txt'
+  { find $rewritten -type l 2>/dev/null || true; } | while read -r link; do
+    cp --remove-destination "$(readlink -f "$link")" "$link"
   done
   echo 'sandbox ready; use it with: export SVEN_SERVER_DIR={{dir}}'
 
