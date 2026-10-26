@@ -116,15 +116,18 @@ namespace CS16KILLFEED
     notice.victim = DisplayName( victim );
     notice.victimColour = TeamColour( victim );
     const bool killedSelf = attacker !is null && attacker.entindex() == victim.entindex();
-    const string weapon = WeaponName( victim, attacker );
-    @notice.icon = FindIcon( weapon );
+    // A death from the world or from the victim itself shows the skull and no killer. Only a kill reads the inflictor:
+    // a death without damage (the kill command) leaves an old one in the victim.
+    string weapon = NO_WEAPON;
     if( attacker !is null && !killedSelf && ( attacker.IsPlayer() || attacker.IsMonster() ) )
     {
       notice.killer = DisplayName( attacker );
       notice.killerColour = TeamColour( attacker );
+      weapon = WeaponName( victim, attacker );
       // CS sends the headshot flag of the victim's last hit group (players and monsters both keep one).
       notice.headshot = victim.MyMonsterPointer().m_LastHitGroup == HITGROUP_HEAD;
     }
+    @notice.icon = FindIcon( weapon );
     notice.expireTime = g_Engine.time + NOTICE_TIME;
     // A fifth notice pushes the oldest out (death.cpp MsgFunc_DeathMsg).
     if( g_Notices.length() == CS16HUD::KILLFEED_ROWS )

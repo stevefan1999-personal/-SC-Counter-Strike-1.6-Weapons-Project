@@ -21,7 +21,7 @@ is [cs16-killfeed-reference.md](research/cs16-killfeed-reference.md), which meas
 | Parts     | Right to left: the victim name ends at `W − s(12)`, then `s(5)`, the headshot icon and `s(5)` (headshots only), the weapon icon, `s(5)`, and the killer name.                                                  |
 | Names     | Players in the CT colour (153,204,255), monsters in the T colour (255,63,63).                                                                                                                                  |
 | Icons     | `d_<weapon>` rects of `cs16/icons/640hud1.spr`, `640hud2.spr` and `640hud16.spr` (the `hud.txt` 640 rows), 16 px high, 1:1, added to the screen with the tint (255,80,0). The headshot icon has the same tint. |
-| No killer | A death from the world or from the victim itself has no killer name, as a CS suicide.                                                                                                                          |
+| No killer | A death from the world or from the victim itself shows `d_skull` and no killer name, as a CS suicide.                                                                                                          |
 | Console   | Each notice also prints the `death.cpp` line to the console of every player, for example `*** Player killed Scientist with a headshot from m4a1 ***`.                                                          |
 
 The data for one notice comes from the `PlayerKilled` and `MonsterKilled` hooks:
@@ -166,6 +166,9 @@ The CS world-death crop shows the `max4` capture (`bot_kill` deaths), because th
 - Sven's own death message. The Sven server also prints each death as a notify line in the top-left corner (for example
   "Player fell or something."). No AngelScript API stops it ([sven-client-hudtext.md](research/sven-client-hudtext.md)
   §6).
+- Suicides with a weapon. CS shows the icon of the weapon for a suicide that has one (an own HE grenade). Counter-Life
+  shows the skull for every death without a killer, because a death without damage (the `kill` command) leaves an old
+  inflictor in the victim.
 - Team colours and team kills. In co-op all players are one team, so every player name is CT blue, every monster name is
   T red, and there is no green team-kill icon. Monsters that monsters kill, and monsters that die from the world, get no
   notice.
