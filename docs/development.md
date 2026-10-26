@@ -113,3 +113,16 @@ just hudboxes .e2e/shots/run1-spawn.png 0 820 460 80
 
 Each line is the box of one HUD-coloured glyph in screen pixels. CS 1.6 draws its HUD sprites 1:1 at every resolution
 and anchors them to the screen edges, so the boxes must match.
+
+### Kill-feed reference
+
+`just fixture-killfeed` runs Valve's CS 1.6 client offscreen against a ReGameDLL_CS listen server, kills bots with an
+M4A1 and saves the kill feed to `.e2e/reference/cs16-killfeed-<W>x<H>-*.png`. Measure a Counter-Life screenshot the same
+way, against a frame of the same view without notices:
+
+```sh
+just fixture-killfeed :96 2560x1440
+just fixture-metrics .e2e/shots/run1-killfeed.png .e2e/shots/run1-killfeed-before.png
+```
+
+[CS 1.6 kill-feed reference](research/cs16-killfeed-reference.md) describes the fixture and the measured layout.
