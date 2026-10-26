@@ -17,6 +17,8 @@ const TRANSPARENT_INDEX = 255; // alpha-test sprites drop this palette index; in
 const FRAME_HEADER_SIZE = 16;
 const FRAME_SINGLE = 0;
 const FRAME_GROUP = 1;
+// ImageMagick stamps PNGs with creation times; dropping them keeps regenerated evidence byte-identical.
+const REPRODUCIBLE_PNG = ["-define", "png:exclude-chunks=date,time"];
 const SPRITE_TYPES = ["parallel-upright", "facing-upright", "parallel", "oriented", "parallel-oriented"];
 const TEXTURE_FORMATS = ["normal", "additive", "index-alpha", "alpha-test"];
 
@@ -119,7 +121,7 @@ const toPam = (width: number, height: number, rgba: Uint8Array): Uint8Array => {
 // Pipes RGBA pixels through ImageMagick; `args` run between input and PNG output (crop, flatten, annotate).
 export async function writePng(width: number, height: number, rgba: Uint8Array, outPath: string, args: string[] = []) {
   const magick = new Deno.Command("magick", {
-    args: ["pam:-", ...args, `png:${outPath}`],
+    args: ["pam:-", ...args, ...REPRODUCIBLE_PNG, `png:${outPath}`],
     stdin: "piped",
     stderr: "piped",
   })
