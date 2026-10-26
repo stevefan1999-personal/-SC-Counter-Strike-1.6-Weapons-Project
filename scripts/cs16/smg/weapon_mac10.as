@@ -27,7 +27,7 @@ enum CS16_Mac10_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/mac10/w_mac10.mdl";
-string V_MODEL      = "models/cs16/wpn/mac10/v_mac10.mdl";
+string V_MODEL      = "models/cs16/wpn/mac10/v_mac10_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/mac10/p_mac10.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 2;

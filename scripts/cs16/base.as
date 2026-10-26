@@ -140,6 +140,11 @@ string WEAPON_LIST_DIR      = MAIN_CSTRIKE_DIR + "icons/";
 const array<string> WEAPON_LIST_SPRITES = { "crosshairs", "640hud1", "640hud2", "640hud3", "640hud4", "640hud5",
     "640hud6", "640hud7", "640hud10", "640hud11", "640hud12", "640hud13", "640hud14", "640hud15", "640hud16", "640hud17",
     "640hud18" };
+//Muzzle flashes: view model events 5005 name these files, which draw CS 1.6 sprites (docs/research/muzzle-flash.md)
+const array<string> MUZZLE_FLASH_SPRITES = { "csflashx.spr", "muzzle/muzzleflash2.spr" };
+const array<string> MUZZLE_FLASH_EVENTS = { "cs16_muzzleflash2_s3_a0.txt", "cs16_muzzleflash2_s3_a1.txt",
+    "cs16_muzzleflash2_s3_a2.txt", "cs16_muzzleflash2_s6_a0.txt", "cs16_muzzleflash2_s9_a0.txt",
+    "cs16_muzzleflash3_s4_a0.txt", "cs16_muzzleflash3_s7_a0.txt" };
 //Zoom information
 int RESET_ZOOM_VALUE         = 0;
 int DEFAULT_AUG_SG_ZOOM     = 55;
@@ -255,8 +260,10 @@ mixin class WeaponBase
     void CommonSpritePrecache()
     {
         //MuzzleFlash
-        g_Game.PrecacheModel( MAIN_SPRITE_DIR + MAIN_CSTRIKE_DIR + "csflashx.spr" );
-        g_Game.PrecacheGeneric( "events/" + "cs16_flashx.txt" );
+        for( uint sprite = 0; sprite < MUZZLE_FLASH_SPRITES.length(); sprite++ )
+            g_Game.PrecacheModel( MAIN_SPRITE_DIR + MAIN_CSTRIKE_DIR + MUZZLE_FLASH_SPRITES[sprite] );
+        for( uint event = 0; event < MUZZLE_FLASH_EVENTS.length(); event++ )
+            g_Game.PrecacheGeneric( "events/" + MUZZLE_FLASH_EVENTS[event] );
         //HUD
         g_Game.PrecacheGeneric( MAIN_SPRITE_DIR + MAIN_CSTRIKE_DIR + "640hud7.spr" );
         for( uint sprite = 0; sprite < WEAPON_LIST_SPRITES.length(); sprite++ )

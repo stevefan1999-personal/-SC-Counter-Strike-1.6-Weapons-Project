@@ -25,7 +25,7 @@ enum CS16_Awp_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/awp/w_awp.mdl";
-string V_MODEL      = "models/cs16/wpn/awp/v_awp.mdl";
+string V_MODEL      = "models/cs16/wpn/awp/v_awp_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/awp/p_awp.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 8;

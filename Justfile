@@ -38,6 +38,45 @@ install target=server_dir:
     '{{cstrike_dir}}' "$addon/sprites/cs16/hud" > /dev/null
   echo "installed into $addon"
 
+# Rebuild the *_r2 view models, whose muzzle events draw the CS 1.6 flash, from the originals in a git ref: just muzzle-models
+[group('deploy')]
+muzzle-models ref='435d391':
+  #!/usr/bin/env bash
+  set -euo pipefail
+  cd '{{justfile_directory()}}'
+  original=$(mktemp) && trap 'rm -f "$original"' EXIT
+  # model (under models/cs16/wpn) and its event rules; sizes and attachments: docs/research/muzzle-flash.md
+  while read -r model rules; do
+    git show '{{ref}}':"models/cs16/wpn/$model.mdl" > "$original"
+    deno run -R -W tools/mdlpatch.ts "$original" "models/cs16/wpn/${model}_r2.mdl" $rules > /dev/null
+    echo "models/cs16/wpn/${model}_r2.mdl"
+  done <<'EOF'
+  57/v_57 5001:11=5005:cs16_muzzleflash2_s3_a0.txt
+  awp/v_awp 5001:31=5005:cs16_muzzleflash2_s9_a0.txt
+  eagle/v_eagle 5001:21=5005:cs16_muzzleflash2_s6_a0.txt
+  elite/v_elite 5001:11=5005:cs16_muzzleflash2_s3_a0.txt 5011:11=5005:cs16_muzzleflash2_s3_a1.txt
+  g18/v_glock18 5001:21=5005:cs16_muzzleflash2_s6_a0.txt
+  m3/v_m3 5001:21=5005:cs16_muzzleflash2_s6_a0.txt
+  m4a1/v_m4a1 5021:11=5005:cs16_muzzleflash2_s3_a2.txt 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  mac10/v_mac10 5001:11=5005:cs16_muzzleflash2_s3_a0.txt
+  mp5/v_mp5 5001:11=5005:cs16_muzzleflash2_s3_a0.txt
+  p228/v_p228 5001:11=5005:cs16_muzzleflash2_s3_a0.txt
+  scout/v_scout 5001:21=5005:cs16_muzzleflash2_s6_a0.txt
+  tmp/v_tmp 5001:11=5005:cs16_muzzleflash2_s3_a0.txt
+  ump45/v_ump45 5001:11=5005:cs16_muzzleflash2_s3_a0.txt
+  usp/v_usp 5001:11=5005:cs16_muzzleflash2_s3_a0.txt 5021:11=5005:cs16_muzzleflash2_s3_a2.txt
+  xm1014/v_xm1014 5001:21=5005:cs16_muzzleflash2_s6_a0.txt
+  ak47/v_ak47 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  aug/v_aug 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  famas/v_famas 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  galil/v_galil 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  g3sg1/v_g3sg1 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  m249/v_m249 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  sg550/v_sg550 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  sg552/v_sg552 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  p90/v_p90 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s4_a0.txt
+  EOF
+
 # Start a dedicated server (no install; run just install first) with a command pipe: just server 27015 hl_c01_a1
 [group('server')]
 server port='27015' map='hl_c01_a1' *args: (stop port)

@@ -19,3 +19,5 @@ sprites/640hud15.spr sprites/cs16/icons/640hud15.spr
 sprites/640hud16.spr sprites/cs16/icons/640hud16.spr
 sprites/640hud17.spr sprites/cs16/icons/640hud17.spr
 sprites/640hud18.spr sprites/cs16/icons/640hud18.spr
+# The muzzle flash fireball (events/cs16_muzzleflash2_*.txt) gets its own folder for the same reason.
+sprites/muzzleflash2.spr sprites/cs16/muzzle/muzzleflash2.spr

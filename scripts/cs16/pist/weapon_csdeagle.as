@@ -27,7 +27,7 @@ enum CS16_Deagle_Animation
 
 // Models
 string W_MODEL      = "models/cs16/wpn/eagle/w_eagle.mdl";
-string V_MODEL      = "models/cs16/wpn/eagle/v_eagle.mdl";
+string V_MODEL      = "models/cs16/wpn/eagle/v_eagle_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/eagle/p_eagle.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 21;

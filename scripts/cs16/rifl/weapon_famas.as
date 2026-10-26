@@ -25,7 +25,7 @@ enum CS16_Famas_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/famas/w_famas.mdl";
-string V_MODEL      = "models/cs16/wpn/famas/v_famas.mdl";
+string V_MODEL      = "models/cs16/wpn/famas/v_famas_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/famas/p_famas.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 3;

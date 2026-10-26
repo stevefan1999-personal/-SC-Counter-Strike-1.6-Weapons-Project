@@ -27,7 +27,7 @@ enum CS16_Ump45_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/ump45/w_ump45.mdl";
-string V_MODEL      = "models/cs16/wpn/ump45/v_ump45.mdl";
+string V_MODEL      = "models/cs16/wpn/ump45/v_ump45_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/ump45/p_ump45.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 15;

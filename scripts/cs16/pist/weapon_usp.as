@@ -37,7 +37,7 @@ enum CS16_Usp_Animation
 
 // Models
 string W_MODEL      = "models/cs16/wpn/usp/w_usp.mdl";
-string V_MODEL      = "models/cs16/wpn/usp/v_usp.mdl";
+string V_MODEL      = "models/cs16/wpn/usp/v_usp_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/usp/p_usp.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 6;
