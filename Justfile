@@ -350,7 +350,7 @@ metamod_release := 'v20261009a'
 metamod_archive := 'metamod-fallguys-ubuntu-i386.zip'
 metamod_sha256 := '552ae6d1faf184498f29d0c686515f56618eb55229970d7a687d8d5c74ed2d78'
 metamod_url := 'https://github.com/metamod-svencoop/metamod-svencoop/releases/download/' + metamod_release + '/' + metamod_archive
-# The library that "-dll" loads instead of the game DLL, relative to the install root.
+# The library that "-dll" loads instead of the game DLL, and the plugin; both relative to the game directory (svencoop).
 metamod_dll := 'addons/metamod/dlls/metamod.so'
 metamod_plugin := 'addons/counterlife/counterlife.so'
 
