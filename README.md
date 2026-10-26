@@ -121,6 +121,15 @@ Server commands (in case you registered the weapons as a plugin):
 as_command cs16.bm_maxmoney <value>
 as_command cs16.bm_moneyperscore <value>
 as_command cs16.bm_startmoney <value>
+as_command cs16.cs16_hud <1|0>                // 1: Counter-Strike 1.6 HUD, 0: native Sven Co-op HUD
+as_command cs16.cs16_hud_res <width>x<height> // screen size for players who did not set .hudres
+```
+
+Players tell the server their screen size for the Counter-Strike 1.6 HUD in chat or console (see `docs/hud-architecture.md`):
+```
+.hudres <width>x<height>
+/hudres
+!hudres
 ```
 
 ## Notes
