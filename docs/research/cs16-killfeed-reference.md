@@ -139,12 +139,16 @@ parallel runs, set a second root with `CS_FIXTURE_ROOT` and use other ports.
 | `STEAM_RUNTIME_RUN`  | `~/.local/share/Steam/ubuntu12_32/steam-runtime/run.sh` | Steam runtime                                           |
 
 Requirements: Steam running and signed in, Half-Life with CS 1.6 and Condition Zero installed, Xvfb with GLX, xdotool,
-ImageMagick 7, Deno 2, CMake 3.5 or newer, gcc and g++ with 32-bit libraries, fd and rg.
+ImageMagick 7, Deno 2, CMake 3.5 or newer, gcc and g++ with 32-bit libraries, fd and rg. The recipes do not get
+ReGameDLL_CS. Clone it next to the repository first: `git clone https://github.com/rehlds/ReGameDLL_CS ../ReGameDLL_CS`
+(tested at commit `4a50c42`; the build does not use its submodule).
 
 ## 4. Screenshots
 
 The full screenshots are in `.e2e/reference/` (not in git), named `cs16-killfeed-<W>x<H>-<name>.png`. The directory
-`cs16-killfeed-reference/` next to this file holds small crops of the feed.
+`cs16-killfeed-reference/` next to this file holds small crops of the feed from one run. A new run draws the same
+`m4a1`, `headshot`, `stack4` and `max4` feeds with every part at the same pixels (95–99.7% of the changed pixels agree;
+the others are glyph edges over a different background), but a different `fight`.
 
 | Name            | Shows                                                                                                                                                |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -170,8 +174,8 @@ The full screenshots are in `.e2e/reference/` (not in git), named `cs16-killfeed
 - Icon rects: a fit of the decoded sprite texels (`640hud1.spr`) against the red that the icon added gives the drawn
   position to 0.05 px. All icons fit at an integer rect position plus about 0.5 px in x and y: HUD sprites are sampled
   with bilinear filtering half a pixel off the texel grid. Each icon therefore spreads 1 px to the right and down.
-- Times: a frame takes about 0.2 s at 1600x900 and 0.6 to 1.3 s at 2560x1440. Its time is the middle of the grab. The
-  time zero is the moment the console log showed the kill (40 ms poll).
+- Times: frames come 0.05 to 0.5 s apart at 1600x900 and 0.5 to 1.5 s apart at 2560x1440, as the host load changes. A
+  frame time is the middle of the grab. The time zero is the moment the console log showed the kill (40 ms poll).
 
 ### 5.2 Line geometry
 
@@ -214,10 +218,11 @@ between a skull and the victim 12 to 13 (900) or 18 to 20 (1440). Name ink also 
 - Sprites come from the 640 set of `cstrike/sprites/hud.txt` at 1:1 at both resolutions: `d_m4a1` 48×16 (`640hud1`
   192,96), `d_headshot` 36×16 (`640hud1` 0,240), `d_skull` 32×16 (`640hud1` 224,240). At 1440p the icons look small next
   to the 24 px names.
-- Colour: the texel value times the tint 255,80,0, added to the frame. Measured added colour at the brightest texel:
-  208–211, 65–66, 0 for `d_m4a1` (brightest texel 208) and up to 229, 72, 0 for `d_skull`. The green-to-red ratio is
-  0.31 (80/255) and blue is 0. On the dark ceiling of the captures the icons look orange (about 250,100,30). Over the
-  bright sky in `1600x900-fight` they go to pink and white.
+- Colour: the texel value times the tint 255,80,0, added to the frame. Measured added colour at the reddest pixel:
+  203–211, 65–66, 0 for `d_m4a1` (brightest texel 208; the half-pixel bilinear sampling and small background changes
+  between the two frames move it by a few units) and up to 229, 72, 0 for `d_skull` (brightest texel 234). The
+  green-to-red ratio is 0.31 (80/255) and blue is 0. On the dark ceiling of the captures the icons look orange (about
+  250,100,30). Over the bright sky in `1600x900-fight` they go to pink and white.
 - The headshot icon follows the weapon icon after a gap of s(5), on the same y, with the same tint.
 - A death without a weapon sprite (`bot_kill` sends `world`) shows `d_skull`.
 
@@ -237,11 +242,13 @@ between a skull and the victim 12 to 13 (900) or 18 to 20 (1440). Name ink also 
 
 - At most 4 lines. Five deaths in one frame (`max4`) show the last four. The first death is gone.
 - New notices go to the bottom. Line 0 is the oldest.
-- Each notice stays 6.0 s. In two runs with frames 0.2 s apart at 1600x900, a notice was still visible 5.84–6.01 s after
-  the kill and gone 6.05–6.21 s after it. Runs with slower frames (2560x1440, or a loaded host) agree within their frame
-  spacing.
-- When the top notice expires, the lines below move up one step at once. In `stack4` the kill shows alone until 2.0 s,
-  four lines show from 2.2 s, three lines from 6.05 s (the skulls move up to rows 61, 91, 121) and no lines from 8.3 s.
+- Each notice stays 6.0 s. In a 1600x900 run with frames 0.06 s apart, the `m4a1` notice was visible 5.94 s after the
+  logged kill and gone at 5.99 s, and the `headshot` notice was visible at 5.99 s and gone at 6.07 s. The client prints
+  the kill line when it adds the notice (as in cs16-client `death.cpp:275-300`), so the script sees the kill at most one
+  log poll (40 ms) late. Runs with slower frames (2560x1440, or a loaded host) agree within their frame spacing.
+- When the top notice expires, the lines below move up one step at once. In `stack4` the kill shows alone until F9 at
+  2.0 s, four lines show from about 2.1 s, three lines from 6.05 s (the skulls move up to rows 61, 91, 121) and no lines
+  from about 8.1 s, 6 s after the `bot_kill` deaths.
 - A notice that arrives while the console is open gets an old start time. In a run with `bot_kill` typed into the
   console about 1 s after a kill, all four lines went away together at 6.1 s. While the console is open the client shows
   the main menu and draws no HUD (no radar, no crosshair), so the HUD time stops at the last HUD frame. The capture
@@ -273,8 +280,8 @@ the measurements above.
 
 The differences are all in the layout: Valve scales the top, the line step, the margin and the gaps with `s(n)`, and
 cs16-client uses `YRES(32) + 2` and fixed pixels. The measurements confirm the formula in
-`docs/research/cs16-hud-spec.md` §3.9 (branch `docs/cs16-hud-spec`): top `s(32)`, step `s(16)`, margin `s(12)`, gap
-`s(5)`, with one correction: the T name colour is 255,63,63, not 255,64,64.
+[cs16-hud-spec.md](cs16-hud-spec.md) §3.9: top `s(32)`, step `s(16)`, margin `s(12)`, gap `s(5)`, with one correction:
+the T name colour is 255,63,63, not the 255,64,64 of its §1.3 and §5.6.
 
 ## 7. Limits and quirks
 
