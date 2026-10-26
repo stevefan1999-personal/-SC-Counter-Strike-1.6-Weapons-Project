@@ -165,7 +165,7 @@ void MapInit()
 
     g_CS16Menu.AddItem( BuyMenu::BuyableItem( CS16_C4::WPN_NAME, CS16_C4::GetName(), CS16_C4::WPN_PRICE, "equip" ) );
 
-    //Initializes per-map state for the Buy Menu (clears points, precaches sprites)
+    //Initializes per-map state for the Buy Menu (clears points)
     BuyMenu::MoneyInit();
     DMS_MapInit();
 

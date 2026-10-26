@@ -311,8 +311,8 @@ namespace DamageMoneyScore
 		// Sync OldScore to suppress frag-based earning
 		BuyMenu::OldScore[steamId] = int( pPlayer.pev.frags );
 
-		// Refresh the money HUD display (channel 0, 640hud7.spr)
-		g_BuyMenuHelper.ShowPointsSprite( pPlayer );
+		// Refresh the CS money HUD; a reload of the wallet, not a change in play
+		g_BuyMenuHelper.ShowPointsSprite( pPlayer, false );
 	}
 
 	//=========================================================================
@@ -650,8 +650,8 @@ HookReturnCode DMS_ClientPutInServer( CBasePlayer@ pPlayer )
 	// Sync OldScore to suppress BuyMenu's frag-based earning from this point
 	BuyMenu::OldScore[steamId] = int( pPlayer.pev.frags );
 
-	// Refresh HUD display
-	DamageMoneyScore::g_BuyMenuHelper.ShowPointsSprite( pPlayer );
+	// Refresh the CS money HUD; a reload of the wallet, not a change in play
+	DamageMoneyScore::g_BuyMenuHelper.ShowPointsSprite( pPlayer, false );
 
 	// Sync score to scoreboard
 	DamageMoneyScore::SyncScore( pPlayer, steamId );

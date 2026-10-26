@@ -3,11 +3,13 @@
 #include "health"
 #include "armour"
 #include "ammo"
+#include "money"
 
 namespace CS16HUD
 {
   const array<string> STATUS_SPRITES = { "health.spr", "armor.spr", "armor_full.spr", "armor_helmet.spr",
-    "armor_helmet_full.spr", "clip.spr", "two_cells.spr", "reserve_lo.spr" };
+    "armor_helmet_full.spr", "clip.spr", "two_cells.spr", "reserve_lo.spr", "money_hi.spr", "money_delta_plus_hi.spr",
+    "money_delta_minus_hi.spr" };
 
   // Call in PluginInit after PluginInit of the foundation.
   void RegisterStatus()
@@ -15,8 +17,10 @@ namespace CS16HUD
     for( uint index = 0; index < STATUS_SPRITES.length(); ++index )
       PrecacheSprite( GENERATED_SPRITE_DIR + STATUS_SPRITES[index] );
     PrecacheSprite( ICON_SHEET_DIR + "640hud7.spr" ); // ammo icons
+    @g_Money = MoneyElement();
     Register( HealthElement() );
     Register( ArmourElement() );
     Register( AmmoElement() );
+    Register( g_Money );
   }
 }
