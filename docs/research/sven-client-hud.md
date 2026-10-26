@@ -31,6 +31,8 @@ Scope: Sven Co-op 5.26, engine build 10269, Linux, 32-bit.
   prints SPR headers and frames, `.re/tools/elf-strtab.ts` prints `char *`
   tables from an ELF file.
 - API dump: `sven-coop.github.io/outputdocs.txt` (cited as `outputdocs.txt:LINE`).
+- An independent re-check of the main claims is in "Review status" at the
+  end. Claims marked UNVERIFIED were not proved from the binaries or files.
 
 ## Summary
 
@@ -867,3 +869,42 @@ What a metamod plugin (`metamod-p-rs`) can add:
   `svc_stufftext` before it sends it.
 - I did not test any of this in a running game, because no game client may be
   started. A test with `hud_debug 2` would confirm 1.5 and 4.5.
+- UNVERIFIED: whether a changelevel frees the HUD sprite table (1.12). If it
+  does not, the 256-path limit counts every map of a connection.
+- UNVERIFIED: whether a clean Sven install ships `cl_filterstuffcmd "1"` in
+  `autoexec.cfg` (5).
+
+## Review status
+
+An independent re-check (2026-10-27) re-derived these claims from the
+binaries (same SHA-256 as above), the txt and SPR files, `outputdocs.txt` and
+`cs16-client`. It tried to refute each one.
+
+| # | Claim | Result | Evidence re-read |
+|---|---|---|---|
+| 1 | IDs 139–144, sizes 2/var/var/5/var/9 | confirmed | `outputdocs.txt:32069–32104`; `server.so` 0x498A83–0x498B17 |
+| 2 | `CustSpr` layout, byte left/top, width/height clamped 0–512 | confirmed | 0xD8A20, 0xD83D2; `server.so` 0x547676–0x5476B4 |
+| 3 | client channel = channel + 16 × group; plugins 1, maps 0 | confirmed | `server.so` 0x5474B8, 0x2BDCB4, 0x1A1EC6 (`scripts/plugins`), 0x1A3946 (`scripts/maps`) |
+| 4 | channel > 31 writes past the array | confirmed (create path only; `ToggleElem`, `UpdateNum` refuse) | 0xD8951–0xD8A1B, 0xD845A, 0xD8510 |
+| 5 | position formulas; x = −1 is the border; defaults −1 | confirmed | 0xDB324, 0xD7C24, 0xD7C88; `server.so` 0x2BCF00, 0x2BCFEE |
+| 6 | no scaling; only 640 rows | confirmed | 0xD6EC2, 0x9EA50; `hw.so` 0x127B70, 0x12A300 |
+| 7 | Sven 20×20 digits; maxdigits 0 → "0+"; icon placement | confirmed | `hud.txt:24–33`; 0xDBC48, 0xEBEE0, 0xEBDE4; `server.so` +0xD = 0 |
+| 8 | alpha model; 16/160/255 archived; opaque/masked only darker | confirmed | 0xD7D5E, 0xDA964, 0xDB2B8, 0xDBA5A, 0xDB9EC, 0xD69E5–0xD6A4B; `hw.so` 0x102E00 |
+| 9 | `PLAY_ONCE`, `HIDE_WHEN_STOPPED` never read | confirmed; frame formula made exact | 0xB48EE, 0xB495A, 0xD7CEE, 0xD7D5E |
+| 10 | `VidInit` deletes all 32 elements | confirmed | 0xD8F2A |
+| 11 | native colours are constants | confirmed (sampled) | 0xA1F1F, 0xA3D26, 0xC90D4, 0xA1C41, 0xCAD94, 0xCAE04 |
+| 12 | `m_iHideHUD` bits | confirmed (sampled) | 0xA1E60–0xA1EB7, 0xCAD4E, 0xCAF81, 0x9F872–0x9F888, 0xD82F2, 0xDA56A |
+| 13 | crosshair from the weapon txt, white, masked, centred, FOV ≤ 49 → zoom | confirmed | 0xA012C, 0xB46EE |
+| 14 | txt keys case-sensitive, 640 only | confirmed | 0x9EA50; GOT 0x61C1A0 is `strcmp` (`readelf -r`) |
+| 15 | `error.spr` swap; whole frame for bad rects; handle ≤ 0 ignored | confirmed | `hw.so` 0x12B990, 0x127AA0, 0x102E00 |
+| 16 | 256 HUD sprite paths, path reuse without case | confirmed; lifetime added | `hw.so` 0x102880, 0x5A9C0, 0x102C70 |
+| 17 | stufftext filter lists, default 0 | confirmed; the test client has 1 | `hw.so` 0x56E90, tables via `elf-strtab.ts`, cvar 0x2F11EC |
+| 18 | `NetworkMessage` does not check the type | confirmed | `server.so` 0x1C24DA |
+| 19 | killfeed 64×176 region | confirmed | `killfeed.as:36`, `322–326`; CS `640hud1.spr` 256×256 |
+| 20 | "23 weapon txts" with the bad crosshair rect | wrong: 22 | `rg`, `spr-check.ts` |
+| 21 | `crosshairs.spr` fully transparent | confirmed (texFormat 3, 100 % index 255) | `spr-stats.ts` |
+| 22 | `cs16-client` line citations in 3, 5 and 6 | confirmed | the cited lines |
+
+Not re-checked: the time display (0xEC22A, 0xEBC42), the native positions in
+2.2, the hook list in 2.5, `WeaponList` and the weapon menu layout (4.1–4.3),
+the `Cbuf`/`Cmd_ExecuteString` flow (5) and the unused engine crosshair (3).
