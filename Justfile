@@ -29,9 +29,9 @@ install target=server_dir:
   rsync -a '{{justfile_directory()}}'/{models,sprites,sound,events,maps} "$addon/"
   cp '{{justfile_directory()}}/default_plugins.txt' "$addon/default_plugins.txt"
   # CS 1.6 assets come from the local Counter-Strike install, not from git.
-  rg -v '^\s*(#|$)' '{{justfile_directory()}}/cstrike-assets.txt' | while read -r asset; do
+  rg -v '^\s*(#|$)' '{{justfile_directory()}}/cstrike-assets.txt' | while read -r asset destination; do
     test -f '{{cstrike_dir}}/'"$asset" || { echo "missing CS 1.6 asset: {{cstrike_dir}}/$asset" >&2; exit 1; }
-    install -D -m 644 '{{cstrike_dir}}/'"$asset" "$addon/$(dirname "$asset")/cs16/$(basename "$asset")"
+    install -D -m 644 '{{cstrike_dir}}/'"$asset" "$addon/${destination:-$(dirname "$asset")/cs16/$(basename "$asset")}"
   done
   echo "installed into $addon"
 

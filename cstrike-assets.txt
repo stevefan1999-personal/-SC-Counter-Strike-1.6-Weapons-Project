@@ -1,5 +1,6 @@
 # CS 1.6 files copied from the local Counter-Strike install at install time.
-# Each path is relative to cstrike/ and lands under <dir>/cs16/<file> in svencoop_addon.
+# Each line is a path relative to cstrike/ and an optional destination relative to svencoop_addon/.
+# Without a destination the file lands under <dir>/cs16/<file>.
 sprites/640hud1.spr
 sprites/640hud2.spr
 sprites/640hud16.spr
