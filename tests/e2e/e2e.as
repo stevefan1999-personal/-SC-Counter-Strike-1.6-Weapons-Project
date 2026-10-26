@@ -10,6 +10,7 @@
 //   as_command e2e.hurt <amount>                  damage player 1 from the world (pain, armour absorption)
 //   as_command e2e.respawn                        respawn player 1, also when dead
 //   as_command e2e.notify <text...>               print a line in the top-left notify area of every player
+//   as_command e2e.turn <degrees>                 turn player 1's view by an exact yaw step (left is positive)
 
 const float DEFAULT_SPAWN_DISTANCE = 160.0f;
 const float LETHAL_DAMAGE = 10000.0f;
@@ -32,6 +33,7 @@ void PluginInit()
   g_Commands.insertLast( CConCommand( "hurt", "<amount> - damage player 1 from the world", @HurtPlayer ) );
   g_Commands.insertLast( CConCommand( "respawn", "- respawn player 1, also when dead", @Respawn ) );
   g_Commands.insertLast( CConCommand( "notify", "<text...> - print a line in the notify area of every player", @NotifyAll ) );
+  g_Commands.insertLast( CConCommand( "turn", "<degrees> - turn player 1's view by a yaw step", @TurnView ) );
 }
 
 CBasePlayer@ FirstPlayer()
@@ -197,6 +199,21 @@ void SetArmor( const CCommand@ args )
     return;
   player.pev.armorvalue = atof( args.Arg( 1 ) );
   g_EngineFuncs.ServerPrint( "[e2e] armor " + player.pev.armorvalue + "\n" );
+}
+
+// A known yaw step moves a world point at the screen centre by focal length * tan(step) pixels, which measures the
+// field of view without any map geometry.
+void TurnView( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null || args.ArgC() < 2 )
+    return;
+  Vector viewAngles = player.pev.v_angle;
+  viewAngles.y += atof( args.Arg( 1 ) );
+  player.pev.angles = viewAngles;
+  player.pev.v_angle = viewAngles;
+  player.pev.fixangle = FAM_FORCEVIEWANGLES;
+  g_EngineFuncs.ServerPrint( "[e2e] turned to yaw " + viewAngles.y + "\n" );
 }
 
 void HurtPlayer( const CCommand@ args )
