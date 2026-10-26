@@ -99,7 +99,9 @@ element type on a used channel deletes the old element.
 | 5              | map    | `MONEY_DELTA_LOW`             | money change, low part            | status    |
 | 6              | map    | `FLASHLIGHT`                  | flashlight                        | status    |
 | 7              | map    | `RADAR_BACKGROUND`            | radar background                  | none yet  |
-| 8–15           | map    | `RADAR_DOT_FIRST` + n         | radar dots (`RADAR_DOTS` = 8)     | none yet  |
+| 8–13           | map    | `RADAR_DOT_FIRST` + n         | radar dots (`RADAR_DOTS` = 6)     | none yet  |
+| 14             | map    | `ARMOUR_FULL`                 | armour, full part                 | status    |
+| 15             | map    | `FLASHLIGHT_ENERGY`           | flashlight, energy part           | status    |
 | 16             | plugin | `CROSSHAIR_WEST`              | crosshair, west line              | crosshair |
 | 17             | plugin | `CROSSHAIR_EAST`              | crosshair, east line              | crosshair |
 | 18             | plugin | `CROSSHAIR_NORTH`             | crosshair, north line             | crosshair |
@@ -113,6 +115,11 @@ element type on a used channel deletes the old element.
 | 29             | plugin | `AMMO_ICON`                   | ammo icon                         | status    |
 | 30             | plugin | `MONEY_HIGH`                  | money, high part                  | status    |
 | 31             | plugin | `MONEY_LOW`                   | money, low part                   | status    |
+
+Channels 14 and 15 were radar dots in the first plan. The generated sprites then changed (`docs/hud-sprites.md`, merged
+from `feat/hud-sprites`): armour and flashlight are two elements each, because their bright part overlaps the base icon.
+No other channel was free, and the radar has no owner, so the two radar dot channels at the top of the range carry the
+second parts. Both parts of an element draw additively, so their order on the client does not change the picture.
 
 The engine keeps 8 text slots. The stock API gives plugins slots 0–3 and map scripts slots 4–7 (`sven-client-hudtext.md`
 1.2). A new text on a slot replaces the old text on that slot. Text and custom elements never share a slot.
@@ -160,14 +167,14 @@ On `main` these users take channels that the map above gives to other elements:
 | User                                                      | API channel    | Client channel or slot | Element of the map                 |
 | --------------------------------------------------------- | -------------- | ---------------------- | ---------------------------------- |
 | money number display (`scripts/cs16/BuyMenu.as:100`)      | plugin 0       | 16                     | crosshair, west line               |
-| C4 status icon (`scripts/cs16/misc/weapon_c4.as:131`)     | plugin 4       | 20                     | kill feed icon, row 1              |
-| kill feed weapon icons (`scripts/cs16/killfeed.as:290`)   | plugin 5–8     | 21–24                  | kill feed icons rows 2–4, health   |
-| kill feed headshot icons (`scripts/cs16/killfeed.as:307`) | plugin 9–12    | 25–28                  | armour, clip, reserve high and low |
-| kill feed names (`scripts/cs16/killfeed.as:323`, `340`)   | text 1–4, 9–12 | engine slots 0–3       | victim names rows 1–4              |
+| C4 status icon (`scripts/cs16/misc/weapon_c4.as:130`)     | plugin 4       | 20                     | kill feed icon, row 1              |
+| kill feed weapon icons (`scripts/cs16/killfeed.as:291`)   | plugin 5–8     | 21–24                  | kill feed icons rows 2–4, health   |
+| kill feed headshot icons (`scripts/cs16/killfeed.as:308`) | plugin 9–12    | 25–28                  | armour, clip, reserve high and low |
+| kill feed names (`scripts/cs16/killfeed.as:324`, `341`)   | text 1–4, 9–12 | engine slots 0–3       | victim names rows 1–4              |
 
 - The status element must remove the money number display of `BuyMenu.as` when it draws the money.
 - The kill feed element replaces the kill feed of `killfeed.as`.
-- The C4 status icon has no channel in the map. Its owner must give it one, for example a radar dot channel (8–15).
+- The C4 status icon has no channel in the map. Its owner must give it one, for example a radar dot channel (8–13).
 - Other plugins on the same server that use the stock API also draw on client channels 16–31.
 
 ## Raw senders
@@ -339,13 +346,19 @@ player ready. Thus an element must not start only in `OnSpawn`. `OnResend` runs 
 `PrecacheSprite` in `PluginInit`, after `CS16HUD::PluginInit()`.
 
 Never precache a HUD sprite with `g_Game.PrecacheModel`. The proof found this defect: when the server precaches a sprite
-sheet as a model and the native HUD also loads that sheet (the weapon txts load `cs16/640hud7` for the ammo icons),
-every HUD sprite that is drawn from the sheet becomes a solid block of its colour after a `changelevel`. The native ammo
-icon breaks too. The sprites stay broken until the client connects again. `BuyMenu.as` precached
-`sprites/cs16/640hud7.spr` as a model, so on `main` the money sign and the native ammo icons broke at each
-`changelevel`. This branch changes that line to `PrecacheGeneric`.
+sheet as a model and the native HUD also loads that sheet, every HUD sprite that is drawn from the sheet becomes a solid
+block of its colour after a `changelevel`. The native sprite breaks too. The sprites stay broken until the client
+connects again.
 
-Evidence (the proof element on testcenter, a shot before and after `changelevel testcenter`):
+`BuyMenu.as` precached its money sign sheet `sprites/cs16/640hud7.spr` as a model. Before `main` moved the weapon lists
+to `sprites/cs16/icons/` (merge `fc34436`), the weapon lists loaded the same sheet for the ammo icons. Thus the money
+sign and the native ammo icons broke at each `changelevel`. Now the weapon lists load `cs16/icons/640hud7`, so the two
+paths differ, but the money sign line was the only model precache of a HUD sheet. This branch changes it to
+`PrecacheGeneric`, so the defect cannot come back when two users share a sheet again (for example a CS ammo icon element
+that draws from `cs16/icons/640hud7.spr`).
+
+Evidence (the proof element on testcenter before the merge of `fc34436`, a shot before and after
+`changelevel testcenter`):
 
 | Users of the sheet                                                                         | After `changelevel`                                              |
 | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
@@ -365,7 +378,7 @@ The generated sprites of `docs/hud-sprites.md` are in `sprites/cs16/hud/`, thus 
 ran. A precache of a missing file would ask each client for a download that fails. Each element precaches the files that
 it uses.
 
-The engine allows 256 HUD sprite paths for one connection (`sven-client-hud.md` 1.12). The generated set uses 12.
+The engine allows 256 HUD sprite paths for one connection (`sven-client-hud.md` 1.12). The generated set uses 14.
 
 ## Cvars and commands
 
