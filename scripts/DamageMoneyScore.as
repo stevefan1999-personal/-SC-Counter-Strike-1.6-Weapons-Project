@@ -526,8 +526,11 @@ HookReturnCode DMS_MonsterTakeDamage( DamageInfo@ pDamageInfo )
 	if( pVictim is null || pAttacker is null )
 		return HOOK_CONTINUE;
 
-	// Only track damage FROM players TO non-player monsters
-	if( !pAttacker.IsPlayer() || pVictim.IsPlayer() )
+	// Only track damage FROM players TO live non-player monsters.
+	// Dying and dead monsters still take damage, but MonsterKilled never fires
+	// for them again, so their ledger entry would pay out on whichever monster
+	// reuses the entity index next.
+	if( !pAttacker.IsPlayer() || pVictim.IsPlayer() || !pVictim.IsAlive() )
 		return HOOK_CONTINUE;
 
 	float damage = pDamageInfo.flDamage;
