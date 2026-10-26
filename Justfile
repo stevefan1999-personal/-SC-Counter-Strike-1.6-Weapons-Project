@@ -33,6 +33,9 @@ install target=server_dir:
     test -f '{{cstrike_dir}}/'"$asset" || { echo "missing CS 1.6 asset: {{cstrike_dir}}/$asset" >&2; exit 1; }
     install -D -m 644 '{{cstrike_dir}}/'"$asset" "$addon/$(dirname "$asset")/cs16/$(basename "$asset")"
   done
+  # The CS HUD number sprites are composed from the same install (docs/hud-sprites.md).
+  deno run -R='{{cstrike_dir}}' -W="$addon/sprites/cs16/hud" '{{justfile_directory()}}/tools/hudgen.ts' \
+    '{{cstrike_dir}}' "$addon/sprites/cs16/hud" > /dev/null
   echo "installed into $addon"
 
 # Start a dedicated server (no install; run just install first) with a command pipe: just server 27015 hl_c01_a1
@@ -220,3 +223,8 @@ e2e-hud port='27017' label='hud':
 [group('e2e')]
 hudboxes image x y w h:
   deno run -A '{{justfile_directory()}}/tests/e2e/hudboxes.ts' '{{image}}' {{x}} {{y}} {{w}} {{h}}
+
+# Render the HUD sprite contact sheet and check it against a CS 1.6 screenshot: just hud-sheet /abs/cs16-ref-hud.png
+[group('tools')]
+hud-sheet screenshot out=(justfile_directory() / 'docs/hud-sprites/contact-sheet.png'):
+  deno run -R -W --allow-run=magick '{{justfile_directory()}}/tools/hudsheet.ts' '{{cstrike_dir}}' '{{screenshot}}' '{{out}}'
