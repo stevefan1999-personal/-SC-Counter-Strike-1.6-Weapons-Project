@@ -4,6 +4,7 @@
 - Date: 2026-10-27.
 - Branch: `docs/cs16-hud-spec`.
 - Scope: every Counter-Strike 1.6 HUD element (position, sprite, colour, alpha, number format, update trigger) and a proposed mapping to the Sven Co-op 5.26 AngelScript HUD API.
+- Review: an independent skeptic review on 2026-10-27 re-derived the load-bearing claims from the binaries. The corrections are in the text. Section 11 lists each check and its result. The largest correction: sprite, number and time displays share one group of 16 channels (§5.1, §5.5).
 
 ## 1. Sources and conventions
 
@@ -16,9 +17,10 @@
 | `hud.txt` | `Half-Life/cstrike/sprites/hud.txt` (CR removed) | `hud.txt:110` |
 | `wtxt` | `Half-Life/cstrike/sprites/weapon_*.txt` | `weapon_ak47.txt:9` |
 | `RGD` | ReGameDLL_CS, directory `regamedll/` | `dlls/player.cpp:7906` |
-| `HW`, `VGUI2` | `Half-Life/hw.so` and `Half-Life/vgui2.so` | address |
+| `HW`, `VGUI2` | `Half-Life/hw.so` (SHA-256 `fca6628b…`) and `Half-Life/vgui2.so` (SHA-256 `f0291c95…`). Both have symbols. The copies `.re/engine/hw.so` and `.re/vgui2/vgui2.so` are the Sven Co-op files, not these files. | address |
 | `API` | `sven-coop.github.io/outputdocs.txt` (AngelScript API dump) | `API:2131` (line) |
 | `SVEN` | Sven Co-op client install (read-only) | `svencoop/sprites/hud.txt:24` |
+| `SVEN-BIN` | Sven Co-op client `svencoop/cl_dlls/client.so` (SHA-256 `50580344…`), analysed in IDA from `.re/client/client.so`. Function names follow `docs/research/sven-client-hud.md` (branch `docs/sven-client-hud`). | `SVEN-BIN 0xd893a` |
 | `TOOL` | Deno scripts written for this research. They copy the `BIN` formulas. | output in Appendix A |
 
 `BIN` is the authority. `FWGS` is cited where it agrees with `BIN`. Section 9 lists every FWGS deviation that this research found. Do not copy FWGS values that Section 9 lists.
@@ -31,7 +33,8 @@
 - Integer division truncates toward zero, as in C. `(int)x` truncates.
 - A box is `(x, y, w, h)`: top-left corner and size in screen pixels. The y axis points down.
 - Examples use the 640 sprite set at 640×480, unless a row gives another size.
-- "A VGUI panel is open" is an interpretation. BIN calls a `gViewPortInterface` virtual function there, and the symbols do not give its name.
+- Some gates call `gViewPortInterface` virtual functions. The slot names come from the `CounterStrikeViewport` vtable (BIN 0x180180, address point +8): slot 3 `AllowedToPrintText` (0x173ba0), slot 10 `IsScoreBoardVisible` (0x173a80), slot 19 `IsTutorTextWindowOpen` (0x173890), slot 24 `IsSpectatorGUIVisible` (0x173ac0), slot 52 `GetSpectatorTopBarHeight` (0x865b0). They test CS client panels that a Sven server cannot see, so the plugin ignores these gates.
+- `cstrike/config.cfg` is the user's saved configuration. The game rewrites it (it changed on 2026-10-27 01:01), so this spec cites its cvars by name, not by line.
 
 ### 1.3 Colour and blend model
 
@@ -92,6 +95,8 @@ Fade curves:
 
 TOOL sample (Appendix A.1): health curve 228, 202, 176, 151, 125, 100 at t = 0…5 s. Ammo curve 200, 180, 160, 140, 120, 100.
 
+Frame detail: health, armour and money subtract the frame time before they compute the alpha (BIN 0xb105c, 0xa4b1c, 0x9c97e). Thus the first drawn frame is a little below 228 (227 at 100 fps). Ammo computes the alpha first (BIN 0xa3099–0xa30c0), so its first frame is 200.
+
 ## 2. Global rules
 
 ### 2.1 Sprite set and scaling
@@ -140,6 +145,8 @@ Algorithm for n > 0:
 2. If n ≥ 10, draw digit `(n % 100) / 10`. Else, if flag 2 or flag 4 is set, keep one empty cell (with flag 8, draw "0").
 3. Draw digit `n % 10`.
 4. Each step moves x by `dw`. The function returns the new x.
+
+For n > 0, BIN draws the flag-8 "0" glyphs without a new `SPR_Set` (BIN 0xb60b3, 0xb6082). They use the sprite and colour of the previous `SPR_Set`. In the round timer that call set the same sheet and colour, so the result does not change.
 
 For n ≤ 0 the function draws nothing, unless flag 1 is set. With flag 1 it keeps the reserved cells and draws "0". A value of 1000 or more gives a digit index out of range. CS keeps the values small through the protocol: health and reserve ammo are bytes (BIN 0xaeefc, 0x9fae0), and the clip is a signed char (BIN 0x9ff13).
 
@@ -354,7 +361,7 @@ Section 8 marks this element as not applicable. It is here for reference.
 | Item | Value | Evidence |
 |---|---|---|
 | Trigger | `RoundTime` message (short seconds). The next draw sets `end = now + seconds`. Panic state resets. | BIN 0xb0090, 0xadfb0–0xadfb8 |
-| Hidden when | `HIDEHUD_TIMER`, a VGUI panel is open, or the bomb is planted | BIN 0xadfc6–0xadfe8 |
+| Hidden when | `HIDEHUD_TIMER`, the spectator GUI is visible (viewport slot 24 `IsSpectatorGUIVisible`, §1.2), or the bomb is planted | BIN 0xadfc6–0xadfe8 (call at 0xadfdd) |
 | x | `(W - dw * (W <= 639 ? 5 : 4)) / 2` = W/2 − 40 (640) | BIN 0xae0fc |
 | y | suit: `H - fh - fh/2` = H − 37. No suit: 42. | BIN 0xae0b6, 0xae406 |
 | Stopwatch | `stopwatch` box `(x - 24, y, 24, 24)`, only if W > 399 | BIN 0xae10e–0xae171, hud.txt:127 |
@@ -387,15 +394,16 @@ Section 8 marks this element as not applicable. `BarTime` (short seconds, 0 mean
 | Item | Value | Evidence |
 |---|---|---|
 | Lines | 4 at most. A new line pushes the oldest out. | BIN 0xa603f–0xa608a |
-| Lifetime | `hud_deathnotice_time`, default 6 s | BIN 0xa5a47, 0xa61e6–0xa621e |
-| Scale | `s(n) = (int)(n * H / min(H, 480))`. This is `GetProportionalScaledValue` (VGUI2 0x129f0–0x12a47) with base 640×480 (HW 0x1c5c02, 0x1c5c09) clamped to the screen (HW 0x1c2b20). | |
-| Metrics | top `s(32)`, line step `s(16)`, right margin `s(12)`, gap `s(5)` | BIN 0xa5a4d–0xa5aae |
+| Lifetime | `hud_deathnotice_time`, default 6 s. BIN truncates the cvar to whole seconds. | BIN 0xa5a47, 0xa61e6–0xa621e |
+| Scale | `s(n) = (int)(n * H / min(H, 480))`. This is `GetProportionalScaledValue` (VGUI2 0x129f0–0x12a47, slot +0x28 of the `CSchemeManager` vtable, the slot that BIN calls) with base 640×480 (HW 0x1c5c02, 0x1c5c09) clamped to the screen (HW 0x1c2b20). | |
+| Metrics | top `s(32)`, line step `s(16)`, right margin `s(12)`, gap `s(5)`. BIN computes them once, in `CHudDeathNotice::Init`, with the screen size at that time. A later change of the video mode does not change them. | BIN 0xa5a4d–0xa5aae |
+| Gate | Drawn only while the tutor window is closed (slot 19) and `AllowedToPrintText` (slot 3) is true (§1.2) | BIN 0xa5b45, 0xa5b84 |
 | Line y | `s(32) + i * s(16)` (i = 0 is the oldest). A spectator uses the spectator-bar height instead of `s(32)`. | BIN 0xa5b9f, 0xa5b35 |
 | Layout | Left to right: killer name, gap `s(5)`, weapon icon, gap, then headshot icon and gap (if any), then victim name. The victim name ends at `W - s(12)`. A suicide has no killer name and no first gap. All parts share the line y. | BIN 0xa5bdd–0xa5dd3 |
 | Name font | engine console font, colour by team: `CSWTCH.37[team - 1]` for teams 1…4, else grey (§1.3) | BIN 0xa60c6–0xa60df, 0xa6133–0xa614c |
 | Icon | `d_<weapon>` from the `DeathMsg` string. An unknown name (for example `world`, `c4`) uses `d_skull`. Colour: kill icon, or team-kill icon when the string is `teammate`. | BIN 0xa61c0–0xa61c8, 0xa5bae, 0xa5c5b |
 | Headshot | `d_headshot` after the weapon icon, same colour | BIN 0xa61ce–0xa6345, 0xa5d13–0xa5d5c |
-| Non-player victim | victim byte 255: the name is the weapon string without `d_` | BIN 0xa6107–0xa638b |
+| Non-player victim | victim byte 255: BIN stores the weapon string without `d_` as the victim name and prints `<killer> killed a <name>` to the console. It does not draw that name (BIN 0xa5d8f), but the layout still subtracts its width (BIN 0xa5bdd). Thus the line keeps an empty space at the right. | BIN 0xa6107–0xa638b, 0xa63eb |
 | Message | `DeathMsg`: byte killer, byte victim, byte headshot, string weapon | BIN 0xa5fc5–0xa5fe3 |
 
 Values: H = 480 gives top 32, step 16, margin 12, gap 5. H = 768 gives 51, 25, 19, 8. H = 1080 gives 72, 36, 27, 11.
@@ -472,7 +480,12 @@ Death icons (all 16 px high):
    - `m_iFOV > 54`,
    - the weapon is not Scout (3), SG550 (13), AWP (18) or G3SG1 (24). BIN uses the bit mask `0x1042008`.
    - `HIDEHUD_CROSSHAIR` is clear.
-2. When `m_iFOV < 90`, `CurWeapon` also sets the engine sprite crosshair. That sprite is the weapon's `zoom` entry, else its `crosshair` entry (BIN 0x9ff87–0xa00d6, 0x9ebc0). For CS weapons it is `crosshairs.spr` (24,0,24,24) (for example weapon_ak47.txt:10). This region is the Half-Life 9 mm cross: four short ticks (TOOL, Appendix A.4). The engine draws this sprite only when the engine cvar `crosshair` is 1 (default 1, cstrike/config.cfg:115).
+2. When `m_iFOV < 90`, `CurWeapon` also sets the engine sprite crosshair. That sprite is the weapon's `zoom` entry, else its `crosshair` entry (BIN 0x9ff87–0xa00d6, 0x9ebc0). The engine draws it only when the engine cvar `crosshair` is 1 (`cstrike/config.cfg`). The 640 entries in `cstrike/sprites/weapon_*.txt`:
+   - AWP, G3SG1, Scout, SG550: `zoom` = `sniper_scope` (0,0,256,256).
+   - AUG, SG552, C4: no `crosshair` and no `zoom` entry, so the engine crosshair is cleared.
+   - All other weapons: `crosshair` = `crosshairs` (24,0,24,24) (for example weapon_ak47.txt:10), the Half-Life 9 mm cross: four short ticks (TOOL, Appendix A.4). XM1014 also has `zoom` = `ch_sniper`.
+
+   Only the snipers, AUG and SG552 set an FOV below 90. Thus a CS player never sees the 9 mm cross.
 3. When `m_iFOV ≥ 90`, `CurWeapon` clears the engine crosshair (BIN 0x9ff87).
 
 #### 3.12.2 Inputs
@@ -548,11 +561,11 @@ State: `distance` (float, starts at 0), `alpha` (int, starts at 200), `lastCheck
 6. Set `alpha = min(alpha, 255)`.
 7. Set `length = (int)((distance - g) * 0.5) + 5`.
 
-The decay runs once for each client frame. It depends on the frame rate. The CS default is `fps_max 100` (cstrike/config.cfg:119). Appendix A.2 has a frame-by-frame AK-47 vector at 100 fps.
+The decay runs once for each client frame. It depends on the frame rate. The CS default is `fps_max 100` (`cstrike/config.cfg`). Appendix A.2 has a frame-by-frame AK-47 vector at 100 fps.
 
 #### 3.12.5 Resolution scale
 
-`cl_crosshair_size` selects a base width (BIN 0xa1870). The BIN default is `"0"` (BIN 0x9d290), which is the same as `auto`. The CS config default is `auto` (cstrike/config.cfg:85).
+`cl_crosshair_size` selects a base width (BIN 0xa1870). The BIN default is `"0"` (BIN 0x9d290), which is the same as `auto`. The saved CS config has `auto` (`cstrike/config.cfg`). `cl_dynamiccrosshair` defaults to `"1"` (BIN 0xb37c0–0xb37e8).
 
 | Value | Base |
 |---|---|
@@ -599,7 +612,7 @@ The inner end of each line is d pixels from the centre pixel. The four lines are
 | Colour | HUD orange. Battery < 20 %: alert red. | BIN 0xa7e07–0xa7e37 |
 | Alpha | on: 225. Off: 100. | BIN 0xa7e07 |
 | Trigger | `Flashlight` (byte on, byte battery %) and `FlashBat` (byte battery %) | BIN 0xa80b0, 0xa8070, FWGS flashlight.cpp:64-83 |
-| Hidden when | `HIDEHUD_FLASHLIGHT` or `HIDEHUD_ALL`, the VGUI viewport check fails (a panel is open), no suit, spectator | BIN 0xa7d97 and the viewport call that follows |
+| Hidden when | `HIDEHUD_FLASHLIGHT` or `HIDEHUD_ALL`, the CS tutor window is open (viewport slot 19 `IsTutorTextWindowOpen`, §1.2), no suit, spectator | BIN 0xa7d97, 0xa7da3 |
 
 ### 3.14 Pain arrows and damage-type icons
 
@@ -631,9 +644,9 @@ Damage-type icons (BIN 0xafd50, 0xada80):
 | `TextMsg` destination 3 (talk) and 5 | chat area | BIN 0xce3e0 (cases 3, 5) |
 | `TextMsg` destinations 1, 2 | console only | BIN 0xce3e0 (cases 1, 2) |
 | Chat (`SayText`) | `CHudSayText::GetTextPrintY` returns `H - (int)(2.75 * fh) - (5 * lineH + (int)(0.5 * lineH))`. A spectator uses the spectator-bar height instead of `2.75 * fh`. | BIN 0xc5700 |
-| Player id (`StatusText`, `StatusValue`) | `hud_centerid 0` (default): x = 10, y = `H - (int)(2.75 * fh)`. Else centred at `y = H/2 + hud_centerid * textH`. Console font. Names in team colours, default yellow. | BIN 0xc8bb0, cstrike/config.cfg:147 |
+| Player id (`StatusText`, `StatusValue`) | `hud_centerid 0` (default): x = 10, y = `H - (int)(2.75 * fh)`. Else centred at `y = H/2 + hud_centerid * textH`. Console font. Names in team colours, default yellow. | BIN 0xc8bb0, `cstrike/config.cfg` |
 | `HudText` and `game_text` | Half-Life titles.txt message engine (x and y fractions, effects 0/1/2, fade times) | BIN 0x92ab0, 0x921f0, FWGS message.cpp |
-| Text menu (`ShowMenu`) | x = 20. First line y = `H/2 - charH * (newlines/2) - (3*charH + charH/3)` with `charH = max(12, engine char height)`. Line step `charH + 2`. Default white. Codes `\w` `\y` `\r` `\d` (§1.3). `\R` right-aligns the rest of the line at x = W/2. Hidden while a VGUI panel is open. | BIN 0xc3d90–0xc40c0 |
+| Text menu (`ShowMenu`) | x = 20. First line y = `H/2 - charH * (newlines/2) - (3*charH + charH/3)` with `charH = max(12, engine char height)`. Line step `charH + 2`. Default white. Codes `\w` `\y` `\r` `\d` (§1.3). `\R` right-aligns the rest of the line at x = W/2. Hidden while the scoreboard is visible (viewport slot 10 `IsScoreBoardVisible`, §1.2). | BIN 0xc3d90–0xc40c0, 0xc40fd |
 
 ### 3.16 Other CS screen parts
 
@@ -661,16 +674,18 @@ Damage-type icons (BIN 0xafd50, 0xada80):
 
 ## 5. Mapping to the Sven AngelScript HUD API
 
-### 5.1 API facts (from the dump)
+### 5.1 API facts (from the dump, checked against the client)
 
 | Fact | Evidence |
 |---|---|
 | `HudNumDisplay`, `HudUpdateNum`, `HudTimeDisplay`, `HudUpdateTime`, `HudCustomSprite`, `HudToggleElement`, `HudMessage` exist | API:1924-1969 |
-| `channel` range 0-15, "each module type has its own channel group" (numeric, time and sprite displays) | API:2130-2131, API:2253-2254 |
+| `channel` range 0-15, "each module type has its own channel group". "Module type" means map script or plugin, not sprite, number or time display. The client keeps one array of 32 elements. `CustSpr`, `NumDisplay` and `TimeDisplay` all store into it by channel (`GetOrCreateElement`). Channels 0-15 (maps) are hidden by `HIDEHUD_CUSTOM_MAPS`, 16-31 (plugins) by `HIDEHUD_CUSTOM_PLUGINS`. A message of another element type on a used channel deletes the old element. Thus all plugins on a server share 16 channels for sprites, numbers and timers together. | API:2130-2131, API:2253-2254; SVEN-BIN 0xd893a (0xd8961, 0xd8976), callers 0xd8a61, 0xd8bff, 0xd8dc5; group gate 0xd82f2 (0xd830e, 0xd836e) |
 | `HUDTextParams.channel` is 1-4 | API:2286-2287 |
-| `left` and `top` are `uint8` (0-255). `width` and `height` are `int16` (0-512, 0 = whole sprite). | API:2228-2238, API:2045-2055 |
-| Sprite displays have `frame`, `numframes`, `framerate` | API:2188-2198 |
-| `x`, `y`: 0…1 from the top-left, −1…0 from the right or bottom, −1 centred | API:2213-2219 (HUDSpriteParams) |
+| `left` and `top` are `uint8` (0-255). `width` and `height` are `int16` (0-512). The client sets right = left + width and bottom = top + height. If width or height is 0, it sets right or bottom to the frame size. Thus 0 means "to the right or bottom edge of the frame", and "0 = whole sprite" is true only when left and top are 0. This rule caused the kill-feed glitch that commit `95ae240` fixed (now in `main`). | API:2228-2238, API:2045-2055; SVEN-BIN `READ_SPRRECT` 0xd83d2, `FixupSpriteRect` 0xd5002 |
+| Sprite displays have `frame`, `numframes`, `framerate`. The drawn frame is `frame + (int)(framerate * t) mod numframes` only when `numframes > 1` and `framerate > 0`. Else `frame` is static. | API:2188-2198; SVEN-BIN 0xb495a |
+| Draw mode: additive by default. `HUD_SPR_OPAQUE` uses `SPR_Draw`, else `HUD_SPR_MASKED` uses `SPR_DrawHoles`. No other `HUD_SPR_*` flag is read. | SVEN-BIN `CHudCustomSprite::Start` 0xb48ee, `Draw` 0xb495a |
+| `x`, `y`: the API says 0…1 from the top-left, −1…0 from the right or bottom, −1 centred. The client does not centre at −1: in fraction mode −1 gives the left or top border. Use `SCR_CENTER_X/Y` to centre. §5.2 U1-U3 give the exact rules. | API:2213-2219 (HUDSpriteParams); SVEN-BIN `CalcHudPos` 0xdb324 |
+| The client deletes all 32 elements at each level load (`CHudCustom::VidInit`). The server must send them again after a map change or a reconnect. | SVEN-BIN 0xd8f2a |
 | `HUD_ELEM_ABSOLUTE_X` 1, `HUD_ELEM_ABSOLUTE_Y` 2, `SCR_CENTER_X` 4, `SCR_CENTER_Y` 8, `NO_BORDER` 16, `HIDDEN` 32, `EFFECT_ONCE` 64, `DEFAULT_ALPHA` 128, `DYNAMIC_ALPHA` 256 | API:33329-33377 |
 | `HUD_SPR_OPAQUE` 65536, `HUD_SPR_MASKED` 131072, `HUD_SPR_PLAY_ONCE` 262144, `HUD_SPR_HIDE_WHEN_STOPPED` 524288 | API:33296-33314 |
 | `HUD_NUM_RIGHT_ALIGN` 65536, `SEPARATOR` 131072, `DONT_DRAW_ZERO` 262144, `LEADING_ZEROS` 524288, `NEGATIVE_NUMBERS` 1048576, `PLUS_SIGN` 2097152 | API:33251-33281 |
@@ -679,28 +694,30 @@ Damage-type icons (BIN 0xafd50, 0xada80):
 
 The existing code uses these conventions: sprite name `cs16/<file>.spr` relative to `sprites/` (`killfeed.as:36`, `BuyMenu.as:66`, `base.as:134-135`), precache of `sprites/cs16/<file>.spr` (`killfeed.as:201-203`, `BuyMenu.as:586`).
 
-### 5.2 Assumptions (all UNVERIFIED)
+### 5.2 Assumptions and their status
 
-Another agent reverse-engineers the Sven client. Every row below needs that work before an implementation depends on it.
+The first version of this spec listed U1-U16 as UNVERIFIED. The review checked them in the Sven client (SVEN-BIN). "Per sven-re" means `docs/research/sven-client-hud.md` (branch `docs/sven-client-hud`) states it with addresses, but this review did not check it again.
 
-| Id | Assumption |
-|---|---|
-| U1 | With `ABSOLUTE_X` and x ≥ 0, the element's left edge is x pixels from the left screen edge. The same rule applies to y. |
-| U2 | With `ABSOLUTE_X` and x < 0, the anchor is the right screen edge. It is not known if x sets the element's left edge (`W + x`) or its right edge (`W + x` minus the width, as Half-Life `HudMessage` does). This spec gives every box with both edges so that either rule works. |
-| U3 | With `SCR_CENTER_X`/`SCR_CENTER_Y`, x and y are offsets from `W/2`, `H/2`. It is not known if the offset places the element's top-left corner or its centre. |
-| U4 | Sven draws custom sprites at 1:1 pixel size at every resolution (like CS). |
-| U5 | Sven draws custom sprites additively. `color1` RGB multiplies the sprite. It is not known if the alpha also multiplies. |
-| U6 | `HUD_ELEM_NO_BORDER` removes the `hud_bordersize` offset (default 16). |
-| U7 | `left`, `top`, `width`, `height` select a sub-rectangle. A width or height smaller than the sprite crops it. |
-| U8 | With `framerate` 0, `frame` selects one static frame of a multi-frame sprite. |
-| U9 | Effect 2 interpolates linearly from `color2` to `color1` in `fxTime` seconds, and `EFFECT_ONCE` keeps `color1` after the end. It is not known if Sven interpolates before or after the alpha multiply. |
-| U10 | A `holdTime` long enough (or 0) keeps an element visible until the plugin replaces or hides it. |
-| U11 | Numeric, time and sprite displays have separate groups of 16 channels. |
-| U12 | `HudNumDisplay` draws its digits with Sven's own `number_0`…`number_9` (svencoop/sprites/hud.txt:24-33: 640hud7, 20×20 cells, step 20), not with CS digits (20×25 glyphs, hud.txt:110-119). |
-| U13 | `HudMessage` channels 1-4 are shared with map `game_text` entities. A negative x right-aligns each line (Half-Life `CHudMessage::XPosition`). |
-| U14 | `m_iHideHUD` bits stay set until code clears them. Sven can reset them on spawn or in map scripts. |
-| U15 | `HIDEHUD_HEALTH` (8) also hides Sven's pain arrows and damage-type icons, as in Half-Life. |
-| U16 | A fraction x of 0.2 gives the same pixel as `W / 5`. |
+Position terms (SVEN-BIN `CalcHudPos` 0xdb324): `v` = x or y as sent, `S` = screen size on that axis, `s` = element size on that axis, `b` = border (0 with `NO_BORDER`, else `clamp(int(hud_bordersize), 0, 100)`).
+
+| Id | Assumption | Status |
+|---|---|---|
+| U1 | With `ABSOLUTE_X` and x ≥ 0, the element's left edge is x pixels from the left screen edge. The same rule applies to y. | VERIFIED: `p = (int)(v + b)`. No clamp. |
+| U2 | With `ABSOLUTE_X` and x < 0, the anchor is the right screen edge (left-edge or right-edge rule unknown). | RESOLVED, right-edge rule: `p = (int)(v + S - b - s)`. The element's right (or bottom) edge is `-v` pixels inside the screen edge. Use the "right anchor" or "bottom anchor" values. `v = 0` counts as x ≥ 0, so "0 px from the right edge" needs the fraction 1.0 (see U16). |
+| U3 | With `SCR_CENTER_X`/`SCR_CENTER_Y`, x and y are offsets from `W/2`, `H/2` (corner or centre unknown). | RESOLVED, centre rule: with `ABSOLUTE`, `p = (int)(v + ((S - s) >> 1))` and no border. The element is centred, then moved by v. Without `ABSOLUTE`: `p = (int)(v * (S - 2b) + ((S - s) >> 1))`, then clamped. |
+| U4 | Sven draws custom sprites at 1:1 pixel size at every resolution (like CS). | Per sven-re §1.6 (glOrtho in screen pixels, no HUD scale, `hud.txt` and weapon lists read only at 640). Not checked again. |
+| U5 | Sven draws custom sprites additively. `color1` RGB multiplies the sprite. Alpha multiply unknown. | VERIFIED: additive unless `OPAQUE`/`MASKED` (0xb48ee). The final RGB is `(int)(float)(c * (A / 255.0))` (0xda964, called at the end of `GetColor` 0xd7d5e), the same formula and truncation as CS `ScaleColors`. An element with A = 0 is not drawn (0xb4a18). `HUD_ELEM_DYNAMIC_ALPHA` and `HUD_ELEM_DEFAULT_ALPHA` multiply A again by Sven's HUD alpha (0xd7e16–0xd7ec0). Do not set them. |
+| U6 | `HUD_ELEM_NO_BORDER` removes the `hud_bordersize` offset (default 16). | VERIFIED (0xdb347–0xdb3b4). |
+| U7 | `left`, `top`, `width`, `height` select a sub-rectangle. | VERIFIED, with the "0 = to the frame edge" rule of §5.1. Never send a width or height of 0 to hide a part: hide the element. |
+| U8 | With `framerate` 0, `frame` selects one static frame of a multi-frame sprite. | VERIFIED (0xb49bb–0xb49e6). `numframes` 1 also gives a static frame. |
+| U9 | Effect 2 interpolates linearly from `color2` to `color1` in `fxTime`; `EFFECT_ONCE` keeps `color1`. Order of interpolation and alpha multiply unknown. | VERIFIED: effect 2 interpolates all four channels R, G, B and A from `color2` to `color1` (0xdb6f8 cases 1 and 2, lerp 0xdb640). Then A multiplies RGB (U5). `EFFECT_ONCE` holds t at `0.999 * fxTime` (0xd7d86–0xd7eda), so the end colour is 0.1 % short of `color1` and can be 1 unit off after truncation. Effect 7 shows `color1`, then `color2` after half of `fxTime` (0xdb9c2). |
+| U10 | A `holdTime` long enough (or 0) keeps an element visible. | CORRECTED: with `holdTime ≥ 0` the element ends at `fadein + hold` (+ fade-out) (0xd7e45–0xd7f1c). `holdTime` 0 with no fade-in shows one frame only. A negative `holdTime` never ends; per sven-re the constructor default is −1. Use −1. |
+| U11 | Numeric, time and sprite displays have separate groups of 16 channels. | REFUTED (§5.1): they share one group of 16 channels for each module type. |
+| U12 | `HudNumDisplay` draws Sven's `number_0`…`number_9` (svencoop/sprites/hud.txt:24-33: 640hud7, 20×20 cells), not CS digits (20×25 glyphs, hud.txt:110-119). | Per sven-re §1.7-§1.8: Sven digits; element height = Sven font height 20; digits start 4 px right of the icon; the icon is centred on the 20 px row. Not checked again. |
+| U13 | `HudMessage` channels 1-4 are shared with map `game_text` entities. A negative x right-aligns each line (Half-Life `CHudMessage::XPosition`). | UNVERIFIED. |
+| U14 | `m_iHideHUD` bits stay set until code clears them. Sven can reset them on spawn or in map scripts. | UNVERIFIED (server side). |
+| U15 | `HIDEHUD_HEALTH` (8) also hides Sven's pain arrows and damage-type icons. | VERIFIED: Sven `CHudHealth::Draw` returns at once when bit 8 is set (0xcad41–0xcad4e). Per sven-re the pain arrows and damage icons are drawn from that function. |
+| U16 | A fraction x of 0.2 gives the same pixel as `W / 5`. | VERIFIED with `NO_BORDER`: `p = (int)(0.2f * W)` = `W / 5` for all real screen widths. In fraction mode the client also clamps `p + s ≤ S - b`, so the fraction 1.0 with `NO_BORDER` puts an element flush with the right (or bottom) edge. |
 
 ### 5.3 Native Sven elements to hide
 
@@ -718,80 +735,100 @@ The sum is 810. Rules:
 
 1. Use a bitwise OR. Do not clear bits that a map or Sven set.
 2. Set the bits again after each spawn (U14).
-3. Do not set 4 (`HIDEHUD_ALL`), 1 (`HIDEHUD_WEAPONS`), 16 (`HIDEHUD_WEAPON_SELECT`) or 128 (`HIDEHUD_CUSTOM_PLUGINS`). Bit 128 hides the plugin HUD itself. Bits 1 and 16 remove the native weapon menu, which the plugin cannot replace (§5.6).
+3. Do not set 4 (`HIDEHUD_ALL`), 1 (`HIDEHUD_WEAPONS`), 16 (`HIDEHUD_WEAPON_SELECT`) or 128 (`HIDEHUD_CUSTOM_PLUGINS`). Bit 128 hides the plugin HUD itself. Bits 1 and 16 remove the native weapon menu, which the plugin cannot replace (§5.6). Per sven-re they also stop weapon selection with the slot keys.
+
+Consequences:
+
+- Bit 8 also removes Sven's pain arrows and damage-type icons (U15). After this change the player has no hit-direction cue until the plugin draws the CS arrows (§3.14). Those need `valve/sprites/640_pain.spr`, which the install recipe cannot import yet (§6.2).
+- The native elements that stay (weapon menu, pickup history) use Sven's fixed colour (100,130,200) at Sven's HUD alpha (SVEN-BIN `DrawWList` 0xa1574–0xa1584; per sven-re also the history). A server cannot change it, and pre-coloured sprites cannot reach CS orange, because the red factor is at most 100/255. Thus these two elements cannot look like CS.
 
 ### 5.4 Primitive mapping
 
 | CS primitive | Sven equivalent | Notes |
 |---|---|---|
-| `SPR_Set(spr, r,g,b)` + `SPR_DrawAdditive(0, x, y, rect)` | `HudCustomSprite` with `spritename`, `left`/`top`/`width`/`height` = rect, `x`/`y` with `ABSOLUTE_X`, `ABSOLUTE_Y`, `NO_BORDER` | U1, U2, U4-U7. Give `color1` as the pre-scaled colour with alpha 255. This is correct if Sven multiplies by alpha and also if it does not (U5). |
-| `FillRGBA(x, y, w, h, r,g,b,a)` | `HudCustomSprite` on a solid white sprite `cs16/hudfill.spr`, rect `(0, 0, w, h)`, colour `(r*a/255, g*a/255, b*a/255, 255)` | `hudfill.spr` is a new generated file (§6.3). |
-| `FillRGBABlend` | no exact match. Use `HUD_SPR_OPAQUE` or additive. | Only `cl_crosshair_translucent 0` and night vision use it. |
-| `DrawHudNumber` | option A: `HudNumDisplay` (Sven digits, U12). Option B: a generated multi-frame sprite, frame = value (U8). | §5.5 |
-| Fade (alpha 228 → 100 in 5 s) | `color2` = bright, `color1` = dim, effect 2, `fxTime` 5, `EFFECT_ONCE`. Send again at each change to restart it. | U9. Exact for health, armour and ammo (constant RGB). For money the RGB and the alpha both change. Send raw RGB with the alpha in the A channel if Sven interpolates before the multiply, else accept the error. |
+| `SPR_Set(spr, r,g,b)` + `SPR_DrawAdditive(0, x, y, rect)` | `HudCustomSprite` with `spritename`, `left`/`top`/`width`/`height` = rect, `x`/`y` with `ABSOLUTE_X`, `ABSOLUTE_Y`, `NO_BORDER` | U1, U2, U4-U7. Give `color1` as the raw CS colour with the CS alpha in A, for example (255,160,0,100). Sven then computes the same pixel as `ScaleColors` (U5). A pre-scaled colour with A = 255 also works for a static colour. Do not set `DEFAULT_ALPHA` or `DYNAMIC_ALPHA` (`BuyMenu.as` sets `DYNAMIC_ALPHA` today). |
+| `FillRGBA(x, y, w, h, r,g,b,a)` | `HudCustomSprite` on a solid white sprite `cs16/hudfill.spr`, rect `(0, 0, w, h)`, colour `(r, g, b, a)` | `hudfill.spr` is a new generated file (§6.3). Sven truncates `c * a / 255`; GL does not. The difference is at most 1 unit. |
+| `FillRGBABlend` | no exact match. Use `HUD_SPR_OPAQUE` or additive. | Only `cl_crosshair_translucent 0` and night vision use it. `OPAQUE` and `MASKED` sprites become darker with a low A, not translucent (per sven-re). |
+| `DrawHudNumber` | option A: `HudNumDisplay` (Sven digits, U12). Option B: generated composite sprites, frame = value (U8). | Option A cannot be pixel-faithful: other glyphs (20×20), a 4 px gap after the icon, a 20 px row (U12). A pixel-faithful HUD needs option B (§5.5, §6.3). |
+| Fade (alpha 228 → 100 in 5 s) | `color2` = start colour, `color1` = end colour, both raw RGB with the CS alpha in A, effect 2, `fxTime` 5, `EFFECT_ONCE`. Send again at each change to restart it. | U9. Exact for health, armour, ammo and money, because Sven interpolates RGBA first and multiplies after, as CS does. Example, money gain: `color2` (0,255,0,228), `color1` (255,160,0,100). Only the end colour can be 1 unit off (U9). To continue a running fade without a restart (CS `AmmoX`), send `color2` = the colour now and `fxTime` = the time left. |
 | Engine console text (names) | `HudMessage` | U13. The server cannot measure text width. |
 
 ### 5.5 Channel plan
 
-Budget: 16 sprite channels. The CS HUD needs more than 16 boxes. The existing kill feed uses 8 sprite channels (`killfeed.as:318`, `killfeed.as:334`). This plan uses 15 and keeps one free.
+Correction: the first version planned 16 sprite channels plus 6 separate numeric channels. That is not possible. Sprites, numbers and timers share one group of 16 channels, and every plugin on the server uses the same group (§5.1). A number display and a sprite on the same channel delete each other at each update.
 
-Sprite group:
+Channel users today:
 
-| Channel | Element | Content |
+| Branch | Channels in use |
+|---|---|
+| this branch's base `ed52216` | 0 money (`HudNumDisplay`, `BuyMenu.as:100`), 1-4 kill icons and 5-8 headshot icons (`killfeed.as:318`, `killfeed.as:334`), 4 C4 icon (`weapon_c4.as:131`). Channel 4 collides. |
+| `main` (`d1c8f92`) | 0 money, 4 C4 icon, 5-8 kill icons, 9-12 headshot icons (`killfeed.as:18-19` on `main`). 6 channels are free. |
+
+Cost of each CS element when it is drawn pixel-exact (composites are generated sprites, §6.3):
+
+| Element | Channels | How |
 |---|---|---|
-| 0-3 | crosshair W, E, N, S | `cs16/hudfill.spr` lines |
-| 4-7 | kill feed icons, line 1-4 | generated `cs16/killicons.spr`: one frame for each `d_*` icon, and one with the headshot icon added after a 5 px gap. CS uses `s(5)`, which is 5 px only at H ≤ 480. This replaces channels 1-8 of `killfeed.as`. |
-| 8 | health cross | `cs16/640hud7.spr` (48,25,24,24) |
-| 9 | armour full part | `cs16/640hud7.spr`, cropped rect |
-| 10 | ammo bar | `cs16/hudfill.spr` (0,0,2,25), or `cs16/640hud7.spr` `divider` cropped to (240,0,2,25) |
-| 11 | ammo icon | `cs16/640hud7.spr`, rect from §3.3 |
-| 12 | flashlight casing | `cs16/640hud7.spr` (112,25,32,32) |
-| 13 | flashlight energy | `cs16/640hud7.spr` (160+off,25,32−off,32) |
-| 14 | flashlight beam | `cs16/640hud7.spr` (144,25,16,32) |
-| 15 | free: radar background (`cs16/radar640.spr`) or one status icon | |
+| Health | 1 | composite: cross + 3 digit cells, frame = value. The cross and the digits do not overlap (TOOL, Appendix A.5), so the copy is exact. |
+| Armour | 2 | composite: empty icon + 3 cells, frame = value, one file for each armour type. The full part stays a separate cropped `640hud7.spr` rect: in a merged frame 75 (vest) or 113 (helmet) pixels would clip at 255 before the colour multiply, while CS adds them after it (Appendix A.5). |
+| Ammo | 3, or 2 | clip + bar composite; reserve composite; icon as a `640hud7.spr` rect. Reserve and icon can merge into one composite for each of the 13 ammo types. |
+| Money | 2 | dollar + high 3 cells (frame = value / 100, 161 frames); low 2 cells (110 frames: "00"…"99" and " 0"…" 9"). |
+| Money delta | 2 | as money, with a `plus` and a `minus` file. Its colour is the money colour times a second fade, which one linear RGBA ramp can only approximate. |
+| Flashlight | 2 | casing + beam composite (frame 0 off, frame 1 on); the energy part as a cropped rect. Merging the energy part is not exact: 176 pixels clip (Appendix A.5). |
+| Crosshair | 4, or 2 | 4 `hudfill.spr` lines; or 2 generated pair sprites (W+E, N+S), one file for each length, frame = gap. |
+| Kill feed icons | 4 | `killicons.spr` with the headshot icon merged into the frame (5 px gap; CS uses `s(5)`, which is 5 px only at H ≤ 480). |
+| C4 status icon | 1 | existing `weapon_c4.as` element |
 
-Numeric group:
+The full set needs 18 to 21 channels. One example that fits in 16, with no free channel:
 
 | Channel | Element |
 |---|---|
-| 0 | money (existing `BuyMenu.as:100`) |
-| 1 | money delta |
-| 2 | health digits (option A) |
-| 3 | armour digits with the `suit_empty` icon (option A) |
-| 4 | ammo clip (option A) |
-| 5 | ammo reserve (option A) |
+| 0 | money high (replaces the `BuyMenu.as` number display) |
+| 1 | money low |
+| 2 | health |
+| 3 | armour (empty icon + digits) |
+| 4 | C4 status icon (as now) |
+| 5-8 | kill feed icons, lines 1-4 (headshot merged, frees 9-12) |
+| 9 | armour full part |
+| 10 | ammo clip + bar |
+| 11 | ammo reserve + icon (13 files) |
+| 12 | flashlight casing + beam |
+| 13 | flashlight energy |
+| 14-15 | crosshair pair sprites |
 
-Text channels (1-4, U13): 1 kill feed killers, 2 kill feed victims, 3 centre print. Keep 4 free for maps.
+This example drops the money delta row (CS shows it 2.5 s after tracked changes). Other choices: drop the C4 icon, or draw a 3-line kill feed. Another plugin that sends HUD elements on this server takes channels from the same 16.
 
-Option B (CS digits) replaces numeric channels 2-5 with sprite channels. That needs composite frame sprites to stay within 16 channels: health cross plus 3 digits in one 256-frame sprite (channel 8), armour icon plus fill plus digits in one sprite for each armour type (channel 9), clip digits plus bar (channel 10), reserve digits (channel 15, the radar is then dropped). Frames are `uint8`, so values 0-255 fit. That covers the CS protocol ranges of health, clip and reserve (§2.3). Clamp armour and co-op health to 255 in this option.
+Text channels (1-4, U13): 1 kill feed killers, 2 kill feed victims, 3 centre print. Keep 4 free for maps. Text is a separate message (`HudMessage`), not one of the 16 element channels (U13 is still UNVERIFIED).
+
+Frames are `uint8`, so one composite holds the values 0-255. That covers the CS protocol ranges of health, clip and reserve (§2.3). Clamp armour and co-op health to 255.
 
 ### 5.6 Per-element parameters
 
-Common flags: `ABS` = `HUD_ELEM_ABSOLUTE_X + HUD_ELEM_ABSOLUTE_Y` (3). `NB` = `HUD_ELEM_NO_BORDER` (16). `ONCE` = `HUD_ELEM_EFFECT_ONCE` (64). `CXY` = `HUD_ELEM_SCR_CENTER_X + HUD_ELEM_SCR_CENTER_Y` (12). Boxes are for the 640 set. "L/R" gives the distance of the element's left edge from the left screen edge, or of its right edge from the right screen edge. "T/B" does the same for top and bottom.
+Common flags: `ABS` = `HUD_ELEM_ABSOLUTE_X + HUD_ELEM_ABSOLUTE_Y` (3). `AY` = `HUD_ELEM_ABSOLUTE_Y` (2). `NB` = `HUD_ELEM_NO_BORDER` (16). `ONCE` = `HUD_ELEM_EFFECT_ONCE` (64). `CXY` = `HUD_ELEM_SCR_CENTER_X + HUD_ELEM_SCR_CENTER_Y` (12). Boxes are for the 640 set. The x, y values use the verified rules (U1-U3, U16): x ≥ 0 sets the left edge; x < 0 puts the right edge −x pixels inside the right screen edge; y works the same way for top and bottom. All elements use `holdTime` −1 (U10) and raw colours with the CS alpha in A (§5.4). Channels follow the example of §5.5. Composite sprites are listed in §6.3.
 
-| Element | Call, channel | Flags | Box (CS, 640) | x, y to send | Sprite and rect | Colours and effect |
+Correction: the first version gave two x, y values for each element because U2 and U3 were open, and it used `HudNumDisplay` for the digits (option A). The table below uses the resolved rules and option B, the only pixel-faithful option.
+
+| Element | Call, channel | Flags | Box (CS, 640) | x, y to send | Sprite, rect, frame | Colours and effect |
 |---|---|---|---|---|---|---|
-| Health cross | `HudCustomSprite`, sprite 8 | ABS+NB+ONCE | L 12, T = H − 37, 24×24 (B 13) | x 12. y −37 (left/top anchor, U2) or −13 (bottom anchor) | `cs16/640hud7.spr` 48,25,24,24 | health > 25: color2 (228,143,0,255), color1 (100,62,0,255), effect 2, fxTime 5. ≤ 25: color2 (223,0,0,255), color1 (98,0,0,255). ≤ 15: (250,0,0,255), effect 0. |
-| Health digits | `HudNumDisplay`, num 2 (option A) | ABS+NB+ONCE | field L 34 … 94, T = H − 37, 25 high | x 34, y −37 or −12 | none (or the cross as icon at x 12, U12) | as the cross. `maxdigits` 3. Value `clamp(health, 0, 999)`. CS sends a byte, so CS shows 0-255 only. |
-| Armour empty icon and digits | `HudNumDisplay`, num 3 | ABSOLUTE_Y+NB+ONCE (x is a fraction) | icon at W/5, T = H − 37. Digits from W/5 + 24. | x 0.2 (U16), y −37 or −13 | `cs16/640hud7.spr` 24,25,24,24 (helmet: 24,124,24,24) | HUD orange fade as health (no red) |
-| Armour full part | `HudCustomSprite`, sprite 9 | ABSOLUTE_Y+NB+ONCE | x W/5, y = H − 37 + off, 24 × (24 − off), `off = (int)(24 * (100 - min(bat,100)) / 100)` | x 0.2, y −(37 − off) or −13 | `cs16/640hud7.spr` 0,25+off,24,24−off (helmet: 0,124+off) | same colours and timing as the empty icon. Hide when off = 24. |
-| Ammo clip | `HudNumDisplay`, num 4 | ABS+NB+ONCE | field L = W − 184 … W − 124 (R 124), T = H − 37 | x −184 (left anchor) or −124 (right anchor), y −37 or −12 | none | color2 (200,125,0,255), color1 (100,62,0,255), effect 2, fxTime 5. Restart when the clip or the weapon changes. |
-| Ammo bar | `HudCustomSprite`, sprite 10 | ABS+NB+ONCE | L = W − 114, T = H − 37, 2×25 (R 112, B 12) | x −114 or −112, y −37 or −12 | §5.5 | as the clip |
-| Ammo reserve | `HudNumDisplay`, num 5 | ABS+NB+ONCE | field W − 102 … W − 42 (no clip: W − 104 … W − 44) | x −102 or −42, y −37 or −12 | none | as the clip. A reserve-only change uses `HudUpdateNum` (no restart, as `AmmoX`). |
-| Ammo icon | `HudCustomSprite`, sprite 11 | ABS+NB+ONCE | L = W − 42, T = H − 40, 24×24 (R 18, B 16). No clip: L = W − 44. | x −42 or −18, y −40 or −16 | `cs16/640hud7.spr`, rect from §3.3 | as the clip |
-| Money | `HudNumDisplay`, num 0 | ABS+NB+ONCE | dollar L = W − 134, T = H − 75 (B 50). Digits W − 116 … W − 16 (R 16). | x −134 or −16, y −75 or −50 | `cs16/640hud7.spr` 192,25,18,25 (as now in `BuyMenu.as:104-110`) | gain: color2 (0,228,0,255) → color1 (100,62,0,255), effect 2, fxTime 5. Loss: color2 (228,0,0,255). Blink: effect 7 between (255,160,0,255) and the normal colour for 0.2·n s (toggle period 0.1 s, U9). |
-| Money delta | `HudNumDisplay`, num 1 | ABS+NB+ONCE | sign L = W − 116 − signW, T = H − 112. Digits as money (bottom H − 87). | x −133 (plus) or −129 (minus), or −16 (right anchor). y −112 or −87. | `plus` 223,25,17,23 or `minus` 210,25,13,23 | color2 = money start colour, color1 (0,0,0,255), effect 2, fxTime 2.5. Then hide. |
-| Flashlight casing | `HudCustomSprite`, sprite 12 | ABS+NB | L = W − 48, T 16, 32×32 (R 16) | x −48 or −16, y 16 | 112,25,32,32 | on: (225,141,0,255). Off: (100,62,0,255). Battery < 20 %: (225,14,14,255) or (100,6,6,255). |
-| Flashlight energy | sprite 13 | ABS+NB | L = W − 48 + off, T 16, (32 − off)×32 | x −(48 − off) or −16, y 16 | 160+off,25,32−off,32 | as the casing |
-| Flashlight beam | sprite 14 (only when on) | ABS+NB | L = W − 16, T 16, 16×32 (R 0) | x −16 (left-anchor rule). The right-anchor rule cannot express 0 px from the right edge (U2, open question 1). y 16. | 144,25,16,32 | as the casing |
-| Crosshair line | `HudCustomSprite`, sprites 0-3 | CXY+ABS+NB | §3.12.6 | W: (−(d+len−1), 0). E: (d, 0). N: (0, −(d+len−1)). S: (0, d). Assumes top-left anchor (U3). | `cs16/hudfill.spr` (0,0,len,1) or (0,0,1,len) | color1 = crosshair colour scaled by `alpha`, alpha 255. Effect 0. |
-| Kill feed icon | `HudCustomSprite`, sprites 4-7 | ABSOLUTE_X+NB (y is a fraction) | icon box from §3.9 | x from the name widths (note below). y = the fraction `(32 + 16*i) / 480`, which equals `s(32) + i*s(16)` for H ≥ 480 except for truncation. | `cs16/killicons.spr`, frame = icon index | (255,80,0,255). Team kill: (10,240,10,255). |
+| Health | `HudCustomSprite`, 2 | ABS+NB+ONCE | (12, H − 37, 82×25): cross (12, H − 37, 24×24), cells x 34, 54, 74 | x 12, y −12 | `cs16/hud_health.spr`, rect 0,0,0,0, frame = `clamp(health, 0, 255)` | health > 25: color2 (255,160,0,228), color1 (255,160,0,100), effect 2, fxTime 5. 16-25: (250,0,0,228) → (250,0,0,100). ≤ 15: color1 (250,0,0,255), effect 0. Send again at each change. |
+| Armour icon and digits | `HudCustomSprite`, 3 | AY+NB+ONCE (x is a fraction) | (W/5, H − 37, 84×25): empty icon 24×24, cells from W/5 + 24 | x 0.2 (U16), y −12 | `cs16/hud_armor.spr` or `cs16/hud_armor_helmet.spr`, frame = `clamp(armour, 0, 255)` | (255,160,0,228) → (255,160,0,100), effect 2, fxTime 5. No red state. |
+| Armour full part | `HudCustomSprite`, 9 | AY+NB+ONCE | (W/5, H − 37 + off, 24 × (24 − off)), `off = (int)(24 * (100 - min(bat,100)) / 100)` | x 0.2, y −13 | `cs16/640hud7.spr` 0,25+off,24,24−off (helmet: 0,124+off) | as the armour digits, sent in the same frame so that both fades start together. Hide the element when off ≥ 24: a height of 0 would draw to the bottom of the sheet (§5.1). |
+| Ammo clip and bar | `HudCustomSprite`, 10 | ABS+NB+ONCE | (W − 184, H − 37, 72×25): cells W − 184 … W − 124, bar (W − 114, H − 37, 2×25) | x −112, y −12 | `cs16/hud_clip.spr`, frame = `clamp(clip, 0, 255)` | color2 (255,160,0,200), color1 (255,160,0,100), effect 2, fxTime 5. Restart on each CS `CurWeapon` change (clip, weapon, weapon state). Hide it for weapons without a clip. |
+| Ammo reserve and icon | `HudCustomSprite`, 11 | ABS+NB+ONCE | (W − 102, H − 40, 84×28): cells W − 102 … W − 42 at H − 37, icon (W − 42, H − 40, 24×24). No clip: 2 px further left. | x −18 (no clip: −20), y −12 | `cs16/hud_reserve_<ammo>.spr`, frame = `clamp(reserve, 0, 255)` | as the clip. A reserve-only change continues the running fade (§5.4). |
+| Money, high part | `HudCustomSprite`, 0 | ABS+NB+ONCE | (W − 134, H − 75, 78×25): dollar (W − 134, H − 75, 18×25), cells W − 116 … W − 56 | x −56, y −50 (no suit: −100) | `cs16/hud_money_hi.spr`, frame = `value / 100` (frame 0 = dollar only) | gain: color2 (0,255,0,228), color1 (255,160,0,100). Loss: color2 (255,0,0,228). Effect 2, fxTime 5. No change: (255,160,0,100). Blink: effect 7, color1 (255,160,0,255), color2 = the normal colour, fxTime 0.2, for 0.2·n s; then send the normal element again. |
+| Money, low part | `HudCustomSprite`, 1 | ABS+NB+ONCE | cells W − 56 … W − 16 at H − 75 (40×25) | x −16, y −50 (no suit: −100) | `cs16/hud_money_lo.spr`, frame = `v ≥ 100 ? v % 100 : (v < 10 ? 100 + v : v)` | as the high part, sent in the same frame |
+| Money delta (not in the example) | `HudCustomSprite`, 2 channels | ABS+NB+ONCE | sign at W − 116 − signW, cells as money, T = H − 112 | high x −56, low x −16, y −87 | `cs16/hud_delta_plus.spr` or `cs16/hud_delta_minus.spr`, and `cs16/hud_money_lo.spr` | approximation: color2 = the money start colour, color1 = the same RGB with A = 0, effect 2, fxTime 2.5. Then hide. |
+| Flashlight casing and beam | `HudCustomSprite`, 12 | AY+NB (x is a fraction) | (W − 48, 16, 48×32): casing (W − 48, 16, 32×32), beam (W − 16, 16, 16×32) | x 1.0 (the clamp puts it flush right, U16), y 16 | `cs16/hud_flash.spr`, frame 0 = off (no beam), frame 1 = on | on: (255,160,0,225). Off: (255,160,0,100). Battery < 20 %: (255,16,16,225) or (255,16,16,100). Effect 0. |
+| Flashlight energy | `HudCustomSprite`, 13 | ABS+NB | (W − 48 + off, 16, (32 − off)×32), `off = (int)((1 - bat) * 32)` | x −16, y 16 | `cs16/640hud7.spr` 160+off,25,32−off,32 | as the casing. Hide the element when off ≥ 32. |
+| Crosshair, 4 lines | `HudCustomSprite`, 4 channels | CXY+ABS+NB | §3.12.6, with the scaled d and len | for even W and H: W (1 − d − ⌊len/2⌋, 1), E (d + ⌈len/2⌉, 1), N (1, 1 − d − ⌊len/2⌋), S (1, d + ⌈len/2⌉) | `cs16/hudfill.spr` 0,0,len,1 or 0,0,1,len | (r, g, b, alpha) from §3.12, effect 0 |
+| Crosshair, 2 pair sprites | `HudCustomSprite`, 14-15 | CXY+ABS+NB | W+E strip (cx − d − len + 1, cy, 2(d + len) − 1, 1); N+S strip in the same way | x 1, y 1 for both (even W and H) | `cs16/xhair_h_<len>.spr`, `cs16/xhair_v_<len>.spr`, frame = d | as the 4 lines. Not exact for d = 0 (only when W < base), where CS adds the centre pixel more than once. |
+| Kill feed icon | `HudCustomSprite`, 5-8 | ABSOLUTE_X+NB (y is a fraction) | icon box from §3.9 | x from the name widths (note below). y = the fraction `(32 + 16*i) / 480`, which equals `s(32) + i*s(16)` for H ≥ 480 except for truncation. | `cs16/killicons.spr`, frame = icon (with or without headshot) | (255,80,0,255). Team kill: (10,240,10,255). |
+| C4 status icon | `HudCustomSprite`, 4 | ABS+NB+SCR_CENTER_Y | (12, H/2 − 37, 32×32): the first status slot (§3.10) | x 12, y −21 (even H) | `cs16/640hud7.spr` 0,148,32,32 | (0,160,0,255) (RGD dlls/player.cpp:1935-1938). In a bomb zone CS flashes it: effect 7, color1 (0,160,0,255), color2 (250,0,0,255), fxTime 0.2. `weapon_c4.as` draws it at (0, 300) in Sven blue today. |
 | Kill feed names | `HudMessage`, text 1 (killers) and 2 (victims) | – | §3.9 | victims: x = `−s(12)/W` (−0.019 at 4:3, −0.014 at 16:9), right-aligned lines (U13). y as the icons. Killers: right-aligned to the left of the icon column. | – | names: players (153,204,255) as CT, monsters (255,64,64) as T. Effect 0, fade 0. One message with 4 lines for each column. The server does not know the aspect ratio. |
 | Centre print | `HudMessage`, text 3 | – | centred at `0.35 * H` | x −1, y 0.35 | – | (255,180,30), effect 0, fadein 0, holdTime 4, fadeout 0 |
-| Radar background (optional) | `HudCustomSprite`, sprite 15 | ABS+NB | (0,0,128,128) | x 0, y 0 | `cs16/radar640.spr` 0,0,128,128. `cl_radartype 1` look: `cs16/radaropaque640.spr` with `HUD_SPR_MASKED` (UNVERIFIED match for `SPR_DrawHoles`). | (25,75,25,255). Opaque look: (200,200,200,255). |
-| Radar dot (only with a free channel) | `HudCustomSprite` | ABS+NB | `FillRGBA(x, y, 2, 2)` from §3.8 | x, y = radar pixel | `cs16/hudfill.spr` 0,0,2,2 | (150,75,250) at alpha 235, pre-scaled (138,69,230,255) |
-| Status icon (alternative use of sprite 15) | `HudCustomSprite` | SCR_CENTER_Y+ABS+NB | first icon: x 12, top = H/2 − (h + 5) | x 12, y −(h + 5) from the centre (U3) | `cs16/640hud7.spr`, rect from §2.6 | colour from the CS message, for example (0,160,0,255). Flash: effect 7 between it and (250,0,0,255), period 0.1 s (U9). |
-| Map countdown (optional, replaces the round timer) | `HudTimeDisplay`, time group 0 | SCR_CENTER_X+ABS+NB + `HUD_TIME_MINUTES` + `HUD_TIME_SECONDS` + `HUD_TIME_COUNT_DOWN` | stopwatch L = W/2 − 64, digits from W/2 − 40, T = H − 37 | x −64 from the centre (U3), y −37 or −13 | `cs16/640hud7.spr` 144,72,24,24 (`stopwatch`) | (100,62,0,255). Below 31 s: effect 7 with (255,16,16,255). |
+| Radar background (optional, no channel in the §5.5 example) | `HudCustomSprite` | ABS+NB | (0,0,128,128) | x 0, y 0 | `cs16/radar640.spr` 0,0,128,128. `cl_radartype 1` look: `cs16/radaropaque640.spr` with `HUD_SPR_MASKED` (UNVERIFIED match for `SPR_DrawHoles`). | (25,75,25,255). Opaque look: (200,200,200,255). |
+| Radar dot (only with a free channel) | `HudCustomSprite` | ABS+NB | `FillRGBA(x, y, 2, 2)` from §3.8 | x, y = radar pixel | `cs16/hudfill.spr` 0,0,2,2 | (150,75,250,235) |
+| Other status icons (no channel in the §5.5 example) | `HudCustomSprite` | SCR_CENTER_Y+ABS+NB | first icon: x 12, top = H/2 − (h + 5) | x 12, y −(⌊h/2⌋ + 5) (centre rule, even H) | `cs16/640hud7.spr`, rect from §2.6 | colour from the CS message, for example (0,160,0,255). Flash: effect 7, color1 = that colour, color2 (250,0,0,255), fxTime 0.2 (0.1 s each, U9). |
+| Map countdown (optional, replaces the round timer, needs a channel) | `HudTimeDisplay` | SCR_CENTER_X+ABS+NB + `HUD_TIME_MINUTES` + `HUD_TIME_SECONDS` + `HUD_TIME_COUNT_DOWN` | stopwatch L = W/2 − 64, digits from W/2 − 40, T = H − 37 | centre rule (U3), even W: x = ⌈s/2⌉ − 64, with s = Sven's time-display width (per sven-re 0xEBA18, not checked). Sven digits (U12), so not pixel-faithful. | `cs16/640hud7.spr` 144,72,24,24 (`stopwatch`) | (100,62,0,255). Below 31 s: effect 7 with (255,16,16,255). |
 
 Kill feed note: CS packs each line against the right edge with the real text width (§3.9). The server does not know the width of the client font. Two choices:
 
@@ -800,12 +837,14 @@ Kill feed note: CS packs each line against the right edge with the real text wid
 
 Crosshair note: the server does not know W. Thus it cannot apply the `W / base` scale of §3.12.5. Read a player setting from the userinfo (`GetInfoKeyBuffer`, API:5145), for example a `setinfo` key with the width or the scale. Default to scale 1 (the `auto` result at 800 px).
 
-Crosshair update rule: simulate §3.12.4 at 100 steps per second. On each server think of `dt` seconds, run `round(dt * 100)` steps. A shot replaces one decay step. Send the 4 lines only when `d`, `len` or `alpha` changes.
+Crosshair update rule: simulate §3.12.4 at 100 steps per second. On each server think of `dt` seconds, run `round(dt * 100)` steps. A shot replaces one decay step. Send the lines only when `d`, `len` or `alpha` changes.
+
+Message cost: a server sends each element to one player as a reliable message (per sven-re, `MSG_ONE`). A `CustSpr` message for `cs16/hudfill.spr` is about 70 bytes (§1.2 of sven-re gives the layout). The alpha changes in every frame for about 0.7 s after a shot, so 4 lines at 20 updates per second cost about 5.6 KB/s for each player. The 2 pair sprites halve this. Measure the reliable stream before the release (UNVERIFIED risk: reliable-channel overflow).
 
 Elements to keep native:
 
-- Weapon selection menu. The slot keys are client commands, so the server cannot draw the menu. The repo weapon files already give the native menu CS pictures (`sprites/cs16/rifl/weapon_ak47.txt:2-4`).
-- Pickup history, chat, player id, text menus (`ShowMenu`), scoreboard, MOTD.
+- Weapon selection menu. The slot keys are client commands, so the server cannot draw the menu. The repo weapon files already give the native menu CS pictures (`sprites/cs16/rifl/weapon_ak47.txt:2-4`). Sven draws them in its own colour (100,130,200), not in CS orange (§5.3).
+- Pickup history (also in Sven's colour), chat, player id, text menus (`ShowMenu`), scoreboard, MOTD.
 
 ## 6. Assets
 
@@ -833,18 +872,38 @@ These files exist only in `Half-Life/valve/sprites`, and the recipe reads only `
 
 | File | CS use | Proposal |
 |---|---|---|
-| `640_pain.spr` | pain arrows (§3.14) | keep Sven's native arrows if U15 is false. Else add a second asset list for `valve/`. |
+| `640_pain.spr` | pain arrows (§3.14) | U15 is true: bit 8 removes Sven's arrows. To keep a hit-direction cue, add a second asset list for `valve/` and draw the CS arrows (4 frames, §3.14). Else the player has no arrows. |
 | `640hud8.spr`, `640hud9.spr` | damage-type icons | same as above |
-| `crosshairs.spr` | zoomed static crosshair (§3.12.1) | use the repo file `sprites/cs16/crosshairs.spr` |
+| `crosshairs.spr` | engine crosshair for FOV < 90 (§3.12.1) | Not needed. CS never shows its 9 mm cross for CS weapons (§3.12.1), and bit 256 stops Sven's engine crosshair. The repo file `sprites/cs16/crosshairs.spr` is not the Half-Life file: it is a custom 256×256 red cross (Appendix A.3; `docs/research/asset-audit.md` §3 on branch `feat/asset-audit`). It caused the static red crosshair that players see now. |
 | `320hud1.spr`…`320hud4.spr` | 320 set | not needed (U4) |
+
+HUD-related asset glitches reported by `docs/research/asset-audit.md` (branch `feat/asset-audit`, not checked again except where stated):
+
+- Kill feed slices of `640hud1.spr`: width 0 with a non-zero left (§5.1, verified). Fixed by `95ae240`, now in `main`.
+- Static red crosshair: the Sven engine crosshair from the repo weapon lists. The HUD work removes it with bit 256 and draws the CS crosshair (§3.12).
+- Weapon-selection icons: seven icons in `cs1024.spr` are restyled. The CS icons are in `cstrike/sprites/640hud1.spr`…`640hud6.spr` and `640hud10.spr`…`640hud18.spr`, with the rects of `cstrike/sprites/weapon_*.txt` (checked here). Even with CS icons, Sven tints the native menu (100,130,200) (§5.3, verified).
+- `HUDSpriteParams.left` and `top` are `uint8`, so `HudCustomSprite` cannot select the `cs1024.spr` icons at x 340 or 510 (§5.1). The 256×256 CS sheets fit.
 
 ### 6.3 Generated files (not CS files)
 
 | File | Content | Needed for |
 |---|---|---|
-| `sprites/cs16/hudfill.spr` | 64×64, 1 frame, additive, all pixels white | `FillRGBA` boxes: crosshair, ammo bar |
+| `sprites/cs16/hudfill.spr` | 64×64, 1 frame, additive, all pixels white | `FillRGBA` boxes: crosshair lines, radar dots |
 | `sprites/cs16/killicons.spr` | one frame for each `d_*` icon and each icon + headshot, built from 640hud1/2/16 at install time | kill feed in 4 channels |
-| optional digit sprites | 256 frames, each frame one value drawn with the §2.3 rules | option B |
+| `sprites/cs16/hud_health.spr` | 256 frames, 82×25: `cross` at x 0, cells at x 22, 42, 62, flags 5 (§2.3) | health |
+| `sprites/cs16/hud_armor.spr`, `hud_armor_helmet.spr` | 256 frames, 84×25: `suit_empty` (or `suithelmet_empty`) at x 0, cells at x 24, 44, 64 | armour |
+| `sprites/cs16/hud_clip.spr` | 256 frames, 72×25: cells at x 0, 20, 40, flags 5; bar 2×25 of white at x 70 | ammo clip |
+| `sprites/cs16/hud_reserve_<ammo>.spr` (13 files) | 256 frames, 84×28: cells at x 0, 20, 40 (y 3), flags 5; the ammo icon of §3.3 at x 60, y 0 | ammo reserve and icon |
+| `sprites/cs16/hud_money_hi.spr`, `hud_money_lo.spr` | 161 frames, 78×25: `dollar` + cells 0-2 of `"%5i"`; 110 frames, 40×25: cells 3-4 | money |
+| `sprites/cs16/hud_delta_plus.spr`, `hud_delta_minus.spr` (optional) | 161 frames: `plus` (17×23) or `minus` (13×23) + cells 0-2 | money delta |
+| `sprites/cs16/hud_flash.spr` | 2 frames, 48×32: `flash_empty`; `flash_empty` + `flash_beam` at x 32 | flashlight |
+| `sprites/cs16/xhair_h_<len>.spr`, `xhair_v_<len>.spr` (optional) | frame = gap d: two white lines of `len` px with a gap of 2d − 1 px | crosshair in 2 channels |
+
+Rules for the composites:
+
+- Copy the 640hud7 pixels and its palette. The palette is a 256-level grey ramp (Appendix A.5), so every copied value exists.
+- Only merge parts that do not overlap. Health, clip, reserve, money and casing + beam have no overlapping lit pixels. The armour full part and the flashlight energy part overlap their base icon and must stay separate elements (Appendix A.5).
+- The engine allows 256 HUD sprite paths (per sven-re, not checked). The list above adds about 24, plus 2 for each crosshair length.
 
 A Deno tool can build these files from the local CS install during `just install`. Then no Valve pixels go into git.
 
@@ -855,12 +914,14 @@ A Deno tool can build these files from the local CS install during `just install
 | Health | the integer health changes | yes |
 | Armour | the integer armour or the armour type changes | yes |
 | Ammo | the weapon or the clip changes | yes |
-| Ammo reserve only | the reserve changes and the clip does not | no |
-| Money | the value changes. Show the delta only for tracked changes. | yes |
+| Ammo reserve only | the reserve changes and the clip does not | no: send again with the running fade continued (§5.4) |
+| Money | the value changes (any change starts the green or red fade). Show the delta only for tracked changes. | yes |
 | Flashlight | on/off or the battery % changes | no |
 | Crosshair | `d`, `len` or `alpha` changes (§5.6) | no |
 | Kill feed | a kill, or the oldest line expires | no |
+| C4 status icon | the player gets or drops the C4, or enters or leaves a zone where CS would flash it | no |
 | Hide bits | each spawn, and periodically | – |
+| All custom elements | after each level load and after the client connects: the client deletes all 32 elements in `VidInit` (SVEN-BIN 0xd8f2a) | – |
 
 ## 8. Not applicable in co-op
 
@@ -869,7 +930,8 @@ A Deno tool can build these files from the local CS install during `just install
 | Round timer and stopwatch (§3.6) | no rounds | Hide. Optional: show a map countdown with `HudTimeDisplay` at the CS timer box. |
 | Timer hidden when the bomb is planted | no bomb | ignore |
 | `buyzone` status icon | the buy menu has no zones | Omit. Use the icon if buy zones appear later. |
-| `c4`, `defuser`, `rescue`, `escape`, `vipsafety` icons | no objectives | omit |
+| `c4` icon | the repo has a C4 weapon, and `weapon_c4.as` already shows an icon | Draw it as the CS status icon (§5.6): green (0,160,0) at (12, H/2 − 37), not at (0, 300) in Sven blue. |
+| `defuser`, `rescue`, `escape`, `vipsafety` icons | no objectives | omit |
 | Progress bar (§3.7) | bomb plant, defuse, hostage | Omit. Optional: reuse for long player actions. |
 | Scenario status (hostage, bomb ticking) | no scenarios | omit |
 | Radar bomb, hostage, VIP, tracked and radio dots | no objectives, no radio | Omit. Keep teammate dots only if channels are free. |
@@ -914,12 +976,45 @@ A Deno tool can build these files from the local CS install during `just install
 
 ## 10. Open questions
 
-1. The Sven agent must confirm U1-U16. U2, U4, U5, U8 and U11 decide the design.
-2. Can Sven HUD effects interpolate RGB and alpha separately (exact money colours)?
+1. U1-U16: answered in §5.2, except U4 and U12 (per sven-re only) and U13, U14 (UNVERIFIED). U11 is refuted, which changes the channel plan (§5.5).
+2. Answered: yes. Sven interpolates R, G, B and A, then multiplies RGB by A (U9). Raw RGBA endpoints give the exact CS money colours (§5.4).
 3. Which font and glyph widths does Sven use for `HudMessage`? This decides the kill feed layout.
 4. Is a client resolution or a userinfo key available for the crosshair scale?
-5. `sprites/cs16/rifl/weapon_ak47.txt:5` asks for `crosshairs` (256,0,256,256), but `sprites/cs16/crosshairs.spr` is 256×256 (TOOL, Appendix A.3). Check how Sven treats this rect.
+5. Answered by `docs/research/asset-audit.md` §3 (branch `feat/asset-audit`, not checked again): the engine ignores a rect outside the sprite and draws the whole frame; commit `584b15d` changed the rect to `0 0 256 256`. With bit 256 set (§5.3) the question no longer matters.
 6. Does Sven reset `m_iHideHUD` on death, spawn or level change?
+7. Which channels do other plugins on the target servers use? They share the 16 plugin channels (§5.1).
+8. Is the reliable-message cost of the crosshair (§5.6) safe at 32 players?
+9. Which of the compromises of §5.5 is acceptable: no money delta row, a 3-line kill feed, or no C4 icon?
+
+## 11. Skeptic review log
+
+The review tried to refute each claim below from the primary evidence: Hex-Rays and disassembly of BIN (IDA database `.re/cs16-valve-client/client.so.i64`) and SVEN-BIN, `objdump` of the Half-Life `hw.so` and `vgui2.so` (they have symbols), the `hud.txt` and `weapon_*.txt` files, and new Deno scripts (Appendix A.5).
+
+| # | Claim | Evidence checked | Result |
+|---|---|---|---|
+| 1 | Sprite set `res = W > 639 ? 640 : 320`; cstrike `hud.txt` has only 320 and 640 | BIN `CHud::VidInit` 0xb2a75–0xb2a95; `hud.txt` lines 2-195; `valve/sprites/hud.txt` has 320, 640, 1280 and 2560 rows | confirmed |
+| 2 | Health position, colours, ≤ 25 red, ≤ 15 alpha 255, fade order | BIN `CHudHealth::Draw` 0xb0fc0 | confirmed |
+| 3 | Armour y0, iOffset, W/5, full part from the bottom, digit y | BIN `CHudBattery::Draw` 0xa4a10 | confirmed |
+| 4 | Ammo layout, `FillRGBA` bar, fade from 200 | BIN `CHudAmmo::Draw` 0xa2bb0, `MsgFunc_CurWeapon` 0x9fee0 | confirmed |
+| 5 | Money field, colours, delta row, blink | BIN 0x9c920, `MsgFunc_Money` 0xa3b80, `MsgFunc_BlinkAcct` 0xa3bf0 | confirmed |
+| 6 | Number flags 1, 2, 4, 8; `"%5i"`; `ScaleColors` truncation | BIN 0xb5d50, 0xb5c40, 0xb5ad0 | confirmed; added the `SPR_Set` detail of §2.3 |
+| 7 | Crosshair base, delta and run-limit tables; accuracy flags; per-frame rules; 3-D speed; `auto` size; draw gate; defaults | bytes of `CSWTCH.196/.197/.178`; BIN 0xa1df0, 0xa1eb0, 0x68345–0x68369, 0xa1870, 0x9d290, 0xa3022–0xa304f, 0xb37c0 | confirmed; Appendix A.1 and A.2 values reproduced by an independent simulation |
+| 8 | Death-notice scale and layout, colours, 4 lines, 6 s | BIN 0xa5a00, 0xa5b10, 0xa5f90; `CSchemeManager` vtable (VGUI2 0x29e98, slot +0x28 = 0x129f0); HW `BaseUISurface::GetProportionalBase` 0x1c2b20 = min(screen, 640×480) | confirmed; corrected the non-player victim row; added the init-time metrics and the whole-second lifetime |
+| 9 | "A VGUI panel is open" gates | `CounterStrikeViewport` vtable BIN 0x180180 | corrected: named slots (§1.2) |
+| 10 | Flashlight, weapon menu, ammo bars, status icons, pickup history, pain arrows, round timer | BIN 0xa7d90, 0xa25d0, 0x9f570, 0xa1ba0, 0xc7b00, 0xa43e0, 0xaf6f0, 0xadf90 | confirmed |
+| 11 | `FillRGBA` additive, `FillRGBABlend` blended | HW 0x14b160–0x14b170, 0x14b300–0x14b310 | confirmed |
+| 12 | The engine crosshair is the 9 mm cross for CS weapons | all `cstrike/sprites/weapon_*.txt` | corrected (§3.12.1) |
+| 13 | `cstrike/config.cfg` line citations | the file (rewritten at 01:01) | corrected: cited by cvar |
+| 14 | FWGS deviations | FWGS `ammo.cpp` 1198-1229, 1650-1661, 1762-1777; `death.cpp:107`; `hud.cpp:474`; `health.cpp:207-233`, 351; `battery.cpp:113-127` | confirmed (spot check) |
+| 15 | Separate channel groups for numbers, timers and sprites; 16 sprite + 6 number channels | SVEN-BIN 0xd893a, 0xd8a20, 0xd8bbe, 0xd8d84, 0xd82f2 | refuted (§5.1, §5.5) |
+| 16 | U1-U3, U6, U16 position rules | SVEN-BIN `CalcHudPos` 0xdb324 | resolved (§5.2) |
+| 17 | U5, U8, U9 colour, frame and effect rules; U10 hold time | SVEN-BIN 0xd7d5e, 0xdb6f8, 0xdb640, 0xda964, 0xb48ee, 0xb495a | verified; U10 corrected |
+| 18 | "width/height 0 = whole sprite" | SVEN-BIN 0xd83d2, 0xd5002 | corrected (§5.1) |
+| 19 | Hide bits 810; never set 1, 16, 128 | API:33119-33179; SVEN-BIN 0xcad41 (U15), 0xd82f2 (bit 128) | confirmed; added the pain-arrow and native-colour consequences (§5.3) |
+| 20 | Valve-only files, cstrike files, `640hud7.spr` SHA-1 | `ls` and `sha1sum` of both installs and the repo | confirmed; corrected the `crosshairs.spr` proposal (§6.2) |
+| 21 | Composite sprites are exact | Appendix A.5 | new: health exact; armour and flashlight energy must stay separate |
+
+Not re-derived in this review: §2.4 draw order, §3.7 progress bar, §3.8 radar internals, the §3.14 damage-type icons, §3.15 text positions (except the 4 s centre-print time, BIN 0xbd81b), U4 and U12 (per sven-re), U13, U14, the server-side mapping of plugin channels, the Sven number and time widths, the 256-sprite limit, the message cost, and the kill-feed text widths. These remain UNVERIFIED for this review.
 
 ## Appendix A. Tool output
 
@@ -1029,3 +1124,17 @@ repo sprites/cs16/640hud7.spr: tex=additive max=256x256 frames=1 (same SHA-1 as 
 ```
 
 `cstrike/sprites/640hud7.spr` `divider` (240,0,2,40): columns 240-241 are visible in all 40 rows.
+
+### A.5 Overlaps in composite sprites (review, §5.5, §6.3)
+
+The script reads `cstrike/sprites/640hud7.spr` and places two parts in one frame as a composite would. CS draws each part additively, so a pixel gets `min(255, c*E + c*F)` for the colour factor c. A composite stores `min(255, E + F)` and gets `c * min(255, E + F)`. The two are equal only where `E + F ≤ 255`.
+
+```
+palette: 256 entries, grey ramp i/i/i: true
+health: cross + number_0 … number_9 in the hundreds cell: overlapping lit pixels 0, sum > 255: 0 (each digit)
+armour vest: suit_empty + suit_full: overlapping lit pixels 321, sum > 255: 75 (max 494)
+armour helmet: suithelmet_empty + suithelmet_full: overlapping lit pixels 321, sum > 255: 113 (max 494)
+flashlight: flash_empty + flash_full: overlapping lit pixels 308, sum > 255: 176 (max 485)
+```
+
+The other composites of §6.3 place their parts side by side: the digit cells are as wide as the glyph rects (20 px), and the bar, the ammo icon, the dollar, the signs and the beam start at or after the end of the previous part (§3.3, §3.5, §3.13).
