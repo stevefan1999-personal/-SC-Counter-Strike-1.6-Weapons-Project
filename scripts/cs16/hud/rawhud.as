@@ -112,26 +112,33 @@ namespace CS16HUD
   void ClearSent( CBasePlayer@ player )
   {
     const int slot = player.entindex();
-    // An empty text with no fades and no hold replaces the old text of its slot and expires at once.
-    HUDTextParams empty;
-    empty.effect = 0;
-    empty.fadeinTime = 0;
-    empty.fadeoutTime = 0;
-    empty.holdTime = 0;
     for( uint channel = 0; channel < CLIENT_CHANNELS; ++channel )
     {
       if( ( g_SentChannels[slot] & ( uint( 1 ) << channel ) ) != 0 )
         HideElement( player, channel );
     }
     for( uint textSlot = 0; textSlot < TEXT_SLOTS; ++textSlot )
-    {
-      if( ( g_SentTextSlots[slot] & ( uint( 1 ) << textSlot ) ) == 0 )
-        continue;
-      empty.x = g_SentTextX[SentTextIndex( player, textSlot )];
-      empty.y = g_SentTextY[SentTextIndex( player, textSlot )];
-      SendText( player, textSlot, empty, "" );
-    }
+      ClearText( player, textSlot );
     ForgetSent( player );
+  }
+
+  // Empties a text slot that this plugin drew. The empty text goes to the slot's last position, because the client
+  // removes every other text at the position of a new text (sven-client-hudtext.md 1.4).
+  void ClearText( CBasePlayer@ player, uint engineSlot )
+  {
+    const uint bit = uint( 1 ) << engineSlot;
+    if( ( g_SentTextSlots[player.entindex()] & bit ) == 0 )
+      return;
+    // An empty text with no fades and no hold replaces the old text of its slot and expires at once.
+    HUDTextParams empty;
+    empty.effect = 0;
+    empty.fadeinTime = 0;
+    empty.fadeoutTime = 0;
+    empty.holdTime = 0;
+    empty.x = g_SentTextX[SentTextIndex( player, engineSlot )];
+    empty.y = g_SentTextY[SentTextIndex( player, engineSlot )];
+    SendText( player, engineSlot, empty, "" );
+    g_SentTextSlots[player.entindex()] &= ~bit;
   }
 
   uint SentTextIndex( CBasePlayer@ player, uint textSlot )

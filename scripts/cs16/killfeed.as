@@ -314,7 +314,7 @@ namespace CS16KILLFEED
       SendIcon( player, CS16HUD::KillfeedIconChannel( row ), notice.icon, left, top, hold );
       const uint killerSlot = CS16HUD::KILLFEED_KILLER_SLOT_FIRST + row;
       if( notice.killer.IsEmpty() )
-        ClearText( player, killerSlot );
+        CS16HUD::ClearText( player, killerSlot );
       else
         SendName( player, killerSlot, notice.killer, notice.killerColour, left - gap, top, screen, hold );
     }
@@ -323,8 +323,8 @@ namespace CS16KILLFEED
     {
       CS16HUD::HideElement( player, CS16HUD::KillfeedIconChannel( row ) );
       CS16HUD::HideElement( player, CS16HUD::KILLFEED_HEADSHOT_FIRST + row );
-      ClearText( player, CS16HUD::KILLFEED_VICTIM_SLOT_FIRST + row );
-      ClearText( player, CS16HUD::KILLFEED_KILLER_SLOT_FIRST + row );
+      CS16HUD::ClearText( player, CS16HUD::KILLFEED_VICTIM_SLOT_FIRST + row );
+      CS16HUD::ClearText( player, CS16HUD::KILLFEED_KILLER_SLOT_FIRST + row );
     }
   }
 
@@ -370,17 +370,6 @@ namespace CS16KILLFEED
     params.fadeoutTime = 0.0f;
     params.holdTime = hold;
     CS16HUD::SendText( player, slot, params, name );
-  }
-
-  // An empty text with no fades and no hold replaces the text of its slot and expires at once.
-  void ClearText( CBasePlayer@ player, uint slot )
-  {
-    HUDTextParams params;
-    params.effect = TEXT_EFFECT_FADE;
-    params.fadeinTime = 0.0f;
-    params.fadeoutTime = 0.0f;
-    params.holdTime = 0.0f;
-    CS16HUD::SendText( player, slot, params, "" );
   }
 
   // The client puts text at int(fraction * (side - 2 * border) + border). Aim at the middle of the pixel, in the
