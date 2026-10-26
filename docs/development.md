@@ -16,17 +16,17 @@ them.
 
 The recipes find the installs with these environment variables. The defaults are the Steam library paths.
 
-| Variable            | Default                                                      | Use                                     |
-| ------------------- | ------------------------------------------------------------ | --------------------------------------- |
-| `STEAM_COMMON`      | `~/.local/share/Steam/steamapps/common`                      | root of the other defaults              |
-| `SVEN_SERVER_BASE`  | `$STEAM_COMMON/Sven Co-op Dedicated Server`                  | source of server sandboxes              |
-| `SVEN_SERVER_DIR`   | `$SVEN_SERVER_BASE`                                          | server that `install` and `server` use  |
-| `SVEN_CLIENT_DIR`   | `$STEAM_COMMON/Sven Co-op`                                   | game client for the offscreen tests     |
-| `CSTRIKE_DIR`       | `$STEAM_COMMON/Half-Life/cstrike`                            | CS 1.6 files listed in `cstrike-assets.txt` |
-| `CL_DISPLAY`        | `:99`                                                        | offscreen X display                     |
-| `CL_RESOLUTION`     | `1600x900`                                                   | offscreen screen size                   |
-| `CL_STATE_DIR`      | `.e2e` in the repository                                     | logs, pipes and screenshots             |
-| `CL_LISTEN_PORT`    | `27045`                                                      | port of a client-hosted game            |
+| Variable           | Default                                     | Use                                         |
+| ------------------ | ------------------------------------------- | ------------------------------------------- |
+| `STEAM_COMMON`     | `~/.local/share/Steam/steamapps/common`     | root of the other defaults                  |
+| `SVEN_SERVER_BASE` | `$STEAM_COMMON/Sven Co-op Dedicated Server` | source of server sandboxes                  |
+| `SVEN_SERVER_DIR`  | `$SVEN_SERVER_BASE`                         | server that `install` and `server` use      |
+| `SVEN_CLIENT_DIR`  | `$STEAM_COMMON/Sven Co-op`                  | game client for the offscreen tests         |
+| `CSTRIKE_DIR`      | `$STEAM_COMMON/Half-Life/cstrike`           | CS 1.6 files listed in `cstrike-assets.txt` |
+| `CL_DISPLAY`       | `:99`                                       | offscreen X display                         |
+| `CL_RESOLUTION`    | `1600x900`                                  | offscreen screen size                       |
+| `CL_STATE_DIR`     | `.e2e` in the repository                    | logs, pipes and screenshots                 |
+| `CL_LISTEN_PORT`   | `27045`                                     | port of a client-hosted game                |
 
 ## Install on a server
 
@@ -83,14 +83,14 @@ Known client problems:
 
 `just install-e2e` adds `tests/e2e/e2e.as` to the server. Use it from the server console with `as_command`:
 
-| Command                             | Effect                                                                    |
-| ----------------------------------- | ------------------------------------------------------------------------- |
-| `e2e.spawn <class> [distance]`      | spawn in front of player 1; a monster stops moving after 1 s              |
-| `e2e.aim [head\|body] [class]`      | turn player 1 to the nearest live monster; prints the number still alive  |
-| `e2e.kill [head\|body] [n] [class]` | kill the nearest monsters with the held weapon as the inflictor           |
-| `e2e.give <class>`                  | give player 1 an item                                                     |
-| `e2e.health <n>`, `e2e.armor <n>`   | set health or armour                                                      |
-| `e2e.hurt <n>`                      | damage player 1 from the world                                            |
+| Command                             | Effect                                                                   |
+| ----------------------------------- | ------------------------------------------------------------------------ |
+| `e2e.spawn <class> [distance]`      | spawn in front of player 1; a monster stops moving after 1 s             |
+| `e2e.aim [head\|body] [class]`      | turn player 1 to the nearest live monster; prints the number still alive |
+| `e2e.kill [head\|body] [n] [class]` | kill the nearest monsters with the held weapon as the inflictor          |
+| `e2e.give <class>`                  | give player 1 an item                                                    |
+| `e2e.health <n>`, `e2e.armor <n>`   | set health or armour                                                     |
+| `e2e.hurt <n>`                      | damage player 1 from the world                                           |
 | `e2e.stuff <command>`               | run a console command on the client (the client can refuse some of them) |
 
 ## Scenarios
