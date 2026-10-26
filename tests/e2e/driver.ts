@@ -34,8 +34,9 @@ export class Server {
   }
 
   // The CS HUD lays out icons in screen pixels and cannot read the client's size, so it gets the size of the e2e client.
-  async start(map: string) {
-    await just("server", String(this.port), map);
+  // Extra arguments go to the server command line, for example "+motdfile" and a file.
+  async start(map: string, ...args: string[]) {
+    await just("server", String(this.port), map, ...args);
     await this.command(`as_command .cs16_hud_res ${resolution}`);
   }
 

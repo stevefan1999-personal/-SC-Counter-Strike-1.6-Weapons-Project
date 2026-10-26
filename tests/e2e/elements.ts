@@ -6,7 +6,7 @@
 // the reference (REFERENCES); CS_REFERENCE_DIR overrides where the references are (default: the main checkout's
 // .e2e/reference, which git ignores); CSTRIKE_DIR is the CS 1.6 install. Prints a JSON report and exits 1 when a check
 // fails.
-import { Client, crop, just, Server, sleep } from "./driver.ts";
+import { Client, crop, Server, sleep } from "./driver.ts";
 import { measure } from "./hudboxes.ts";
 import { addedColour, matchBoxes, Pixels, rectError, type Region, type Rgb } from "./hudcompare.ts";
 import { parseSpr } from "../../tools/spr.ts";
@@ -187,7 +187,7 @@ async function waitForClientInGame() {
 
 try {
   // No MOTD: its window would take the keys, and Enter, which closes it, fires the weapon in game.
-  await just("server", String(port), "testcenter", "+motdfile", "e2e_no_motd.txt");
+  await server.start("testcenter", "+motdfile", "e2e_no_motd.txt");
   await client.connect(port);
   await waitForClientInGame();
   await sleep(SETTLE_MS);
