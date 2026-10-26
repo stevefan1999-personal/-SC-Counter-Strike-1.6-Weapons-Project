@@ -191,7 +191,14 @@ async function auditModels(): Promise<string[]> {
       0,
       ...(ourModel.textures ?? []).flatMap((texture) => [texture.width, texture.height]),
     );
-    const facts = [`- texture flags: ${flagged.join(", ") || "none"}; largest texture side ${largestTexture}px`];
+    const embedded = (ourModel.textures ?? []).length;
+    const groups = (ourModel.sequenceGroups ?? []).length;
+    const facts = [
+      `- texture flags: ${flagged.join(", ") || "none"}; largest texture side ${largestTexture}px`,
+      `- ${
+        embedded ? `${embedded} embedded textures` : "no embedded textures (engine loads <name>T.mdl)"
+      }; ${groups} sequence group(s)`,
+    ];
     const [csPath] = await existingPaths([join(cstrikeDir, "models", csName)]);
     if (!csPath) return [`### ${name}`, "- no CS 1.6 counterpart (port-only asset)", ...facts];
     const theirs = await Deno.readFile(csPath);
