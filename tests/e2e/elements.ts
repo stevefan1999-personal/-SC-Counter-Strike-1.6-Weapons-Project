@@ -192,6 +192,9 @@ try {
   await waitForClientInGame();
   await sleep(SETTLE_MS);
   await run("r_drawviewmodel 0");
+  // The client runs the player's config again when it connects, which can turn on net_graph over the bottom right. It
+  // blocks both cvars in stufftext, so they are typed.
+  await client.console("net_graph 0; cl_showfps 0");
   await run("weapon_usp");
   await sleep(SETTLE_MS);
 
