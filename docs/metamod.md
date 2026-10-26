@@ -161,14 +161,23 @@ saves these screens to `.e2e/shots/`, each with a crop of the notify area (`-not
 
 | Shot                      | Event                                                     | Notify area (top left)       |
 | ------------------------- | --------------------------------------------------------- | ---------------------------- |
-| `obituary-scientist`      | a CS weapon kills a pinned scientist; the kill feed shows | empty                        |
+| `obituary-scientist`      | `e2e.kill`: the held CS weapon kills a pinned scientist   | empty                        |
 | `obituary-world-filtered` | the world kills the player; the kill feed shows the skull | empty                        |
 | `obituary-notice`         | `as_command e2e.notify Server will change level soon`     | `Server will change level …` |
 | `obituary-world-native`   | `cl_obituary_filter 0`, then the world kills the player   | `Stefan fell or something.`  |
 
-The scenario sets `developer 0` on the client. With `developer 1` (the player's `autoexec.cfg` on the test machine sets
-it), the engine also prints console lines at the top left, for example `Stefan died`. The CS kill feed prints this line
-to the console (`HUD_PRINTCONSOLE`), as CS 1.6 does. The plugin does not change console lines.
+The scenario checks more than the server log:
+
+- It starts the server without a MOTD window (`+motdfile` names a missing file) and the client with `+developer 0`. It
+  types nothing into the game console.
+- Before the first capture, it waits until a test line shows in the notify area and goes away again. An empty notify
+  area then means that no line arrived, not that the client still loads or that a window covers the area.
+- Each capture must show notify glyphs in the console colour, or none, and the CS icons of the kill feed.
+- The client's console log must hold `Stefan fell or something.` only after the death with `cl_obituary_filter 0`.
+
+With `developer 1` (the player's `autoexec.cfg` on the test machine sets it), the engine also prints console lines at
+the top left, for example `Stefan died`. The CS kill feed prints this line to the console (`HUD_PRINTCONSOLE`), as CS
+1.6 does. The plugin does not change console lines.
 
 ## Limits
 

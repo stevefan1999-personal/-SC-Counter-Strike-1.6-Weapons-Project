@@ -28,9 +28,9 @@ export class Server {
     return `${stateRoot}/server-${this.port}/server.log`;
   }
 
-  // `recipe` is a Justfile recipe with the parameters of `server`, such as `server-metamod`.
-  async start(map: string, recipe = "server") {
-    await just(recipe, String(this.port), map);
+  // `recipe` is a Justfile recipe with the parameters of `server`, such as `server-metamod`; `args` go to the server.
+  async start(map: string, recipe = "server", ...args: string[]) {
+    await just(recipe, String(this.port), map, ...args);
   }
 
   async command(command: string) {
@@ -66,8 +66,14 @@ export class Server {
 }
 
 export class Client {
-  async connect(port: number) {
-    await just("client", `+connect 127.0.0.1:${port}`);
+  // `args` go to the game after `+connect`, such as `+developer 0`.
+  async connect(port: number, ...args: string[]) {
+    await just("client", `+connect 127.0.0.1:${port}`, ...args);
+  }
+
+  // The game's console output, which also holds the console copy of every printed message.
+  async log(): Promise<string> {
+    return await Deno.readTextFile(`${stateRoot}/client/client.log`).catch(() => "");
   }
 
   async keys(...keys: string[]) {
