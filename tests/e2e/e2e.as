@@ -11,6 +11,7 @@
 //   as_command e2e.respawn                        respawn player 1, also when dead
 //   as_command e2e.notify <text...>               print a line in the top-left notify area of every player
 //   as_command e2e.turn <degrees>                 turn player 1's view by an exact yaw step (left is positive)
+//   as_command e2e.fov                            print player 1's FOV (m_iFOV), held weapon (script or native), life
 
 const float DEFAULT_SPAWN_DISTANCE = 160.0f;
 const float LETHAL_DAMAGE = 10000.0f;
@@ -34,6 +35,7 @@ void PluginInit()
   g_Commands.insertLast( CConCommand( "respawn", "- respawn player 1, also when dead", @Respawn ) );
   g_Commands.insertLast( CConCommand( "notify", "<text...> - print a line in the notify area of every player", @NotifyAll ) );
   g_Commands.insertLast( CConCommand( "turn", "<degrees> - turn player 1's view by a yaw step", @TurnView ) );
+  g_Commands.insertLast( CConCommand( "fov", "- print player 1's FOV, weapon and life state", @PrintFov ) );
 }
 
 CBasePlayer@ FirstPlayer()
@@ -214,6 +216,19 @@ void TurnView( const CCommand@ args )
   player.pev.v_angle = viewAngles;
   player.pev.fixangle = FAM_FORCEVIEWANGLES;
   g_EngineFuncs.ServerPrint( "[e2e] turned to yaw " + viewAngles.y + "\n" );
+}
+
+void PrintFov( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null )
+    return;
+  CBaseEntity@ weapon = player.m_hActiveItem.GetEntity();
+  const string classname = weapon is null ? "none" : string( weapon.pev.classname );
+  // Script weapons are the CS weapons; native ones are Sven's own.
+  const string kind = g_CustomEntityFuncs.IsCustomEntity( classname ) ? "script" : "native";
+  g_EngineFuncs.ServerPrint( "[e2e] fov " + player.m_iFOV + " weapon " + classname + " " + kind
+    + ( player.IsAlive() ? " alive" : " dead" ) + "\n" );
 }
 
 void HurtPlayer( const CCommand@ args )
