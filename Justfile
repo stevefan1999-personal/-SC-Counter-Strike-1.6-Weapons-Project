@@ -5,6 +5,10 @@ server_dir := env('SVEN_SERVER_DIR', steam_common / 'Sven Co-op Dedicated Server
 client_dir := env('SVEN_CLIENT_DIR', steam_common / 'Sven Co-op')
 cstrike_dir := env('CSTRIKE_DIR', steam_common / 'Half-Life/cstrike')
 state_root := env('CL_STATE_DIR', justfile_directory() / '.e2e')
+steam_runtime := env('STEAM_RUNTIME_RUN', home_directory() / '.local/share/Steam/ubuntu12_32/steam-runtime/run.sh')
+display := env('CL_DISPLAY', ':99')
+resolution := env('CL_RESOLUTION', '1600x900')
+listen_port := env('CL_LISTEN_PORT', '27045')
 
 default:
   @just --list
@@ -92,3 +96,71 @@ check port='27015' map='hl_c01_a1':
   echo "$fresh"
   if rg -q 'ERROR|failed' <<< "$fresh"; then exit 1; fi
   echo 'plugins compiled cleanly'
+
+# Start the offscreen X display that e2e runs render into: just display
+[group('e2e')]
+display:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  state='{{state_root}}/display'
+  mkdir -p "$state"
+  test -f "$state/xvfb.pid" && kill -0 "$(cat "$state/xvfb.pid")" 2>/dev/null && exit 0
+  Xvfb '{{display}}' -screen 0 '{{resolution}}x24' -nolisten tcp +extension GLX > "$state/xvfb.log" 2>&1 &
+  echo $! > "$state/xvfb.pid"
+  for _ in $(seq 1 40); do DISPLAY='{{display}}' xdpyinfo >/dev/null 2>&1 && exit 0; sleep 0.25; done
+  echo 'Xvfb did not come up' >&2; exit 1
+
+# Launch the Sven Co-op client offscreen; extra args go to the game: just client +connect 127.0.0.1:27017
+[group('e2e')]
+client +args: display client-stop
+  #!/usr/bin/env bash
+  set -euo pipefail
+  state='{{state_root}}/client'
+  mkdir -p "$state/backup"
+  # The engine rewrites the video mode and cvars on exit; client-stop puts the player's files back.
+  cp '{{client_dir}}/svencoop.conf' '{{client_dir}}/svencoop/config.cfg' "$state/backup/"
+  res='{{resolution}}'
+  cd '{{client_dir}}'
+  # -nosound crashes Sven's client in HUD_DrawTransparentTriangles, so mute with volume cvars instead.
+  DISPLAY='{{display}}' SDL_VIDEODRIVER=x11 SteamAppId=225840 SteamGameId=225840 \
+    setsid '{{steam_runtime}}' ./svencoop.sh -nosteamoverlay -nobreakpad -novid -windowed \
+    -w "${res%x*}" -h "${res#*x}" -port {{listen_port}} +volume 0 +MP3Volume 0 {{args}} \
+    > "$state/client.log" 2>&1 &
+  echo $! > "$state/client.pgid"
+  echo "client starting (log: $state/client.log)"
+
+# Stop the offscreen client and restore the player's video settings and cvars: just client-stop
+[group('e2e')]
+client-stop:
+  #!/usr/bin/env bash
+  state='{{state_root}}/client'
+  test -f "$state/client.pgid" && kill -- "-$(cat "$state/client.pgid")" 2>/dev/null && sleep 2
+  rm -f "$state/client.pgid"
+  for file in svencoop.conf config.cfg; do
+    test -f "$state/backup/$file" || continue
+    target='{{client_dir}}/svencoop.conf'
+    test "$file" = config.cfg && target='{{client_dir}}/svencoop/config.cfg'
+    cp "$state/backup/$file" "$target" && rm "$state/backup/$file"
+  done
+
+# Press keys in the offscreen game (xdotool key names): just ui Return
+[group('e2e')]
+ui +keys:
+  @DISPLAY='{{display}}' xdotool key --delay 80 {{keys}}
+
+# Run a console command in the offscreen game: just con 'give weapon_ak47'
+[group('e2e')]
+con +command:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  export DISPLAY='{{display}}'
+  xdotool key grave && sleep 0.6
+  xdotool type --delay 30 '{{command}}' && xdotool key Return && sleep 0.4
+  xdotool key grave && sleep 0.5
+
+# Save a screenshot of the offscreen display: just shot ak47-idle
+[group('e2e')]
+shot name:
+  @mkdir -p '{{state_root}}/shots'
+  @import -display '{{display}}' -window root '{{state_root}}/shots/{{name}}.png'
+  @echo '{{state_root}}/shots/{{name}}.png'
