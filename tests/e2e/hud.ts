@@ -1,7 +1,7 @@
 // HUD scenario: walks through the CS HUD states on testcenter and saves full shots plus HUD-region crops.
 // Usage: deno run -A tests/e2e/hud.ts [port] [label]
 // The server install (SVEN_SERVER_DIR) must already contain the game content and the e2e plugin.
-import { Client, crop, Server, sleep } from "./driver.ts";
+import { Client, crop, PLAYER_NAME, Server, sleep } from "./driver.ts";
 
 const MOTD_DELAY_MS = 3_000;
 const SETTLE_MS = 1_200;
@@ -57,7 +57,7 @@ try {
   await client.join(server);
   await sleep(MOTD_DELAY_MS);
   await client.keys("Return");
-  await client.console("cl_showfps 0; net_graph 0");
+  await client.console(`cl_showfps 0; net_graph 0; name ${PLAYER_NAME}`);
   await sleep(SETTLE_MS);
   await capture("spawn");
 

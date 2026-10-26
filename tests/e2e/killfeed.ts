@@ -3,7 +3,7 @@
 // frame that just fixture-metrics measures the feed against.
 // Usage: deno run -A tests/e2e/killfeed.ts [port] [weapon] [head|body|world] [victim classname]
 // The server install (SVEN_SERVER_DIR) must already contain the game content and the e2e plugin.
-import { Client, crop, Server, sleep } from "./driver.ts";
+import { Client, crop, PLAYER_NAME, Server, sleep } from "./driver.ts";
 
 const MAX_SHOTS = 12;
 const DRAW_DELAY_MS = 1_500;
@@ -13,8 +13,6 @@ const FEED_DRAW_MS = 500; // the server draws a new notice at its next HUD tick,
 const WORLD_DAMAGE = 500; // kills a player without armour
 // A missing file: the server then sends no MOTD, whose window would keep the mouse, so clicks would not fire.
 const NO_MOTD_FILE = "e2e-no-motd.txt";
-// The name of the player in the CS 1.6 reference captures (cs16-killfeed-reference.md), so both feeds name the same killer.
-const PLAYER_NAME = "Player";
 
 const [portArg = "27017", weapon = "weapon_csdeagle", aim = "head", victim = "monster_scientist"] = Deno.args;
 const port = Number(portArg);

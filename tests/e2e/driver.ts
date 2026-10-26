@@ -10,6 +10,10 @@ const JOIN_TIMEOUT_MS = 120_000;
 // The client still loads for a moment after the server logs the join; console keys typed then get lost.
 const JOIN_SETTLE_MS = 3_000;
 
+// The name of the player in the CS 1.6 reference captures (cs16-killfeed-reference.md), so both kill feeds name the
+// same killer.
+export const PLAYER_NAME = "Player";
+
 export class E2eError extends Error {}
 
 async function run(command: string, args: string[], env: Record<string, string> = {}): Promise<string> {
