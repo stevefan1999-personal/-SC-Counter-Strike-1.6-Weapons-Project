@@ -145,3 +145,16 @@ just fixture-metrics .e2e/shots/killfeed-weapon_m4a1-head.png .e2e/shots/killfee
 ```
 
 [CS 1.6 kill-feed reference](research/cs16-killfeed-reference.md) describes the fixture and the measured layout.
+
+### Crosshair reference and comparison sheets
+
+`just fixture-crosshair` gives the CS fixture an AK-47 and saves it at rest and 600 ms into a held burst
+(`.e2e/reference/cs16-crosshair-<W>x<H>-ak47-{rest,firing}.png`), with the waits of the `e2e-hud` steps. Measure both
+games with `tests/e2e/crosshair-lines.ts`. `tests/e2e/comparesheet.ts` puts the same crop of a Counter-Life shot and a
+CS reference side by side at 2× (`docs/hud.md`, "Compared with CS 1.6"):
+
+```sh
+just fixture-crosshair :96 1600x900
+deno run -A tests/e2e/crosshair-lines.ts .e2e/reference/cs16-crosshair-1600x900-ak47-firing.png
+deno run -A tests/e2e/comparesheet.ts 1600x900 <shots dir> <hud label> <elements label> .e2e/reference docs/hud/compare
+```
