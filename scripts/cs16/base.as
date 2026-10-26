@@ -170,6 +170,16 @@ dictionary g_MonsterLastHitter;   // → attacker player entindex (int)
 dictionary g_MonsterLastWeapon;   // → weapon classname (string)
 dictionary g_MonsterLastHeadshot; // → was headshot (bool)
 
+// WeaponBase gives TraceAttack HITGROUP_GENERIC so that the engine adds no hit-group multiplier of its own, and
+// TraceAttack records that group on the victim. Put the real group back before the damage lands, so the death code
+// sees where the bullet hit: the kill-feed headshot icon and the headshot death animation of monsters.
+void RestoreHitGroup( CBaseEntity@ pVictim, int iHitgroup )
+{
+    CBaseMonster@ pMonster = pVictim.MyMonsterPointer();
+    if( pMonster !is null )
+        pMonster.m_LastHitGroup = iHitgroup;
+}
+
 // CS1.6 hitgroup damage multipliers
 float GetHitgroupMultiplier( int iHitgroup )
 {
@@ -618,6 +628,7 @@ mixin class WeaponBase
 
                         // Zero out hitgroup so the engine does not double-apply its own
                         // hitgroup multipliers on top of ours inside TraceAttack.
+                        const int iHitgroup = tr.iHitgroup;
                         tr.iHitgroup = HITGROUP_GENERIC;
 
                         // Gib only on sniper overkill (damage > 4× current health).
@@ -633,6 +644,7 @@ mixin class WeaponBase
                         }
                         g_WeaponFuncs.ClearMultiDamage();
                         pHit.TraceAttack( m_pPlayer.pev, int( flDamage ), vecDir, tr, iDmgType );
+                        CS16BASE::RestoreHitGroup( pHit, iHitgroup );
                         g_WeaponFuncs.ApplyMultiDamage( m_pPlayer.pev, m_pPlayer.pev );
                     }
                     g_SoundSystem.PlayHitSound( tr, vecSrc, vecSrc + (vecEnd - vecSrc) * 2, BULLET_PLAYER_CUSTOMDAMAGE );
@@ -739,6 +751,7 @@ mixin class WeaponBase
 
                             // Zero out hitgroup so the engine does not double-apply its own
                             // hitgroup multipliers on top of ours inside TraceAttack.
+                            const int iBehindHitgroup = trBehind.iHitgroup;
                             trBehind.iHitgroup = HITGROUP_GENERIC;
 
                             g_Game.AlertMessage( at_aiconsole, "[PEN] HIT BEHIND: " + pBehind.GetClassname() + "  dmg=" + iFinalDmg + "\n" );
@@ -747,6 +760,7 @@ mixin class WeaponBase
                             {
                                 g_WeaponFuncs.ClearMultiDamage();
                                 pBehind.TraceAttack( m_pPlayer.pev, iFinalDmg, vecDir, trBehind, iPenDmgType );
+                                CS16BASE::RestoreHitGroup( pBehind, iBehindHitgroup );
                                 g_WeaponFuncs.ApplyMultiDamage( m_pPlayer.pev, m_pPlayer.pev );
 
                                 if( pBehind.IsBSPModel() )
