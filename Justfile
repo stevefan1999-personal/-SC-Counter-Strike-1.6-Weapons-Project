@@ -30,9 +30,9 @@ install target=server_dir:
   done
   echo "installed into $addon"
 
-# Start a dedicated server in the background with a command pipe: just server 27015 hl_c01_a1
+# Start a dedicated server (no install; run just install first) with a command pipe: just server 27015 hl_c01_a1
 [group('server')]
-server port='27015' map='hl_c01_a1' *args: (install server_dir) (stop port)
+server port='27015' map='hl_c01_a1' *args: (stop port)
   #!/usr/bin/env bash
   set -euo pipefail
   state='{{state_root}}/server-{{port}}'
@@ -89,7 +89,7 @@ check port='27015' map='hl_c01_a1':
   logdir='{{server_dir}}/svencoop/logs/Angelscript'
   # The AngelScript log is one file per day, so only read what this run appends.
   before=$(cat "$logdir"/* 2>/dev/null | wc -l)
-  just server {{port}} {{map}}
+  just install && just server {{port}} {{map}}
   sleep 3
   just stop {{port}}
   fresh=$(cat "$logdir"/* | tail -n +$((before + 1)))
