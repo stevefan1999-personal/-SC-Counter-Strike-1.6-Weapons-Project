@@ -173,6 +173,8 @@ Client:
    If the name is found, the client uses that sprite. If the rect that was sent
    is all zero, the client copies the `hud.txt` rect. If the name is not found,
    the handle is 0 and an all-zero rect is read from index −1 (garbage).
+   The name compare is `strncmp` over 24 characters (PLT 0x9AA68 → GOT
+   0x61DB94), so it is case-sensitive.
 
 Automatic size (`CHud::FixupSpriteRect (0xD5002)`, called from the `Start`
 functions 0xB48EE, 0xEBDE4 and 0xEBE60):
@@ -283,6 +285,8 @@ There is no scaling.
   - Each digit moves x by its rect width (20 px). There is no extra spacing.
   - Flag mapping in `CHudNumDisplay::Start (0xEBDE4)`: `LEADING_ZEROS` → 2,
     `NEGATIVE_NUMBERS` → 4, `PLUS_SIGN` → 8.
+- `HUD_NUM_DONT_DRAW_ZERO` (0x40000) works: `CHudNumDisplay::Draw` draws
+  nothing (no icon, no digits) when the float value is exactly 0 (0xEBF29).
 - `HUD_NUM_SEPARATOR` draws a `FillRGBA` bar that is `digitW/10` = 2 px wide
   and `fontH` = 20 px high (0xDB192).
 - Time display (`CHudTimeDisplay::Draw (0xEC22A)`): each field is drawn with
@@ -345,7 +349,16 @@ Draw mode (sprites only, `CHudCustomSprite::Start (0xB48EE)`):
 uses `SPR_DrawHoles`; else `SPR_DrawAdditive`. Numbers and time displays are
 always additive. The engine `SPR_Set (hw.so 0x102E00)` calls
 `glColor4f(r/255, g/255, b/255, 1.0)`. Thus alpha only changes the brightness:
-opaque and masked sprites become darker, not translucent.
+opaque and masked sprites become darker, not translucent. The engine draw
+paths agree: additive is `glBlendFunc(GL_ONE, GL_ONE)` (`hw.so` 0x127E60),
+holes is an alpha test (0x127DC0), and the texture mode is `GL_MODULATE`
+(0x127C52).
+
+The effect colour includes alpha: the lerp `sub_DB640` interpolates all four
+bytes of color1 and color2. For effects 1 and 2 the fraction is
+`fmod(t, fxTime)/fxTime`, reversed for effect 2 (`sete` at 0xDB81C). Thus
+`HUD_EFFECT_RAMP_DOWN` starts at color2 and ends at color1, alpha included,
+which can copy a CS alpha fade (6, item 2).
 
 Defaults: `hud_alpha_default` 160 and `hud_alpha_max` 255 (`CHud::Init (0xD6086)`
 at 0xD6A27 and 0xD6A4B, both archived client cvars). The API calls the first one
@@ -370,6 +383,14 @@ at 0xD6A27 and 0xD6A4B, both archived client cvars). The API calls the first one
 - `HUD_ELEM_HIDDEN` (32) creates the element hidden (0xD7C04). `ToggleElem` sets
   only the visible byte (0xD845A). It does not restart the clock, so it cannot
   bring back an element whose hold time has ended. Send that element again.
+- The clock starts at the first draw while the element is visible:
+  `UpdateVisible (0xD7CEE)` sets the start time only then. Thus an element
+  that is created hidden starts its fade-in and hold when `ToggleElem` first
+  shows it.
+- A resend of the same type calls `Start` (vtable slot +4: 0xB48EE for
+  sprites, 0xEBDE4 for numbers), which clears the start time (0xD7C04). The
+  fades and the effect start again. `UpdateNum` (0xD8510) changes only the
+  value and the flash; it does not restart the clock.
 - Group hiding (`CHudCustom::Draw (0xD82F2)`):
   group 0 (maps, client channels 0–15) is hidden by `HIDEHUD_CUSTOM_MAPS` (64),
   by `hud_hidecustom 1` and by `hud_hidecustom` above 2.
@@ -396,7 +417,14 @@ at 0xD6A27 and 0xD6A4B, both archived client cvars). The API calls the first one
   calls the fatal error routine `0xAF0A0` with "Cannot allocate more than %d
   HUD sprites" (256). The `hud.txt` sheets, each weapon txt sprite, `pain.spr`
   and each custom element sprite take a slot. The same path (compared without
-  case) uses the same slot.
+  case, `strncasecmp` in 0x5A9C0) uses the same slot.
+- The slots last for the whole connection. `SPR_Init (hw.so 0x102C70)`
+  allocates 256 slots only when no table exists, and `ClientDLL_HudVidInit
+  (0x12F6F0)` calls it at each level load, so the table stays from map to
+  map. Only `sub_113040` (it sends `dropclient`, probably `CL_Disconnect`,
+  → 0x102B30) and `SPR_Shutdown (0x102A80)` free it. Thus the 256 paths are
+  counted over all maps of one connection. UNVERIFIED: that a changelevel
+  does not call `sub_113040` (no runtime test).
 - Constructor defaults (`server.so` 0x2BCFD0 for `HUDNumDisplayParams`,
   0x2BCED4 for `HUDSpriteParams`): colours (0,0,0,0) so alpha 0 (invisible),
   x = y = −1 (top-left), `maxdigits` 0 ("0+"), `holdTime` −1 (forever),
@@ -639,6 +667,14 @@ must be drawn by script.
 | `selection` | `640hud3 0 180 170 45` (line 11) | `640hud3 0 180 170 45` (line 94) |
 | HUD colour | (100,130,200), constant | (255,160,0) `RGB_YELLOWISH` (`cs16-client/cl_dll/hud.h:24`) |
 
+The CS digits are not on a 20 px grid. `number_0` … `number_9` start at
+x = 0, 23, 47, 70, 95, 119, 144, 169, 192, 216 (y 0, each 20×25,
+`cstrike/sprites/hud.txt:110–119`). A per-digit sprite must use these `left`
+values, not `20 × digit`. CS still advances each digit by the `number_0`
+width, 20 px (`cs16-client/cl_dll/draw_util.cpp:260`). The repository copy
+`sprites/cs16/640hud7.spr` is byte-identical to `cstrike/sprites/640hud7.spr`.
+Sven's own `640hud7.spr` is 256×128; the CS one is 256×256.
+
 ### 4.5 Causes of glitched icons
 
 1. Missing `.spr`: `Mod_LoadModel (hw.so 0x12B990)` replaces the path with
@@ -673,7 +709,11 @@ with `width = 0` and `height = 0`. The client then draws from (left, top) to
 the bottom-right corner of the 256×256 `640hud1` sheet. Example: `d_ak47` is
 `640hud1 192 80 48 16` (`cstrike/sprites/hud.txt:151`). The client draws the
 64×176 region (192,80)–(256,256) instead of 48×16. Fix: send `wf.width` and
-`wf.height`.
+`wf.height`. Re-checked: `MakeFrame` (`killfeed.as:36`) makes the name
+`cs16/640hud1.spr`, so the `.spr` path rule (1.4, item 2) applies. The CS
+`640hud1.spr` that `just install` copies (`cstrike-assets.txt`) is 256×256.
+The killer and victim names have other defects (text channels); see
+`sven-client-hudtext.md`.
 
 ## 5. Stufftext
 
@@ -749,21 +789,38 @@ Possible from a server script (AngelScript plugin):
    keys. `HIDEHUD_CROSSHAIR` affects only the crosshair.
 2. Draw the CS HUD again with custom elements. Use CS sheets copied to
    `sprites/cs16/`, `color1 = (255,160,0,a)` and additive drawing. A plugin
-   gets client channels 16–31, so it has 16 elements.
+   gets client channels 16–31, so it has 16 elements. All plugins share these
+   16 channels. In this repository `BuyMenu.as:100` uses plugin channel 0 and
+   `killfeed.as:318` and `334` use channels 1–8, so only 9–15 (7 elements) are
+   free. CS alpha: set no alpha flag, because `DEFAULT_ALPHA` and
+   `DYNAMIC_ALPHA` use 160 and 255 (1.9), but CS uses 100 at rest
+   (`MIN_ALPHA`, `cs16-client/cl_dll/hud.h:41`). CS flashes a changed value
+   and fades it linearly in 5 s: health and armour from alpha 228
+   (`health.cpp:226`, `battery.cpp:104`), ammo from 200 (`ammo.cpp:649`,
+   `1096`). To copy it, resend the element with `HUD_EFFECT_RAMP_DOWN`,
+   `HUD_ELEM_EFFECT_ONCE`, `fxTime = 5`, `color1` alpha 100 and `color2`
+   alpha 228 or 200 (1.9, 1.11). CS health is (250,0,0) at 25 or less
+   (`health.cpp:235–244`) and alpha 255 at 15 or less (`health.cpp:207–210`).
 3. For pixel-exact CS positions use `HUD_ELEM_ABSOLUTE_X/Y` with
    `HUD_ELEM_NO_BORDER` and negative values for the right and bottom edges. CS
    anchors: health and ammo row y = H − fontH − fontH/2
    (`cs16-client/cl_dll/health.cpp:276`, `ammo.cpp:1106`), armour x = W/5
    (`battery.cpp:114`), money x = W − 7 × dollar width (`hud/money.cpp:87`).
-   To centre, use `SCR_CENTER` with 0, not −1.
+   With CS fontH = 25 the row is y = H − 37. The health cross is at
+   x = crossW/2 = 12 and its digits at crossW + digitW/2 = 34
+   (`health.cpp:277`, `282`). Money is at y = H − 3 × fontH = H − 75
+   (`MONEY_YPOS`, `hud.h:757`). To centre, use `SCR_CENTER` with 0, not −1.
 4. Digits: `HudNumDisplay` always uses the Sven 20×20 digits. For CS digits,
    use one `HudCustomSprite` for each digit and select the digit with
    `left`/`top` in a copy of the CS `640hud7` (CS digits are 20×25 at y 0 and
    x 0 to 216, `cstrike/sprites/hud.txt:110–119`, so they are inside the 0–255
    limit). A sprite with 10 frames and the `frame` field also works. Both need
    one channel for each digit:
-   health 3 + armour 3 + ammo 3 + 3 + money 5 = 17, which is more than 16. You
-   must combine, or use the map group from a map script.
+   health 3 + armour 3 + ammo 3 + 3 + money 5 = 17, which is more than 16 and
+   much more than the 7 free plugin channels (item 2). You must combine, move
+   the killfeed or the money, use the map group from a map script, or send
+   from a metamod plugin. Select the digits with the uneven CS `left` values
+   (4.4).
 5. Each change needs the full element message again (about 60–80 bytes).
    `UpdateNum` (5 bytes) works only for `HudNumDisplay`. Send all elements again
    after each map change or reconnect (1.11).
