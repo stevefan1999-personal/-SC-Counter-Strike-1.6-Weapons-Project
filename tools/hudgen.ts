@@ -82,14 +82,26 @@ export class Canvas {
     this.pixels = new Uint8Array(width * height);
   }
 
-  // CS draws every HUD layer additively (SPR_DrawAdditive, FillRGBA). With index = brightness, adding indices and
-  // clamping at white is that blend.
+  // Draws a rect of the sheet the way CS 1.6 shows it. Valve's engine insets the texture coordinates of a sprite rect
+  // by half a texel (AdjustSubRect, Half-Life hw.so 0x14a820) and filters bilinearly, so pixel k of a w-wide rect shows
+  // texel k * (w - 1) / w. Sven draws a rect 1:1 (hw.so 0x127AA0), so the frames carry CS's resampled pixels.
+  // Every CS HUD layer is additive (SPR_DrawAdditive, FillRGBA); with index = brightness, adding indices and clamping
+  // at white is that blend.
   add(source: SpriteFrame, rect: Rect, x: number, y: number): this {
+    const texel = (column: number, row: number) => source.pixels[(rect.y + row) * source.width + rect.x + column];
+    const sample = (step: number, size: number) => {
+      const position = step * (size - 1) / size;
+      const near = Math.floor(position);
+      return { near, far: Math.min(near + 1, size - 1), weight: position - near };
+    };
     for (let row = 0; row < rect.height; row++) {
+      const vertical = sample(row, rect.height);
       for (let column = 0; column < rect.width; column++) {
+        const { near, far, weight } = sample(column, rect.width);
+        const blend = (sourceRow: number) => texel(near, sourceRow) * (1 - weight) + texel(far, sourceRow) * weight;
+        const value = blend(vertical.near) * (1 - vertical.weight) + blend(vertical.far) * vertical.weight;
         const at = (y + row) * this.width + x + column;
-        const texel = source.pixels[(rect.y + row) * source.width + rect.x + column];
-        this.pixels[at] = Math.min(WHITE, this.pixels[at] + texel);
+        this.pixels[at] = Math.min(WHITE, this.pixels[at] + Math.round(value));
       }
     }
     return this;

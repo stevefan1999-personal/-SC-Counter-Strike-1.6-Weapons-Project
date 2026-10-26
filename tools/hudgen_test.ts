@@ -61,7 +61,8 @@ Deno.test("cstrike hud.txt has the contract rects on 640hud7", async () => {
   );
 });
 
-// An independent statement of the contract: each frame is the clamped sum of these layers, black elsewhere.
+// An independent statement of the contract: each frame is the clamped sum of these layers as Valve's engine draws
+// them (half-texel inset, bilinear: pixel k of a w-wide rect shows texel k * (w - 1) / w), black elsewhere.
 type Layer = { name: string; x: number; y: number; crop?: Partial<Rect> } | { fill: Rect };
 const digitLayers = (text: string, x: number): Layer[] =>
   [...text].flatMap((char, cell) => char === BLANK ? [] : [{ name: `number_${char}`, x: x + cell * 20, y: 0 }]);
@@ -155,7 +156,14 @@ const expectedPixel = (layers: Layer[], x: number, y: number) =>
       const crop = { x: rectX, y: rectY, width: rectWidth, height: rectHeight, ...layer.crop };
       const [column, row] = [x - layer.x, y - layer.y];
       if (column < 0 || row < 0 || column >= crop.width || row >= crop.height) return sum;
-      return sum + sheet.frame.pixels[(crop.y + row) * sheet.frame.width + crop.x + column];
+      const [sourceX, sourceY] = [column * (crop.width - 1) / crop.width, row * (crop.height - 1) / crop.height];
+      const [left, top] = [Math.floor(sourceX), Math.floor(sourceY)];
+      const [right, bottom] = [Math.min(left + 1, crop.width - 1), Math.min(top + 1, crop.height - 1)];
+      const at = (texelX: number, texelY: number) =>
+        sheet.frame.pixels[(crop.y + texelY) * sheet.frame.width + crop.x + texelX];
+      const [fractionX, fractionY] = [sourceX - left, sourceY - top];
+      const across = (texelY: number) => at(left, texelY) * (1 - fractionX) + at(right, texelY) * fractionX;
+      return sum + Math.round(across(top) * (1 - fractionY) + across(bottom) * fractionY);
     }, 0),
   );
 
