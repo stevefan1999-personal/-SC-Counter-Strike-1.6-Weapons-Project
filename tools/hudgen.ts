@@ -25,6 +25,7 @@ const TWO_DIGIT_FRAMES = 100; // two-cell group frames 0..99 draw both digits
 const TWO_CELL_BLANK = TWO_DIGIT_FRAMES + DIGITS; // frames 100..109 blank the tens cell, 110 blanks both
 const AMMO_BAR_WIDTH_DIVISOR = 10; // CS draws the clip/reserve separator dw/10 wide
 const FILL_SIZE = 64;
+const FLASHLIGHT_STATES = 2; // flashlight.spr frame 0 is off, 1 is on
 
 // hud.txt rows are: name, resolution, sheet, x, y, width, height. The first line is the row count.
 export function parseHudTxt(text: string): Map<string, Rect & { sheet: string }> {
@@ -249,7 +250,7 @@ export function hudSprites(sheet: Sheet): HudSprite[] {
     moneyHigh("money_delta_minus_hi.spr", "minus"),
     {
       file: "flashlight.spr",
-      frames: 2,
+      frames: FLASHLIGHT_STATES,
       content: flashlightBox,
       draw: (canvas, on) => {
         glyph(canvas, "flash_empty");
