@@ -108,13 +108,15 @@ is the first connected player:
 ## Scenarios
 
 ```sh
-just e2e-killfeed 27017 weapon_m4a1 head   # shoot a scientist, save the kill feed
+just e2e-killfeed 27017 weapon_m4a1 head   # shoot a scientist (head, body) or die from the world (world)
 just e2e-hud 27017 run1                    # 15 HUD states with crops of each HUD region
 just e2e-hudproof 27017                    # prove the CS HUD foundation (needs a sandbox, see below)
 just e2e-elements 27017 run1 /abs/crops    # status elements against CS 1.6, with checks (docs/hud.md)
 ```
 
-The scenarios start the server and the client themselves and print a JSON list of the screenshots.
+The scenarios start the server and the client themselves and print a JSON list of the screenshots. The kill-feed
+scenario also saves the same view once the notice is gone (`-clear`). The server gets the client size (`CL_RESOLUTION`)
+as `cs16_hud_res`, because the CS HUD places its icons in screen pixels.
 
 `e2e-hudproof` adds a proof element to the sandbox copy of the plugin, so set `SVEN_SERVER_DIR` to a sandbox. It fails
 on any failed check and writes `report.json` and evidence crops to `.e2e/proof`. See `docs/hud-architecture.md`.
@@ -139,7 +141,7 @@ way, against a frame of the same view without notices:
 
 ```sh
 just fixture-killfeed :96 2560x1440
-just fixture-metrics .e2e/shots/run1-killfeed.png .e2e/shots/run1-killfeed-before.png
+just fixture-metrics .e2e/shots/killfeed-weapon_m4a1-head.png .e2e/shots/killfeed-weapon_m4a1-head-clear.png
 ```
 
 [CS 1.6 kill-feed reference](research/cs16-killfeed-reference.md) describes the fixture and the measured layout.

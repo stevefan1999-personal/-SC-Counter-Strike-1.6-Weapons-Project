@@ -57,13 +57,9 @@ void PluginInit()
     CS16HUD::PluginInit();
     CS16HUD::RegisterStatus();
     CS16CROSSHAIR::Register();
+    CS16KILLFEED::PluginInit();
 
     g_Hooks.RegisterHook( Hooks::Player::PlayerSpawn,    @CS16_PlayerSpawn );
-    g_Hooks.RegisterHook( Hooks::Player::PlayerKilled,   @CS16KILLFEED::OnPlayerKilled );
-    g_Hooks.RegisterHook( Hooks::Monster::MonsterKilled, @CS16KILLFEED::OnMonsterKilled );
-
-    // Killfeed sprite refresh — 0.1 s tick, runs forever
-    g_Scheduler.SetInterval( "CS16KillfeedDraw", 0.1f, g_Scheduler.REPEAT_INFINITE_TIMES );
 
     // Server-side view.cpp approximations (V_DropPunchAngle + V_CalcViewRoll)
     // g_Scheduler.SetInterval( "CS16ViewThink", 0.05f, g_Scheduler.REPEAT_INFINITE_TIMES );
@@ -171,16 +167,8 @@ void MapInit()
     BuyMenu::MoneyInit();
     DMS_MapInit();
 
-    // Precache CS1.6 death notice sprite sheets (640hud1/2/16.spr)
-    CS16KILLFEED::PrecacheSprites();
-    CS16KILLFEED::ResetForNewMap();
+    CS16KILLFEED::MapInit();
     CS16HUD::MapInit();
-}
-
-// Top-level wrapper so g_Scheduler can resolve "CS16KillfeedDraw" by name
-void CS16KillfeedDraw()
-{
-    CS16KILLFEED::DrawNotices();
 }
 
 // Top-level wrapper so g_Scheduler can resolve "CS16ViewThink" by name

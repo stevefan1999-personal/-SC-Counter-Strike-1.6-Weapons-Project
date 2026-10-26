@@ -153,26 +153,19 @@ const float PEN_LOSS_RATE = 0.05f;
 array<int>  g_PlayerArmor(33, 0);
 array<bool> g_PlayerHelmet(33, false);
 
-// Kill feed tracking — last CS16 weapon hit per victim (indexed by victim entindex 1-32)
-array<int>    g_PlayerLastAttacker(33, 0);
-array<string> g_PlayerLastWeapon(33, "");
-array<bool>   g_PlayerLastWasHeadshot(33, false);
-
-// Kill feed tracking — last CS16 weapon fired by each player (indexed by attacker entindex 1-32)
-// Used for monster-kill notices where the victim is not a CBasePlayer.
-array<string> g_AttackerLastWeapon(33, "");
-array<bool>   g_AttackerLastWasHeadshot(33, false);
-
 // Shots fired by each player (indexed by entindex 1-32). The CS HUD crosshair widens once for each new shot, as CS
 // 1.6 does with g_iShotsFired (docs/research/cs16-hud-spec.md 3.12.4).
 array<int> g_PlayerShotsFired(33, 0);
 
-// Kill feed: per-monster last-hit dictionary (key = monster entindex as string).
-// Fallback for when MonsterKilled's pAttacker is null — happens with friendly NPCs
-// such as scientists whose death code doesn't propagate the attacker entity.
-dictionary g_MonsterLastHitter;   // → attacker player entindex (int)
-dictionary g_MonsterLastWeapon;   // → weapon classname (string)
-dictionary g_MonsterLastHeadshot; // → was headshot (bool)
+// WeaponBase gives TraceAttack HITGROUP_GENERIC so that the engine adds no hit-group multiplier of its own, and
+// TraceAttack records that group on the victim. Put the real group back before the damage lands, so the death code
+// sees where the bullet hit: the kill-feed headshot icon and the headshot death animation of monsters.
+void RestoreHitGroup( CBaseEntity@ pVictim, int iHitgroup )
+{
+    CBaseMonster@ pMonster = pVictim.MyMonsterPointer();
+    if( pMonster !is null )
+        pMonster.m_LastHitGroup = iHitgroup;
+}
 
 // CS1.6 hitgroup damage multipliers
 float GetHitgroupMultiplier( int iHitgroup )
@@ -610,38 +603,9 @@ mixin class WeaponBase : IWeaponState
                         if( pVictim !is null )
                             flDamage = CS16BASE::ApplyArmorDamage( pVictim, flDamage, tr.iHitgroup );
 
-                        // Kill feed: record who hit whom, with what weapon, and whether it was a headshot.
-                        // tr.iHitgroup still holds the original value here (not yet zeroed).
-                        int iAIdx = m_pPlayer.entindex();
-                        if( pVictim !is null )
-                        {
-                            // Per-victim: used when a player dies to find their last attacker
-                            int iVIdx = pVictim.entindex();
-                            if( iVIdx >= 1 && iVIdx <= 32 )
-                            {
-                                CS16BASE::g_PlayerLastAttacker[iVIdx]    = iAIdx;
-                                CS16BASE::g_PlayerLastWeapon[iVIdx]      = self.pev.classname;
-                                CS16BASE::g_PlayerLastWasHeadshot[iVIdx] = ( tr.iHitgroup == HITGROUP_HEAD );
-                            }
-                        }
-                        // Per-attacker: used when a monster dies to find the killing player's weapon
-                        if( iAIdx >= 1 && iAIdx <= 32 )
-                        {
-                            CS16BASE::g_AttackerLastWeapon[iAIdx]      = self.pev.classname;
-                            CS16BASE::g_AttackerLastWasHeadshot[iAIdx] = ( tr.iHitgroup == HITGROUP_HEAD );
-                        }
-                        // Per-monster dictionary: fallback for friendly NPCs where the engine
-                        // does not propagate pAttacker through the death chain (e.g. scientists).
-                        if( pVictim is null && iAIdx >= 1 && iAIdx <= 32 )
-                        {
-                            string sMKey = "" + pHit.entindex();
-                            CS16BASE::g_MonsterLastHitter.set( sMKey, iAIdx );
-                            CS16BASE::g_MonsterLastWeapon.set( sMKey, self.pev.classname );
-                            CS16BASE::g_MonsterLastHeadshot.set( sMKey, ( tr.iHitgroup == HITGROUP_HEAD ) );
-                        }
-
                         // Zero out hitgroup so the engine does not double-apply its own
                         // hitgroup multipliers on top of ours inside TraceAttack.
+                        const int iHitgroup = tr.iHitgroup;
                         tr.iHitgroup = HITGROUP_GENERIC;
 
                         // Gib only on sniper overkill (damage > 4× current health).
@@ -657,6 +621,7 @@ mixin class WeaponBase : IWeaponState
                         }
                         g_WeaponFuncs.ClearMultiDamage();
                         pHit.TraceAttack( m_pPlayer.pev, int( flDamage ), vecDir, tr, iDmgType );
+                        CS16BASE::RestoreHitGroup( pHit, iHitgroup );
                         g_WeaponFuncs.ApplyMultiDamage( m_pPlayer.pev, m_pPlayer.pev );
                     }
                     g_SoundSystem.PlayHitSound( tr, vecSrc, vecSrc + (vecEnd - vecSrc) * 2, BULLET_PLAYER_CUSTOMDAMAGE );
@@ -763,6 +728,7 @@ mixin class WeaponBase : IWeaponState
 
                             // Zero out hitgroup so the engine does not double-apply its own
                             // hitgroup multipliers on top of ours inside TraceAttack.
+                            const int iBehindHitgroup = trBehind.iHitgroup;
                             trBehind.iHitgroup = HITGROUP_GENERIC;
 
                             g_Game.AlertMessage( at_aiconsole, "[PEN] HIT BEHIND: " + pBehind.GetClassname() + "  dmg=" + iFinalDmg + "\n" );
@@ -771,6 +737,7 @@ mixin class WeaponBase : IWeaponState
                             {
                                 g_WeaponFuncs.ClearMultiDamage();
                                 pBehind.TraceAttack( m_pPlayer.pev, iFinalDmg, vecDir, trBehind, iPenDmgType );
+                                CS16BASE::RestoreHitGroup( pBehind, iBehindHitgroup );
                                 g_WeaponFuncs.ApplyMultiDamage( m_pPlayer.pev, m_pPlayer.pev );
 
                                 if( pBehind.IsBSPModel() )

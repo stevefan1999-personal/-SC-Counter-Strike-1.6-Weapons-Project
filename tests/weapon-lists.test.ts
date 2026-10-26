@@ -130,7 +130,10 @@ Deno.test("the kill feed draws its death icons from the shipped CS sheets in the
     ?.[1] ?? "";
   // Player caches can hold other packs' files at sprites/cs16/640hud*.spr, so no path may point there.
   assert(!/"(sprites\/)?cs16\/640hud/.test(killfeed), "killfeed.as names a sheet outside the icons folder");
-  const sheets = [...killfeed.matchAll(/MakeFrame\("(640hud\d+)"/g)].map(([, sheet]) => sheet);
-  assert(sheets.length > 0, "no MakeFrame sheets found");
+  const channels = await Deno.readTextFile(`${repo}scripts/cs16/hud/channels.as`);
+  assert(channels.includes(`ICON_SHEET_DIR = "cs16/icons/"`), "CS16HUD::ICON_SHEET_DIR is not cs16/icons/");
+  assert(killfeed.includes("CS16HUD::ICON_SHEET_DIR + sheet"), "the death icons do not use CS16HUD::ICON_SHEET_DIR");
+  const sheets = [...killfeed.matchAll(/const string HUD\d+ = "(640hud\d+)";/g)].map(([, sheet]) => sheet);
+  assert(sheets.length > 0, "no death-icon sheets found");
   for (const sheet of sheets) assert(shipped.includes(`"${sheet}"`), `${sheet} is not a shipped list sheet`);
 });
