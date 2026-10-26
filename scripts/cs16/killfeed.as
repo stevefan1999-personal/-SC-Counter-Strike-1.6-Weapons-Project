@@ -381,7 +381,7 @@ namespace CS16KILLFEED {
     }
 
 // ── PlayerKilled hook ───────────────────────────────────────────────────────
-    HookReturnCode OnPlayerKilled(CBasePlayer@ pVictim, CBaseEntity@ pKiller, entvars_t@ pevInflictor) {
+    HookReturnCode OnPlayerKilled(CBasePlayer@ pVictim, CBaseEntity@ pKiller, int iGib) {
         if (pVictim is null) return HOOK_CONTINUE;
 
         string szVictimName = string(pVictim.pev.netname);
