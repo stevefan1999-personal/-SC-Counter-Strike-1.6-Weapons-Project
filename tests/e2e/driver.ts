@@ -89,6 +89,11 @@ export class Client {
     await run("xdotool", ["mouseup", String(button)], { DISPLAY: display });
   }
 
+  // Turns the view by relative mouse motion (negative dy looks up).
+  async look(dx: number, dy: number) {
+    await run("xdotool", ["mousemove_relative", "--", String(dx), String(dy)], { DISPLAY: display });
+  }
+
   async keyDown(key: string) {
     await run("xdotool", ["keydown", key], { DISPLAY: display });
   }
