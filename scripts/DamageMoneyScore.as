@@ -14,7 +14,7 @@
 // module: a separate plugin would get its own copy of BuyMenu::BuyPoints (and
 // a second "buy" command) instead of sharing the buy menu's wallet.
 // Config: plugins/store/DamageMoneyScore.cfg
-// Data:   plugins/store/playerdata/<sanitized_steam_id>.txt
+// Data:   plugins/store/DamageMoneyScore_<sanitized_steam_id>.txt
 //=============================================================================
 
 #include "cs16/BuyMenu"
@@ -33,7 +33,8 @@ namespace DamageMoneyScore
 	int g_iAutosaveInterval = 60;
 
 	const string CFG_PATH = "scripts/plugins/store/DamageMoneyScore.cfg";
-	const string DATA_DIR = "scripts/plugins/store/playerdata/";
+	// g_FileSystem cannot create directories, so player files sit flat in the writable store root.
+	const string DATA_FILE_PREFIX = "scripts/plugins/store/DamageMoneyScore_";
 
 	//=========================================================================
 	// Player Data — flat dictionaries keyed by Steam ID
@@ -118,7 +119,7 @@ namespace DamageMoneyScore
 	//=========================================================================
 	string GetPlayerDataPath( const string& in steamId )
 	{
-		return DATA_DIR + SanitizeSteamId( steamId ) + ".txt";
+		return DATA_FILE_PREFIX + SanitizeSteamId( steamId ) + ".txt";
 	}
 
 	//=========================================================================
