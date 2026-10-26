@@ -5,6 +5,10 @@ const repoRoot = new URL("../../", import.meta.url).pathname;
 const stateRoot = Deno.env.get("CL_STATE_DIR") ?? `${repoRoot}.e2e`;
 const display = Deno.env.get("CL_DISPLAY") ?? ":99";
 const resolution = Deno.env.get("CL_RESOLUTION") ?? "1600x900";
+const LOG_POLL_MS = 250;
+const JOIN_TIMEOUT_MS = 120_000;
+// The client still loads for a moment after the server logs the join; console keys typed then get lost.
+const JOIN_SETTLE_MS = 3_000;
 
 export class E2eError extends Error {}
 
@@ -66,11 +70,6 @@ export class Server {
     await just("stop", String(this.port));
   }
 }
-
-const JOIN_TIMEOUT_MS = 120_000;
-// The client still loads for a moment after the server logs the join; console keys typed then get lost.
-const JOIN_SETTLE_MS = 3_000;
-const LOG_POLL_MS = 250;
 
 export class Client {
   async connect(port: number) {
