@@ -153,7 +153,7 @@ namespace DamageMoneyScore
 			g_iAutosaveInterval = 10;
 
 		g_Game.AlertMessage( at_console,
-			"[DamageMoneyScore] Config loaded: rate=%.2f sync_score=%d autosave=%ds\n",
+			"[DamageMoneyScore] Config loaded: rate=%1 sync_score=%2 autosave=%3s\n",
 			g_flDamageToMoneyRate, g_iSyncScoreEnabled, g_iAutosaveInterval );
 	}
 
@@ -801,7 +801,7 @@ void DMS_MapInit()
 		g_Scheduler.REPEAT_INFINITE_TIMES );
 
 	g_Game.AlertMessage( at_console,
-		"[DamageMoneyScore] MapInit complete. Rate=%.2f AutoSave=%ds SyncScore=%d\n",
+		"[DamageMoneyScore] MapInit complete. Rate=%1 AutoSave=%2s SyncScore=%3\n",
 		DamageMoneyScore::g_flDamageToMoneyRate,
 		DamageMoneyScore::g_iAutosaveInterval,
 		DamageMoneyScore::g_iSyncScoreEnabled );
