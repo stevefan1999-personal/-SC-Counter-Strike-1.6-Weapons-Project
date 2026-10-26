@@ -34,6 +34,7 @@ namespace CS16KILLFEED
   const int64 SUBPIXELS = 64; // FreeType 26.6
   const int64 FIXED_ONE = 65536; // FreeType 16.16
   const uint BYTE_MASK = 0xFF; // a char converts to a sign-extended uint
+  const int TEXT_EFFECT_FADE = 0; // HudMessage effect 0 only fades, and these texts have no fade times
 
   const string HUD1 = "640hud1";
   const string HUD2 = "640hud2";
@@ -357,7 +358,7 @@ namespace CS16KILLFEED
     // A negative x anchors the right end of the line; the step next to 0 puts it on the border, the furthest right.
     params.x = Math.min( TextPosition( right - HUD_BORDER, screen.width ) - 1.0f, -TEXT_STEP );
     params.y = TextPosition( top - HUD_BORDER, screen.height );
-    params.effect = 0;
+    params.effect = TEXT_EFFECT_FADE;
     params.r1 = colour.r;
     params.g1 = colour.g;
     params.b1 = colour.b;
@@ -372,7 +373,7 @@ namespace CS16KILLFEED
   void ClearText( CBasePlayer@ player, uint slot )
   {
     HUDTextParams params;
-    params.effect = 0;
+    params.effect = TEXT_EFFECT_FADE;
     params.fadeinTime = 0.0f;
     params.fadeoutTime = 0.0f;
     params.holdTime = 0.0f;
