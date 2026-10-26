@@ -21,14 +21,17 @@ Deno.test("a sheet puts the 2x Counter-Life crop left of the 2x CS crop under a 
   const dir = await Deno.makeTempDir();
   try {
     const [ours, cs, out] = ["ours.png", "cs.png", "sheet.png"].map((name) => `${dir}/${name}`);
-    await magick("-size", "40x30", "xc:rgb(200,0,0)", ours);
-    await magick("-size", "40x30", "xc:rgb(0,0,200)", cs);
+    // Only the cropped region has the colour of its side, so a crop in the wrong place shows up as black.
+    await magick("-size", "40x30", "xc:black", "-fill", "rgb(200,0,0)", "-draw", "rectangle 10,5 29,14", ours);
+    await magick("-size", "40x30", "xc:black", "-fill", "rgb(0,0,200)", "-draw", "rectangle 10,5 29,14", cs);
     await magick(...sheetArgs(ours, cs, { x: 10, y: 5, width: 20, height: 10 }, out));
     const sheet = await load(out);
     const [captionRows, side, gap] = [28, 40, 8];
     assertEquals([sheet.width, sheet.height], [2 * side + gap, captionRows + 20]);
-    assertEquals(pixel(sheet, side / 2, captionRows + 10), [200, 0, 0]);
-    assertEquals(pixel(sheet, side + gap + side / 2, captionRows + 10), [0, 0, 200]);
+    for (const [x, y] of [[0, captionRows], [side - 1, captionRows + 19]]) {
+      assertEquals(pixel(sheet, x, y), [200, 0, 0]);
+      assertEquals(pixel(sheet, side + gap + x, y), [0, 0, 200]);
+    }
   } finally {
     await Deno.remove(dir, { recursive: true });
   }

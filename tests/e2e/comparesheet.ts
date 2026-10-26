@@ -79,6 +79,7 @@ export function sheetArgs(oursPath: string, csPath: string, region: Region, out:
   const side = (path: string, caption: string) => [
     "(",
     path,
+    "+gravity", // settings outlive parentheses: the caption gravity of the first side would move the second crop
     "-crop",
     geometry,
     "+repage",
