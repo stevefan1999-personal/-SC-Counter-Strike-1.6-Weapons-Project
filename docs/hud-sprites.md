@@ -30,7 +30,7 @@ the content).
 | `money_delta_minus_hi.spr` | 256    | −delta / 100, delta < 0                                       | 73×25   | 128×32 | (W−129, H−112)                                                                        | −56, −87                                               | 1,054,506 | 20,656 |
 | `flashlight.spr`           | 2      | on ? 1 : 0                                                    | 48×32   | 64×32  | (W−48, 16)                                                                            | 1.0 (fraction), 16                                     | 4,946     | 1,397  |
 | `flashlight_energy.spr`    | 101    | battery %                                                     | 48×32   | 64×32  | (W−48, 16)                                                                            | 1.0 (fraction), 16                                     | 209,678   | 5,555  |
-| `fill.spr`                 | 1      | 0                                                             | 64×64   | 64×64  | any (crosshair lines, bars)                                                           | –                                                      | 4,926     | 596    |
+| `fill.spr`                 | 1      | 0                                                             | 64×64   | 64×64  | any rect up to 64×64 (crosshair lines, radar dots); longer bars need more elements    | –                                                      | 4,926     | 596    |
 
 `two_cells.spr` serves three elements: the first two cells of the reserve and the last two cells of money and of the
 delta row. They show the same frames, so separate files would be byte-identical downloads and textures.
@@ -106,7 +106,7 @@ the `hud.txt` rects of `640hud7.spr`. Cells are 20×25, as `number_0`.
 | `money_delta_minus_hi.spr`                | `minus` (210,25,13,23) at (0,0), cells at x 13, 33, 53, as `money_hi.spr`.                                                                                                  |
 | `flashlight.spr`                          | `flash_empty` (112,25,32,32) at (0,0). `flash_beam` (144,25,16,32) at x 32 in frame 1.                                                                                      |
 | `flashlight_energy.spr`                   | Frame b: `flash_full` (160,25,32,32) without its left `off = (int)((1 − b/100) * 32)` columns, at x = `off`. Frame 0 is empty.                                              |
-| `fill.spr`                                | 64×64 white.                                                                                                                                                                |
+| `fill.spr`                                | 64×64 white. Send a sub-rect (`left`, `top`, `width`, `height`) inside it: Sven cuts a larger rect at the frame edge.                                                       |
 
 Digit rects (x, 0, 20, 25): x = 0, 23, 47, 70, 95, 119, 144, 169, 192, 216 for 0…9. The tool reads every rect from
 `cstrike/sprites/hud.txt` by name; `tools/hudgen_test.ts` checks them against this table.
