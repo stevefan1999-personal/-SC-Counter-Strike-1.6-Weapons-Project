@@ -322,8 +322,9 @@ namespace CS16KILLFEED {
                 wp.spritename = wf.sheet;
                 wp.left       = wf.left;
                 wp.top        = wf.top;
-                wp.width      = 0;   // 0 = auto (full sprite width)
-                wp.height     = 0;   // 0 = auto (full sprite height)
+                // 0 would stretch the rect to the sheet's edge (Sven client CHud::FixupSpriteRect).
+                wp.width      = wf.width;
+                wp.height     = wf.height;
                 wp.color1     = RGBA(255, 80, 0, 255);
                 wp.holdTime   = 0.15f;
                 g_PlayerFuncs.HudCustomSprite(pPlayer, wp);
