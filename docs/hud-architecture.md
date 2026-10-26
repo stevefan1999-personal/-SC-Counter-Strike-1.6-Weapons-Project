@@ -9,7 +9,8 @@ Research that this design uses:
 - `docs/research/sven-client-hud.md`: client channels, byte layouts, positions, lifetime of custom elements.
 - `docs/research/sven-client-hudtext.md`: `TE_TEXTMESSAGE`, text slots, text positions and font.
 - `docs/research/cs16-hud-spec.md`: the CS 1.6 HUD and its proposed Sven mapping (section 5).
-- `docs/hud-sprites.md` on branch `feat/hud-sprites`: the generated sprites in `sprites/cs16/hud/`.
+- `docs/hud-sprites.md`: the generated sprites in `sprites/cs16/hud/`.
+- `docs/hud.md`: the elements that use this foundation, and their comparison with CS 1.6.
 
 ## Files
 
@@ -170,20 +171,12 @@ or avoid it. Two ways to avoid it: merge the headshot icon into the weapon icon 
 
 ### This repository
 
-On `main` these users take channels that the map above gives to other elements:
-
-| User                                                      | API channel    | Client channel or slot | Element of the map                         |
-| --------------------------------------------------------- | -------------- | ---------------------- | ------------------------------------------ |
-| money number display (`scripts/cs16/BuyMenu.as:100`)      | plugin 0       | 16                     | crosshair, west line                       |
-| C4 status icon (`scripts/cs16/misc/weapon_c4.as:130`)     | plugin 4       | 20                     | health                                     |
-| kill feed weapon icons (`scripts/cs16/killfeed.as:291`)   | plugin 5–8     | 21–24                  | armour, armour full, clip, reserve high    |
-| kill feed headshot icons (`scripts/cs16/killfeed.as:308`) | plugin 9–12    | 25–28                  | reserve low, ammo icon, money high and low |
-| kill feed names (`scripts/cs16/killfeed.as:324`, `341`)   | text 1–4, 9–12 | engine slots 0–3       | victim names rows 1–4                      |
-
-- The status element must remove the money number display of `BuyMenu.as` when it draws the money.
-- The kill feed element replaces the kill feed of `killfeed.as`.
-- The C4 status icon moves to `STATUS_ICON` (9).
-- Other plugins on the same server that use the stock API also draw on client channels 16–31.
+Before the HUD elements, older code of this repository drew on channels that this map gives to other elements: the money
+number display of `BuyMenu.as` (client channel 16), the C4 sprite of `weapon_c4.as` (20) and the old kill feed (21–28
+and text slots 0–3). The integrated HUD (`docs/hud.md`) removed all of them: the money element replaces the number
+display, the status icon (9) replaces the C4 sprite, and the new kill feed uses its own channels and slots. No other
+code of this repository sends custom elements or HUD texts. Other plugins on the same server that use the stock API
+still draw on client channels 16–31 and text slots 0–3.
 
 ## Raw senders
 
@@ -235,10 +228,11 @@ safe. The server also drops any `TE_TEXTMESSAGE` above its 512-byte message buff
 bytes, which fits the line buffer and always sends. An element that needs more text uses more than one slot.
 
 The senders record each client channel and text slot that they used for each player, and the last position of each text.
-`cs16_hud 0` hides these channels and sends an empty text with no hold to these slots. The empty text goes to the
-recorded position, because the client clears every other text at the position of a new text (`sven-client-hudtext.md`
-1.4); an empty text at the default centred position would clear a map or plugin text that sits there. Thus turning the
-CS HUD off does not touch the elements or texts of maps or other plugins.
+`ClearText( player, slot )` empties one slot that the plugin drew: it sends an empty text with no hold to the recorded
+position, because the client clears every other text at the position of a new text (`sven-client-hudtext.md` 1.4); an
+empty text at the default position would clear a map or plugin text that sits there. `cs16_hud 0` (`ClearSent`) hides
+the recorded channels and calls `ClearText` for each recorded slot; the kill feed uses `ClearText` for rows that go
+empty. Thus turning the CS HUD off does not touch the elements or texts of maps or other plugins.
 
 ## Screen size
 
@@ -436,9 +430,9 @@ The scenario writes `report.json` and the crops to `.e2e/proof`. It exits with a
 
 ### Results
 
-Last run: this branch after the merge of `main`, map testcenter, client at 1600×900 on Xvfb (Mesa llvmpipe),
-`hud_bordersize` 16, machine load average 66 from other test clients. All 55 checks passed. In each crop below, the top
-part is with `cs16_hud 1` and the next part is with `cs16_hud 0`.
+Last run: the integrated branch `feat/cs16-hud` with all HUD elements (`docs/hud.md`), map testcenter, client at
+1600×900 on Xvfb (Mesa llvmpipe), `hud_bordersize` 16. All 55 checks passed. In each crop below, the top part is with
+`cs16_hud 1` and the next part is with `cs16_hud 0`.
 
 **(a) Raw sprites at exact pixels.** With `ABSOLUTE` and `NO_BORDER`, x ≥ 0 is the left edge and a negative x puts the
 right edge −x pixels from the screen edge (`sven-client-hud.md` 1.5). Thus the cross rect starts at (100, 200) and the
@@ -468,9 +462,9 @@ texts were still visible, so a hold above 127.99 s works.
 
 ![texts on engine slots 5 and 6](hud-architecture/b-text-slots.png)
 
-**(c) Native parts hidden, weapon menu working.** With `cs16_hud 1` the health, armour, ammo, flashlight and crosshair
-are not drawn, and `m_iHideHUD` is 810. The slot key 2 and fire changed the weapon from `weapon_m4a1` to
-`weapon_csglock18`. The red mark at the top left of the first strip is the money display of `BuyMenu.as`.
+**(c) Native parts hidden, weapon menu working.** With `cs16_hud 1` the native health, armour, ammo, flashlight and
+crosshair are not drawn (the CS elements are), and `m_iHideHUD` is 810. The slot key 2 and fire changed the weapon from
+`weapon_m4a1` to `weapon_csglock18`.
 
 ![native bottom row](hud-architecture/c-native-bottom.png)
 
@@ -518,8 +512,6 @@ The chat on the screen shows only the newest line:
 
 ## Known limits
 
-- The foundation alone hides the native health, armour, ammo, flashlight and crosshair. The CS elements come from other
-  branches. Until they are merged, set `cs16_hud 0` or merge them together with the foundation.
 - Map-group elements conflict with five stock maps (see [Stock Sven maps](#stock-sven-maps)).
 - The server cannot see a video mode change on the client. The player must type `.hudres`.
 - On a LAN server all players share one stored `.hudres` value.
