@@ -166,6 +166,7 @@ by 0.5. Every 1 px shift of step 1 gives 14.6 or more.
 - Every frame of every file, pixel by pixel, against an independent statement of the tables above. The statement does
   not clamp, so a frame whose parts add up above white fails (step 2).
 - The frame-number formulas, as described in [Frame numbers](#frame-numbers).
+- The SHA-1 of every generated file (see [Changes](#changes)).
 
 ## Limits and costs
 
@@ -178,6 +179,8 @@ by 0.5. Every 1 px shift of step 1 gives 14.6 or more.
 
 A client does not download a file again when it already has a file with that path. If the output of `hudgen` changes,
 write the files to a new directory (for example `sprites/cs16/hud2/`) and change the plugin to that directory.
+`tools/hudgen_test.ts` pins the SHA-1 of every file that clients get from `sprites/cs16/hud/`, so a changed byte fails
+the test until the directory moves and the hashes are updated.
 
 ## Reproduce
 

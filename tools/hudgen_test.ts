@@ -194,6 +194,38 @@ for (const hudSprite of hudSprites(sheet)) {
   });
 }
 
+// A client never downloads a path again once it has a file there (docs/hud-sprites.md, Changes). These are the bytes
+// shipped under sprites/cs16/hud/: when one changes, move the output to a new directory, then update the hash.
+const SHIPPED_SHA1: Record<string, string> = {
+  "health.spr": "9d21cf5cd0c89f79c66ab0c6f467f281849cb8b6",
+  "armor.spr": "30dffcf00f35ed8a844d3c6b51ad077a014fbe01",
+  "armor_full.spr": "c6418d08c3e6261174831363872da3f68a3e49cf",
+  "armor_helmet.spr": "5d22f1799c2af004df0bcf8df38015dc9f5d1473",
+  "armor_helmet_full.spr": "c2beeb60a4b82afa69b66b263b8f832684de320d",
+  "clip.spr": "4a0167c60dddfb975ea59b9248c07e80abc1d611",
+  "two_cells.spr": "f333071ddc4be38112d7fb52241dbbe8d48ad71c",
+  "reserve_lo.spr": "94fc76058e886844bb297e7a88491487eb1e7867",
+  "money_hi.spr": "410af1e2f29e276dd2b3c31e6a0b01ec5b8fde76",
+  "money_delta_plus_hi.spr": "bf9321b00b0fab5e04134bec91a23228636308aa",
+  "money_delta_minus_hi.spr": "33c4610ee37eee4c21b685543e69506a62e2b203",
+  "flashlight.spr": "74633fbfcde66094924c52f939003aed97181205",
+  "flashlight_energy.spr": "3f8c0e65ffee19984d130aef1cceec11fbe51bf9",
+  "fill.spr": "8d1ee209ece09252ff30f5282cf213292b1be9b3",
+};
+
+Deno.test("hudgen writes the bytes that clients already cached under sprites/cs16/hud", async () => {
+  const sha1 = async (bytes: Uint8Array) =>
+    Array.from(
+      new Uint8Array(await crypto.subtle.digest("SHA-1", bytes.slice())),
+      (byte) => byte.toString(16).padStart(2, "0"),
+    )
+      .join("");
+  const generated = await Promise.all(
+    hudSprites(sheet).map(async (hudSprite) => [hudSprite.file, await sha1(encodeHudSprite(sheet, hudSprite))]),
+  );
+  assertEquals(Object.fromEntries(generated), SHIPPED_SHA1);
+});
+
 // The frame numbers that the AngelScript HUD sends (docs/hud-sprites.md) select the cells that CS would draw.
 Deno.test("money frames rebuild the %5i field for 0..25599", () => {
   for (let money = 0; money <= 25599; money++) {
