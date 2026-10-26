@@ -80,7 +80,9 @@ drops in error hides a notice:
 - The article must agree with the monster name.
 
 A name can hold any character, so the matcher finds each format from its fixed parts. A notice of another plugin that
-has exactly one of these forms, for example `The generator blew up.` with a line feed, is dropped too.
+has exactly one of these forms, for example `The generator blew up.` with a line feed, is dropped too. A player name can
+also make a notice match: with the name `a : b : c`, each notify line that holds this name and ends with a line feed
+looks like `<killer> : <weapon> : <victim>`.
 
 ## Build and test
 
@@ -182,8 +184,12 @@ the top left, for example `Stefan died`. The CS kill feed prints this line to th
 ## Limits
 
 - metamod-p-rs cannot give a hook a null string. A `WRITE_STRING(NULL)` in a `TextMsg` therefore goes to the engine,
-  which stops the server (`WriteString called with no active message`). `UTIL_ClientPrintAll` of `server.so` skips null
-  parameters, and AngelScript strings are never null.
+  which stops the server (`WriteString called with no active message`). Without the plugin, the engine sends an empty
+  string. `UTIL_ClientPrintAll` of `server.so` skips null parameters, and AngelScript strings are never null.
 - Two plugins that both hold `TextMsg` (for example `asusermsg` with a script hook on `TextMsg`) each send their own
-  copy. A message then arrives two times, and an obituary that this plugin drops still arrives from the other plugin.
+  copy. A message then arrives two times, and an obituary that this plugin drops still arrives from the other plugin. A
+  message that the other plugin blocks still arrives from this plugin.
+- Do not use a plugin that changes a `TextMsg` with calls to the engine's message functions from its own hooks, for
+  example `WRITE_STRING` with a different text. While this plugin holds the `TextMsg`, the engine has no open message,
+  so such a call stops the server.
 - The plugin needs glibc 2.34 or newer at run time, because it links the glibc of the build host.
