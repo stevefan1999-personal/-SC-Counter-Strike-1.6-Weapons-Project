@@ -231,6 +231,14 @@ hudboxes image x y w h:
 hud-sheet screenshot out=(justfile_directory() / 'docs/hud-sprites/contact-sheet.png'):
   deno run -R -W --allow-run=magick '{{justfile_directory()}}/tools/hudsheet.ts' '{{cstrike_dir}}' '{{screenshot}}' '{{out}}'
 
+# Regenerate the kill feed's HudMessage glyph advances from the face that the Sven client picks: just hud-font
+[group('tools')]
+hud-font out=(justfile_directory() / 'scripts/cs16/hud/textfont.as'):
+  # The client asks fontconfig for CreditsFont "Ariel" at weight 600; when that face has no Apple Roman cmap it falls
+  # back to "Tahoma", which Sven's hw.so asks for as "Bitstream Vera Sans" (docs/hud.md, "Kill feed").
+  deno run -R -W '{{justfile_directory()}}/tools/hudfont.ts' '{{out}}' \
+    "$(fc-match -f '%{file}' 'Ariel:weight=600')" "$(fc-match -f '%{file}' 'Bitstream Vera Sans:weight=600')"
+
 # CS 1.6 kill-feed reference fixture: Valve's CS 1.6 client against a ReGameDLL_CS listen server (bots and "give").
 hl_dir := env('HL_DIR', steam_common / 'Half-Life')
 # Worktrees share the main checkout's .git, so its parent is the project root that holds ReGameDLL_CS.
