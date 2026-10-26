@@ -28,8 +28,12 @@ namespace CS16HUD
   const uint MONEY_DELTA_LOW = 5;
   const uint FLASHLIGHT = 6;
   const uint RADAR_BACKGROUND = 7;
-  const uint RADAR_DOT_FIRST = 8; // 8-15
-  const uint RADAR_DOTS = 8;
+  const uint RADAR_DOT_FIRST = 8; // 8-13
+  const uint RADAR_DOTS = 6;
+  // Second parts of the two-part status elements of docs/hud-sprites.md: their bright part overlaps the base icon, so
+  // it is a sprite of its own. Both parts draw additively, so their order on the client does not matter.
+  const uint ARMOUR_FULL = 14;
+  const uint FLASHLIGHT_ENERGY = 15;
 
   // Engine text slots of TE_TEXTMESSAGE: plugins get 0-3 and map scripts 4-7 (sven-client-hudtext.md 1.2).
   const uint TEXT_SLOTS = 8;
