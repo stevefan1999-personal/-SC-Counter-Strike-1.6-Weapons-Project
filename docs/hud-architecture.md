@@ -226,8 +226,11 @@ line overruns the stack and crashes the client. A single 300-byte line segfaults
 safe. The server also drops any `TE_TEXTMESSAGE` above its 512-byte message buffer. Thus `SendText` cuts the text to 267
 bytes, which fits the line buffer and always sends. An element that needs more text uses more than one slot.
 
-The senders record each client channel and text slot that they used for each player. `cs16_hud 0` hides these channels
-and sends an empty text with no hold to these slots. It does not touch the elements of maps or other plugins.
+The senders record each client channel and text slot that they used for each player, and the last position of each text.
+`cs16_hud 0` hides these channels and sends an empty text with no hold to these slots. The empty text goes to the
+recorded position, because the client clears every other text at the position of a new text
+(`sven-client-hudtext.md` 1.4); an empty text at the default centred position would clear a map or plugin text that sits
+there. Thus turning the CS HUD off does not touch the elements or texts of maps or other plugins.
 
 ## Screen size
 

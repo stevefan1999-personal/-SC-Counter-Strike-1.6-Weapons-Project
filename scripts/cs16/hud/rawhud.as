@@ -27,6 +27,10 @@ namespace CS16HUD
   // so that turning the CS HUD off removes exactly those and never an element of a map or of another plugin.
   array<uint> g_SentChannels( MAX_PLAYERS + 1 );
   array<uint> g_SentTextSlots( MAX_PLAYERS + 1 );
+  // Per player slot and text slot, the position of the last text. The client removes every other text at the position
+  // of a new text (sven-client-hudtext.md 1.4), so the empty text that clears ours must go to the same place.
+  array<float> g_SentTextX( ( MAX_PLAYERS + 1 ) * TEXT_SLOTS );
+  array<float> g_SentTextY( ( MAX_PLAYERS + 1 ) * TEXT_SLOTS );
 
   void SendSprite( CBasePlayer@ player, uint clientChannel, const HUDSpriteParams& in params )
   {
@@ -100,6 +104,8 @@ namespace CS16HUD
     message.WriteString( text.SubString( 0, TEXT_MAX_LENGTH ) );
     message.End();
     g_SentTextSlots[player.entindex()] |= uint( 1 ) << engineSlot;
+    g_SentTextX[SentTextIndex( player, engineSlot )] = params.x;
+    g_SentTextY[SentTextIndex( player, engineSlot )] = params.y;
   }
 
   // Hides every channel and empties every text slot that this plugin drew for the player.
@@ -119,10 +125,18 @@ namespace CS16HUD
     }
     for( uint textSlot = 0; textSlot < TEXT_SLOTS; ++textSlot )
     {
-      if( ( g_SentTextSlots[slot] & ( uint( 1 ) << textSlot ) ) != 0 )
-        SendText( player, textSlot, empty, "" );
+      if( ( g_SentTextSlots[slot] & ( uint( 1 ) << textSlot ) ) == 0 )
+        continue;
+      empty.x = g_SentTextX[SentTextIndex( player, textSlot )];
+      empty.y = g_SentTextY[SentTextIndex( player, textSlot )];
+      SendText( player, textSlot, empty, "" );
     }
     ForgetSent( player );
+  }
+
+  uint SentTextIndex( CBasePlayer@ player, uint textSlot )
+  {
+    return uint( player.entindex() ) * TEXT_SLOTS + textSlot;
   }
 
   // The client deleted its custom elements (new map or new connection), so nothing is left to clear.
