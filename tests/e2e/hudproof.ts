@@ -49,6 +49,8 @@ const [portArg = "27017", evidenceDir = ".e2e/shots"] = Deno.args;
 const port = Number(portArg);
 const serverDir = Deno.env.get("SVEN_SERVER_DIR");
 const [screenWidth, screenHeight] = (Deno.env.get("CL_RESOLUTION") ?? "1600x900").split("x").map(Number);
+// Server.start sets cs16_hud_res to the client size, so the resends before step (e) report that size.
+const START_RES = `${screenWidth}x${screenHeight}`;
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const server = new Server(port);
 const client = new Client();
@@ -284,7 +286,7 @@ try {
   let since = (await server.log()).length;
   await client.connect(port);
   await server.waitFor(/entered the game/, since, 120_000);
-  await waitResend(since, DEFAULT_RES);
+  await waitResend(since, START_RES);
   const firstResendAt = Date.now();
   await server.waitFor(/\[hudproof\] weapon \S+/, since);
   const connectSpawn = /\[hudproof\] spawn/.test((await server.log()).slice(since));
@@ -328,7 +330,7 @@ try {
   since = (await server.log()).length;
   await server.command("changelevel testcenter");
   await server.waitFor(/entered the game/, since, 120_000);
-  await waitResend(since, DEFAULT_RES);
+  await waitResend(since, START_RES);
   await settleAfterConnect();
   const changelevel = await proveToggle("changelevel", expected);
 
@@ -341,7 +343,7 @@ try {
     await clickPrimary();
   }
   await server.waitFor(/\[hudproof\] spawn/, since, RESPAWN_RETRY_MS);
-  await waitResend(since, DEFAULT_RES);
+  await waitResend(since, START_RES);
   await sleep(SETTLE_MS);
   const respawn = await proveToggle("respawn", expected);
 
