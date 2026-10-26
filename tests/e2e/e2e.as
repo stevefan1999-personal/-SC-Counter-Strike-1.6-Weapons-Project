@@ -1,8 +1,8 @@
 // Counter-Life end-to-end helpers. Loaded only by "just install-e2e", never in production plugin lists.
 // Sven Co-op blocks cheat commands for non-admin players, so tests drive the game through these commands:
-//   as_command e2e.spawn <classname> [distance]   spawn an entity in front of player 1
-//   as_command e2e.kill                           kill every live monster, credited to player 1
-//   as_command e2e.aim                            turn player 1 towards the nearest live monster
+//   as_command e2e.spawn <classname> [distance]   spawn in front of player 1; monsters are pinned in place after landing
+//   as_command e2e.aim [head|body]                turn player 1 towards the nearest live monster
+//   as_command e2e.kill                           kill every live monster, credited to player 1 and its held weapon
 //   as_command e2e.give <classname>               give player 1 an item or weapon
 //   as_command e2e.stuff <client command...>      run a console command on player 1's client
 
@@ -10,26 +10,41 @@ const float DEFAULT_SPAWN_DISTANCE = 160.0f;
 const float LETHAL_DAMAGE = 10000.0f;
 const float PIN_DELAY = 1.0f;
 
+array<CConCommand@> g_Commands;
+
 void PluginInit()
 {
   g_Module.ScriptInfo.SetAuthor( "Counter-Life" );
   g_Module.ScriptInfo.SetContactInfo( "e2e test helpers" );
   // Plugins must create console commands at init time; global CConCommand objects never register.
   g_Commands.insertLast( CConCommand( "spawn", "<classname> [distance] - spawn in front of player 1", @SpawnInFront ) );
+  g_Commands.insertLast( CConCommand( "aim", "[head|body] - turn player 1 towards the nearest live monster", @AimAtNearestMonster ) );
   g_Commands.insertLast( CConCommand( "kill", "- kill every live monster, credited to player 1", @KillMonsters ) );
   g_Commands.insertLast( CConCommand( "give", "<classname> - give player 1 an item", @GiveItem ) );
   g_Commands.insertLast( CConCommand( "stuff", "<command...> - run a client command on player 1", @StuffText ) );
-  g_Commands.insertLast( CConCommand( "aim", "- turn player 1 towards the nearest live monster", @AimAtNearestMonster ) );
 }
-
-array<CConCommand@> g_Commands;
 
 CBasePlayer@ FirstPlayer()
 {
   CBasePlayer@ player = g_PlayerFuncs.FindPlayerByIndex( 1 );
   if( player is null || !player.IsConnected() )
+  {
     g_EngineFuncs.ServerPrint( "[e2e] no player in slot 1\n" );
+    return null;
+  }
   return player;
+}
+
+array<CBaseEntity@> LiveMonsters()
+{
+  array<CBaseEntity@> monsters;
+  CBaseEntity@ entity = null;
+  while( ( @entity = g_EntityFuncs.FindEntityByClassname( entity, "monster_*" ) ) !is null )
+  {
+    if( entity.IsMonster() && entity.IsAlive() )
+      monsters.insertLast( entity );
+  }
+  return monsters;
 }
 
 void SpawnInFront( const CCommand@ args )
@@ -46,34 +61,17 @@ void SpawnInFront( const CCommand@ args )
     g_Scheduler.SetTimeout( "PinInPlace", PIN_DELAY, EHandle( spawned ) );
 }
 
-// Once the monster has dropped to the floor, stop it from walking so a test can shoot it at a known spot.
-// The engine's walk/move functions refuse to move an entity without FL_ONGROUND, FL_FLY or FL_SWIM.
+// Once the monster has dropped to the floor, stop its AI so a test can shoot it at a known spot.
+// Sven's movement code ignores movetype changes, but a monster that never thinks never moves;
+// taking damage still runs Killed(), which restarts thinking for the death animation.
 void PinInPlace( EHandle handle )
 {
   CBaseEntity@ entity = handle.GetEntity();
   if( entity is null )
     return;
-  entity.pev.movetype = MOVETYPE_NONE;
-  entity.pev.flags &= ~FL_ONGROUND;
   entity.pev.velocity = g_vecZero;
+  entity.pev.nextthink = 0;
   g_EngineFuncs.ServerPrint( "[e2e] pinned " + entity.pev.classname + "\n" );
-}
-
-void KillMonsters( const CCommand@ args )
-{
-  CBasePlayer@ player = FirstPlayer();
-  if( player is null )
-    return;
-  int killed = 0;
-  CBaseEntity@ entity = null;
-  while( ( @entity = g_EntityFuncs.FindEntityByClassname( entity, "monster_*" ) ) !is null )
-  {
-    if( !entity.IsMonster() || !entity.IsAlive() )
-      continue;
-    entity.TakeDamage( player.pev, player.pev, LETHAL_DAMAGE, DMG_BULLET );
-    ++killed;
-  }
-  g_EngineFuncs.ServerPrint( "[e2e] killed " + killed + " monster(s)\n" );
 }
 
 // Turn player 1's view onto the nearest live monster so a real shot from the held weapon hits it.
@@ -82,27 +80,43 @@ void AimAtNearestMonster( const CCommand@ args )
   CBasePlayer@ player = FirstPlayer();
   if( player is null )
     return;
+  const bool aimAtHead = args.ArgC() < 2 || args.Arg( 1 ) != "body";
   const Vector eye = player.EyePosition();
   CBaseEntity@ nearest = null;
-  CBaseEntity@ entity = null;
-  while( ( @entity = g_EntityFuncs.FindEntityByClassname( entity, "monster_*" ) ) !is null )
+  array<CBaseEntity@> monsters = LiveMonsters();
+  for( uint index = 0; index < monsters.length(); ++index )
   {
-    if( entity.IsMonster() && entity.IsAlive() && ( nearest is null || ( entity.Center() - eye ).Length() < ( nearest.Center() - eye ).Length() ) )
-      @nearest = entity;
+    if( nearest is null || ( monsters[index].Center() - eye ).Length() < ( nearest.Center() - eye ).Length() )
+      @nearest = monsters[index];
   }
   if( nearest is null )
   {
     g_EngineFuncs.ServerPrint( "[e2e] aim: no live monster\n" );
     return;
   }
+  const Vector target = aimAtHead ? nearest.EyePosition() : nearest.Center();
   Vector viewAngles;
-  g_EngineFuncs.VecToAngles( nearest.Center() - eye, viewAngles );
+  g_EngineFuncs.VecToAngles( target - eye, viewAngles );
   // VecToAngles returns model pitch; player view pitch has the opposite sign.
   viewAngles.x = -viewAngles.x;
   player.pev.angles = viewAngles;
   player.pev.v_angle = viewAngles;
   player.pev.fixangle = FAM_FORCEVIEWANGLES;
-  g_EngineFuncs.ServerPrint( "[e2e] aim at " + nearest.pev.classname + "\n" );
+  g_EngineFuncs.ServerPrint( "[e2e] aim " + ( aimAtHead ? "head" : "body" ) + " of " + nearest.pev.classname + "\n" );
+}
+
+// Scripted kill for tests that do not need real bullets: the held weapon is the inflictor, as when it fires.
+void KillMonsters( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null )
+    return;
+  CBaseEntity@ weapon = player.m_hActiveItem.GetEntity();
+  entvars_t@ inflictor = weapon is null ? player.pev : weapon.pev;
+  array<CBaseEntity@> monsters = LiveMonsters();
+  for( uint index = 0; index < monsters.length(); ++index )
+    monsters[index].TakeDamage( inflictor, player.pev, LETHAL_DAMAGE, DMG_BULLET );
+  g_EngineFuncs.ServerPrint( "[e2e] killed " + monsters.length() + " monster(s) with " + inflictor.classname + "\n" );
 }
 
 void GiveItem( const CCommand@ args )
