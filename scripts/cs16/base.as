@@ -163,6 +163,10 @@ array<bool>   g_PlayerLastWasHeadshot(33, false);
 array<string> g_AttackerLastWeapon(33, "");
 array<bool>   g_AttackerLastWasHeadshot(33, false);
 
+// Shots fired by each player (indexed by entindex 1-32). The CS HUD crosshair widens once for each new shot, as CS
+// 1.6 does with g_iShotsFired (docs/research/cs16-hud-spec.md 3.12.4).
+array<int> g_PlayerShotsFired(33, 0);
+
 // Kill feed: per-monster last-hit dictionary (key = monster entindex as string).
 // Fallback for when MonsterKilled's pAttacker is null — happens with friendly NPCs
 // such as scientists whose death code doesn't propagate the attacker entity.
@@ -212,7 +216,14 @@ float ApplyArmorDamage( CBasePlayer@ pVictim, float flDamage, int iHitgroup )
     }
 }
 
-mixin class WeaponBase
+// Weapon state that changes the CS HUD crosshair gap (CS g_iWeaponFlags, docs/research/cs16-hud-spec.md 3.12.2).
+interface IWeaponState
+{
+    bool IsSilenced();
+    bool IsBurstFire();
+}
+
+mixin class WeaponBase : IWeaponState
 {
     protected int   m_iShotsFired = 0;
     protected float m_flAccuracy = 0.0f;      // CS16 accuracy bloom value (updated each shot, reset on reload/deploy)
@@ -232,6 +243,16 @@ mixin class WeaponBase
     protected float WeaponTimeBase() // map time
     {
         return g_Engine.time;
+    }
+
+    bool IsSilenced()
+    {
+        return WeaponSilMode == MODE_SUP_ON;
+    }
+
+    bool IsBurstFire()
+    {
+        return WeaponFireMode == MODE_BURST;
     }
 
     protected bool m_fDropped;
@@ -521,6 +542,9 @@ mixin class WeaponBase
 
     void ShootWeapon( const string szSound, const uint uiNumShots, const Vector& in CONE, const float flMaxDist, const int iDamage, const int DmgType = DMG_GENERIC, bool bIsSuppressed = false )
     {
+        // One call is one shot, also for the shotgun pellets and each bullet of a burst, as one CS fire event.
+        ++CS16BASE::g_PlayerShotsFired[m_pPlayer.entindex()];
+
         if( szSound != string_t() || szSound != "" )
         {
             --self.m_iClip;
