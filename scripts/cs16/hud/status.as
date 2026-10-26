@@ -5,6 +5,7 @@
 #include "ammo"
 #include "money"
 #include "flashlight"
+#include "statusicon"
 
 namespace CS16HUD
 {
@@ -17,12 +18,13 @@ namespace CS16HUD
   {
     for( uint index = 0; index < STATUS_SPRITES.length(); ++index )
       PrecacheSprite( GENERATED_SPRITE_DIR + STATUS_SPRITES[index] );
-    PrecacheSprite( ICON_SHEET_DIR + "640hud7.spr" ); // ammo icons
+    PrecacheSprite( ICON_SHEET_DIR + "640hud7.spr" ); // ammo and status icons
     @g_Money = MoneyElement();
     Register( HealthElement() );
     Register( ArmourElement() );
     Register( AmmoElement() );
     Register( g_Money );
     Register( FlashlightElement() );
+    Register( StatusIconElement() );
   }
 }
