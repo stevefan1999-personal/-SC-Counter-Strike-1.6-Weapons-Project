@@ -353,6 +353,15 @@ fixture-killfeed display=fixture_display resolution='1600x900' port='27049' clie
   deno run -A '{{justfile_directory()}}/tests/fixture/killfeed.ts' '{{display}}' '{{resolution}}' \
     '{{root}}/qconsole.log' '{{state_root}}/reference' '{{resolution}}'
 
+# Capture the CS 1.6 AK-47 crosshair at rest and 600 ms into a burst into .e2e/reference: just fixture-crosshair :96 2560x1440
+[group('fixture')]
+fixture-crosshair display=fixture_display resolution='1600x900' port='27049' clientport='27007' root=fixture_root: (fixture-root root regamedll_dir 'de_dust2') (fixture-start display resolution port clientport 'de_dust2' root)
+  #!/usr/bin/env bash
+  set -euo pipefail
+  trap "just fixture-stop '{{display}}' '{{root}}'" EXIT
+  deno run -A '{{justfile_directory()}}/tests/fixture/crosshair.ts' '{{display}}' '{{resolution}}' \
+    '{{state_root}}/reference' '{{resolution}}'
+
 # Measure the kill feed of a screenshot against a frame of the same view without notices: just fixture-metrics a.png a-before.png
 [group('fixture')]
 [no-cd]
