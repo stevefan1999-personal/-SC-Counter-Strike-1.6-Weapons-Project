@@ -298,8 +298,8 @@ namespace CS16CROSSHAIR
       const int base = AutoScaleBase( screen.width );
       const bool scaled = screen.width != base;
       const int lineGap = scaled ? int( double( distance ) * screen.width / base ) : int( distance );
-      // shortcut: fill.spr is 64 px, so a longer line (W > 3723 with the AUG at full spread) loses its outer end; ship
-      // a wider fill sprite under a new path if such screens matter.
+      // shortcut: fill.spr is 64 px, so a longer line (full spread on a screen wider than 3723 px) loses its outer end;
+      // ship a wider fill sprite under a new path if such screens matter.
       const int lineLength = Math.min( scaled ? screen.width * length / base : length, FILL_SIZE );
       const bool changed = !state.clientKnown || !state.shown || lineGap != state.shownGap
         || lineLength != state.shownLength || state.shotSinceSend
