@@ -164,3 +164,16 @@ shot name:
   @mkdir -p '{{state_root}}/shots'
   @import -display '{{display}}' -window root '{{state_root}}/shots/{{name}}.png'
   @echo '{{state_root}}/shots/{{name}}.png'
+
+# Add the e2e helper plugin (tests/e2e) to an install that already has the game content: just install-e2e
+[group('e2e')]
+install-e2e target=server_dir:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  addon='{{target}}/svencoop_addon'
+  install -D -m 644 '{{justfile_directory()}}/tests/e2e/e2e.as' "$addon/scripts/plugins/e2e/e2e.as"
+  rg -q '"e2e/e2e"' "$addon/default_plugins.txt" && exit 0
+  # Insert the e2e plugin block before the closing brace of the plugin list.
+  sed -i '$ d' "$addon/default_plugins.txt"
+  printf '\t"plugin"\n\t{\n\t\t"name" "Counter-Life E2E"\n\t\t"script" "e2e/e2e"\n\t\t"concommandns" "e2e"\n\t}\n}\n' >> "$addon/default_plugins.txt"
+  echo "e2e plugin added to $addon"
