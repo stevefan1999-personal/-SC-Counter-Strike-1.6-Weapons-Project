@@ -114,38 +114,6 @@ namespace CS16KILLFEED {
         return "d_skull";
     }
 
-// ── Weapon display name (for console log, matching death.cpp ConsolePrint) ──
-    string GetWeaponDisplayName(const string& in cls) {
-        if (cls == "weapon_ak47")       return "AK-47";
-        if (cls == "weapon_m4a1")       return "M4A1";
-        if (cls == "weapon_awp")        return "AWP";
-        if (cls == "weapon_scout")      return "Scout";
-        if (cls == "weapon_sg550")      return "SG-550";
-        if (cls == "weapon_g3sg1")      return "G3SG1";
-        if (cls == "weapon_aug")        return "AUG";
-        if (cls == "weapon_sg552")      return "SG-552";
-        if (cls == "weapon_famas")      return "FAMAS";
-        if (cls == "weapon_galil")      return "Galil";
-        if (cls == "weapon_csdeagle")   return "Desert Eagle";
-        if (cls == "weapon_csglock18")  return "Glock-18";
-        if (cls == "weapon_usp")        return "USP";
-        if (cls == "weapon_p228")       return "P228";
-        if (cls == "weapon_fiveseven")  return "Five-SeveN";
-        if (cls == "weapon_dualelites") return "Dual Elites";
-        if (cls == "weapon_m3")         return "M3";
-        if (cls == "weapon_xm1014")     return "XM1014";
-        if (cls == "weapon_mac10")      return "MAC-10";
-        if (cls == "weapon_tmp")        return "TMP";
-        if (cls == "weapon_mp5navy")    return "MP5";
-        if (cls == "weapon_ump45")      return "UMP-45";
-        if (cls == "weapon_p90")        return "P90";
-        if (cls == "weapon_csm249")     return "M249";
-        if (cls == "weapon_csknife")    return "Knife";
-        if (cls == "weapon_hegrenade")  return "HE Grenade";
-        if (cls == "weapon_c4")         return "C4";
-        return cls;
-    }
-
 // ── Monster display name ────────────────────────────────────────────────────
     string GetMonsterDisplayName(const string& in cls) {
         if (cls == "monster_zombie")             return "Zombie";
@@ -224,35 +192,26 @@ namespace CS16KILLFEED {
         for (uint i = 0; i < g_Notices.length(); i++)
             g_Notices[i].iChannel = int(i) + 1;
 
-        // Console log (mirrors death.cpp ConsolePrint lines 262-301): world deaths carry no killer name
-        string szSuicideText = szVictim + (szKiller.IsEmpty() ? " died" : " killed self");
+        // Console line, as death.cpp prints it (lines 262-322): world deaths carry no killer name,
+        // and the weapon is named by its kill icon without the "d_" prefix ("with m4a1").
         string log;
         if (bSuicide) {
-            log = szSuicideText;
+            log = szVictim + (szKiller.IsEmpty() ? " died" : " killed self");
         } else if (szWeaponCls.IsEmpty()) {
             log = szKiller + " killed " + szVictim;
         } else {
+            string szWeapon = notice.szWeaponSpriteName.SubString(2);
             if (bHeadshot) log = "*** ";
             log += szKiller + " killed " + szVictim;
             if (bHeadshot)
-                log += " with a headshot from " + GetWeaponDisplayName(szWeaponCls) + " ***";
+                log += " with a headshot from " + szWeapon + " ***";
             else
-                log += " with " + GetWeaponDisplayName(szWeaponCls);
+                log += " with " + szWeapon;
         }
         g_Game.AlertMessage(at_notice, "[KillFeed] " + log + "\n");
 
-        // HUD text line for players (once on push)
-        string line;
-        if (bSuicide) {
-            line = szSuicideText;
-        } else if (szWeaponCls.IsEmpty()) {
-            line = szKiller + " killed " + szVictim;
-        } else {
-            line = szKiller;
-            if (bHeadshot) line += " (HS)";
-            line += " " + szVictim;
-        }
-        g_PlayerFuncs.ClientPrintAll(HUD_PRINTNOTIFY, line + "\n");
+        // CS 1.6 writes kills to the console only; on screen there is just the icon row from DrawNotices.
+        g_PlayerFuncs.ClientPrintAll(HUD_PRINTCONSOLE, log + "\n");
     }
 
 // ── DrawNotices (mirrors CHudDeathNotice::Draw) ─────────────────────────────
