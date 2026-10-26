@@ -8,6 +8,11 @@
 //   as_command e2e.health <value>                 set player 1's health
 //   as_command e2e.armor <value>                  set player 1's armour
 //   as_command e2e.hurt <amount>                  damage player 1 from the world (pain, armour absorption)
+//   as_command e2e.ammo <clip> <reserve>          set the clip and the reserve of player 1's active weapon
+//   as_command e2e.frags <value>                  set player 1's score; the CS16 buy menu pays score changes as money
+//   as_command e2e.battery <percent>              set player 1's flashlight battery
+//   as_command e2e.suit <0|1>                     take away or give back player 1's HEV suit
+//   as_command e2e.backdrop [<r> <g> <b>]         hold a screen of one colour under the HUD; no colour removes it
 
 const float DEFAULT_SPAWN_DISTANCE = 160.0f;
 const float LETHAL_DAMAGE = 10000.0f;
@@ -28,17 +33,25 @@ void PluginInit()
   g_Commands.insertLast( CConCommand( "health", "<value> - set player 1 health", @SetHealth ) );
   g_Commands.insertLast( CConCommand( "armor", "<value> - set player 1 armour", @SetArmor ) );
   g_Commands.insertLast( CConCommand( "hurt", "<amount> - damage player 1 from the world", @HurtPlayer ) );
+  g_Commands.insertLast( CConCommand( "ammo", "<clip> <reserve> - set player 1 active weapon ammo", @SetAmmo ) );
+  g_Commands.insertLast( CConCommand( "frags", "<value> - set player 1 score", @SetFrags ) );
+  g_Commands.insertLast( CConCommand( "battery", "<percent> - set player 1 flashlight battery", @SetBattery ) );
+  g_Commands.insertLast( CConCommand( "suit", "<0|1> - take away or give back player 1 HEV suit", @SetSuit ) );
+  g_Commands.insertLast( CConCommand( "backdrop", "[<r> <g> <b>] - one colour under player 1 HUD", @SetBackdrop ) );
 }
 
+// "Player 1" is the first connected player. A client that retries its connection can come back in a later slot while
+// the engine still frees its old one.
 CBasePlayer@ FirstPlayer()
 {
-  CBasePlayer@ player = g_PlayerFuncs.FindPlayerByIndex( 1 );
-  if( player is null || !player.IsConnected() )
+  for( int slot = 1; slot <= g_Engine.maxClients; ++slot )
   {
-    g_EngineFuncs.ServerPrint( "[e2e] no player in slot 1\n" );
-    return null;
+    CBasePlayer@ player = g_PlayerFuncs.FindPlayerByIndex( slot );
+    if( player !is null && player.IsConnected() )
+      return player;
   }
-  return player;
+  g_EngineFuncs.ServerPrint( "[e2e] no player in the server\n" );
+  return null;
 }
 
 array<CBaseEntity@> LiveMonsters( const string& in classname = "monster_*" )
@@ -196,4 +209,63 @@ void HurtPlayer( const CCommand@ args )
   CBaseEntity@ world = g_EntityFuncs.Instance( 0 );
   player.TakeDamage( world.pev, world.pev, atof( args.Arg( 1 ) ), DMG_GENERIC );
   g_EngineFuncs.ServerPrint( "[e2e] hurt to " + player.pev.health + "\n" );
+}
+
+// Puts the held weapon into a known state, for example the CS 1.6 spawn USP with 12 | 24.
+void SetAmmo( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null || args.ArgC() < 3 )
+    return;
+  CBasePlayerWeapon@ weapon = cast<CBasePlayerWeapon@>( player.m_hActiveItem.GetEntity() );
+  if( weapon is null || weapon.PrimaryAmmoIndex() < 0 )
+  {
+    g_EngineFuncs.ServerPrint( "[e2e] ammo: the held item has no ammo\n" );
+    return;
+  }
+  weapon.m_iClip = atoi( args.Arg( 1 ) );
+  player.m_rgAmmo( weapon.PrimaryAmmoIndex(), atoi( args.Arg( 2 ) ) );
+  g_EngineFuncs.ServerPrint( "[e2e] ammo " + weapon.m_iClip + " " + player.m_rgAmmo( weapon.PrimaryAmmoIndex() ) + " "
+    + weapon.pev.classname + " (" + weapon.pszAmmo1() + ")\n" );
+}
+
+void SetFrags( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null || args.ArgC() < 2 )
+    return;
+  player.pev.frags = atof( args.Arg( 1 ) );
+  g_EngineFuncs.ServerPrint( "[e2e] frags " + player.pev.frags + "\n" );
+}
+
+void SetBattery( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null || args.ArgC() < 2 )
+    return;
+  player.m_iFlashBattery = atoi( args.Arg( 1 ) );
+  g_EngineFuncs.ServerPrint( "[e2e] battery " + player.m_iFlashBattery + "\n" );
+}
+
+void SetSuit( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null || args.ArgC() < 2 )
+    return;
+  player.SetHasSuit( atoi( args.Arg( 1 ) ) != 0 );
+  g_EngineFuncs.ServerPrint( "[e2e] suit " + ( player.HasSuit() ? 1 : 0 ) + "\n" );
+}
+
+// The engine draws a screen fade before the HUD, so an opaque fade puts the HUD on one known colour: glyph boxes and
+// colours can be measured without the world behind them (a CS-like floor colour keeps hudboxes.ts thresholds valid).
+void SetBackdrop( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null )
+    return;
+  const int opaque = 255;
+  const bool on = args.ArgC() > 3;
+  const Vector colour = on ? Vector( atof( args.Arg( 1 ) ), atof( args.Arg( 2 ) ), atof( args.Arg( 3 ) ) ) : g_vecZero;
+  g_PlayerFuncs.ScreenFade( player, colour, 0.0f, 0.0f, on ? opaque : 0, on ? FFADE_STAYOUT : FFADE_IN );
+  g_EngineFuncs.ServerPrint( "[e2e] backdrop " + ( on ? colour.ToString() : "off" ) + "\n" );
 }

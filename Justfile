@@ -226,6 +226,11 @@ e2e-hud port='27017' label='hud':
 e2e-hudproof port='27017' evidence=(state_root / 'proof'):
   deno run -A '{{justfile_directory()}}/tests/e2e/hudproof.ts' {{port}} '{{evidence}}'
 
+# Put the player into the CS 1.6 reference HUD state, compare it with the CS screenshot and capture the other element states: just e2e-elements 27017 run1 docs/hud/elements
+[group('e2e')]
+e2e-elements port='27017' label='elements' cropdir='':
+  deno run -A '{{justfile_directory()}}/tests/e2e/elements.ts' {{port}} {{label}} {{cropdir}}
+
 # Measure HUD-coloured glyph boxes in a screen region (JSON): just hudboxes .e2e/reference/cs16-ref-hud.png 0 820 460 80
 [group('e2e')]
 hudboxes image x y w h:

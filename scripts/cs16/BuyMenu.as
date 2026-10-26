@@ -22,6 +22,7 @@ void BuyKevlar( CBasePlayer@ pPlayer )
     if( uint( BuyPoints[pid] ) < uiCost )
     {
         g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[CS16 BUYMENU] Not enough money for Kevlar - Cost: $650\n" );
+        CS16HUD::BlinkMoney( pPlayer );
         return;
     }
 
@@ -54,6 +55,7 @@ void BuyHelmet( CBasePlayer@ pPlayer )
     if( uint( BuyPoints[pid] ) < uiCost )
     {
         g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[CS16 BUYMENU] Not enough money for Helmet - Cost: $350\n" );
+        CS16HUD::BlinkMoney( pPlayer );
         return;
     }
 
@@ -63,7 +65,6 @@ void BuyHelmet( CBasePlayer@ pPlayer )
     hooks.ShowPointsSprite( pPlayer );
     g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[CS16 BUYMENU] Helmet purchased\n" );
 }
-const string MoneySignSpr = CS16BASE::MAIN_CSTRIKE_DIR + "640hud7.spr";
 
 //plugin cvars
 CCVar@ g_MaxMoney;
@@ -92,40 +93,11 @@ final class BuyMenuCVARS
         return g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
     }
 
-    //Show the Money sign sprite in the player's Hud
-    void ShowPointsSprite( CBasePlayer@ pPlayer )
+    //Show the player's money on the CS HUD (scripts/cs16/hud/money.as). Call it after every change of BuyPoints.
+    //tracked: false when the wallet was only loaded (connect, map change, spawn), which CS shows without a change row
+    void ShowPointsSprite( CBasePlayer@ pPlayer, const bool tracked = true )
     {
-        // Numeric Display
-        HUDNumDisplayParams NumDisplayParams;
-        NumDisplayParams.channel = 0;
-        NumDisplayParams.flags = HUD_ELEM_ABSOLUTE_X | HUD_ELEM_ABSOLUTE_Y | HUD_ELEM_DYNAMIC_ALPHA | HUD_ELEM_EFFECT_ONCE;
-        NumDisplayParams.x = 5;
-        NumDisplayParams.y = -35;
-        NumDisplayParams.spritename = MoneySignSpr;
-        NumDisplayParams.defdigits = 0;
-        NumDisplayParams.maxdigits = 5;
-        NumDisplayParams.left = 192; // Offset
-        NumDisplayParams.top = 25; // Offset
-        NumDisplayParams.width = 18; // 0: auto; use total width of the sprite
-        NumDisplayParams.height = 25; // 0: auto; use total height of the sprite
-        NumDisplayParams.color1 = (int(BuyPoints[PlayerID( pPlayer )]) <= 0) ? RGBA_RED : RGBA_SVENCOOP; // Default Sven HUD colors
-
-        if( int(OldScore[PlayerID( pPlayer )]) == int(pPlayer.pev.frags) )
-            NumDisplayParams.color2 = RGBA_SVENCOOP; // Default Sven HUD colors
-        else if( int(OldScore[PlayerID( pPlayer )]) < int(pPlayer.pev.frags) )
-            NumDisplayParams.color2 = RGBA_GREEN; // Default Sven HUD colors
-        else if( int(OldScore[PlayerID( pPlayer )]) > int(pPlayer.pev.frags) )
-            NumDisplayParams.color2 = RGBA_RED; // Default Sven HUD colors
-
-        NumDisplayParams.fxTime = 0.5;
-
-        if( g_MoneyPerScore is null )
-            NumDisplayParams.effect = (int(BuyPoints[PlayerID( pPlayer )]) <= 0 || int(BuyPoints[PlayerID( pPlayer )]) >= MaxMoney) ? HUD_EFFECT_NONE : HUD_EFFECT_RAMP_DOWN;
-        else
-            NumDisplayParams.effect = (int(BuyPoints[PlayerID( pPlayer )]) <= 0 || int(BuyPoints[PlayerID( pPlayer )]) >= g_MoneyPerScore.GetInt()) ? HUD_EFFECT_NONE : HUD_EFFECT_RAMP_DOWN;
-
-        NumDisplayParams.value = uint(BuyPoints[PlayerID( pPlayer )]);
-        g_PlayerFuncs.HudNumDisplay( pPlayer, NumDisplayParams );
+        CS16HUD::ShowMoney( pPlayer, int( BuyPoints[PlayerID( pPlayer )] ), tracked );
     }
 
     //This method will automatically update the player's points (BuyPoints)
@@ -192,7 +164,7 @@ final class BuyMenuCVARS
         if( !OldScore.exists( PlayerID( pPlayer ) ) )
             OldScore[PlayerID( pPlayer )] = 0;
 
-        ShowPointsSprite( pPlayer );
+        ShowPointsSprite( pPlayer, false );
 
         return HOOK_CONTINUE;
     }
@@ -256,6 +228,7 @@ final class BuyMenuCVARS
                     if( uint(BuyMenu::BuyPoints[PlayerID( pPlayer )]) <= 0 )
                     {
                         g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[CS16 BUYMENU] Not enough money to buy: " + szItemName + " - Cost: $" + uiCost + "\n" );
+                        CS16HUD::BlinkMoney( pPlayer );
                     }
 
                     else if( pPlayer.HasNamedPlayerItem( szItemName ) !is null )
@@ -271,7 +244,10 @@ final class BuyMenuCVARS
                             pPlayer.GiveNamedItem( szItemName );
                         }
                         else
+                        {
                             g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[CS16 BUYMENU] Not enough money to buy: " + szItemName + " - Cost: $" + uiCost + "\n" );
+                            CS16HUD::BlinkMoney( pPlayer );
+                        }
                     }
                 }
                 else
@@ -340,6 +316,7 @@ final class BuyMenuCVARS
                         if( uint(BuyMenu::BuyPoints[PlayerID( pPlayer )]) <= 0 )
                         {
                             g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[CS16 BUYMENU] Not enough money to buy: " + szItemName + " - Cost: $" + uiCost + "\n" );
+                            CS16HUD::BlinkMoney( pPlayer );
                         }
                         //Very tedious check to see if the player already has max ammo for a exhaustible weapon
                         else if( uint(BuyMenu::BuyPoints[PlayerID( pPlayer )]) >= uiCost && pPlayer.HasNamedPlayerItem( szClassname ).iFlags() & ITEM_FLAG_EXHAUSTIBLE != 0 &&
@@ -359,6 +336,7 @@ final class BuyMenuCVARS
                             else
                             {
                                 g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[CS16 BUYMENU] Not enough money to buy: " + szItemName + " - Cost: $" + uiCost + "\n" );
+                                CS16HUD::BlinkMoney( pPlayer );
                             }
                         }
                     }
@@ -417,6 +395,7 @@ final class BuyMenuCVARS
                     if( uint(BuyMenu::BuyPoints[PlayerID( pPlayer )]) <= 0 )
                     {
                         g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[CS16 BUYMENU] Not enough money to buy: " + szItemName + " - Cost: $" + uiCost + "\n" );
+                        CS16HUD::BlinkMoney( pPlayer );
                     }
                     else if( pPlayer.HasNamedPlayerItem( szItemName ) !is null )
                     {
@@ -431,7 +410,10 @@ final class BuyMenuCVARS
                             pPlayer.GiveNamedItem( szItemName );
                         }
                         else
+                        {
                             g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[CS16 BUYMENU] Not enough money to buy: " + szItemName + " - Cost: $" + uiCost + "\n" );
+                            CS16HUD::BlinkMoney( pPlayer );
+                        }
                     }
                 }
                 else
@@ -497,6 +479,7 @@ final class BuyMenuCVARS
                         if( uint(BuyMenu::BuyPoints[PlayerID( pPlayer )]) <= 0 )
                         {
                             g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[CS16 BUYMENU] Not enough money to buy: " + szItemName + " - Cost: $" + uiCost + "\n" );
+                            CS16HUD::BlinkMoney( pPlayer );
                         }
                         //Very tedious check to see if the player already has max ammo for a exhaustible weapon
                         else if( uint(BuyMenu::BuyPoints[PlayerID( pPlayer )]) >= uiCost && pPlayer.HasNamedPlayerItem( szClassname ).iFlags() & ITEM_FLAG_EXHAUSTIBLE != 0 &&
@@ -516,6 +499,7 @@ final class BuyMenuCVARS
                             else
                             {
                                 g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[CS16 BUYMENU] Not enough money to buy: " + szItemName + " - Cost: $" + uiCost + "\n" );
+                                CS16HUD::BlinkMoney( pPlayer );
                             }
                         }
                     }
@@ -582,10 +566,6 @@ void MoneyInit()
 {
     BuyPoints.deleteAll(); //Comment out to keep the points in map change
     OldScore.deleteAll();  //Comment out to keep the points in map change
-
-    // Generic, not model: when the native HUD also loads a sheet that is precached as a model, every HUD sprite drawn
-    // from that sheet becomes a solid block after a changelevel (docs/hud-architecture.md, Precache).
-    g_Game.PrecacheGeneric( CS16BASE::MAIN_SPRITE_DIR + BuyMenu::MoneySignSpr );
 }
 
 final class BuyableItem
@@ -674,6 +654,7 @@ final class BuyableItem
         if( uint(BuyPoints[g_CS16MenuHooks.PlayerID( pPlayer )]) < m_uiCost )
         {
             g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[CS16 BUYMENU] Not enough money to buy: " + m_szEntityName + " - Cost: $" +  m_uiCost + "\n" );
+            CS16HUD::BlinkMoney( pPlayer );
             return;
         }
 
