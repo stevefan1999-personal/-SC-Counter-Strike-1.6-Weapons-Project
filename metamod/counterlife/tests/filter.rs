@@ -9,8 +9,8 @@ use std::ffi::{c_int, CStr};
 
 use metamod_p::sys::{self, META_RES};
 use support::{
-    engine_calls, free_edict, load, logs, set_cvar, set_registered, wire, Call, FREE_SLOT, PLAYER,
-    SAY_TEXT, TEXT_MSG,
+    engine_calls, load, logs, set_cvar, set_registered, wire, Call, FREE_SLOT, PLAYER, SAY_TEXT,
+    TEXT_MSG,
 };
 
 const HELD: META_RES = META_RES::MRES_SUPERCEDE;
@@ -111,12 +111,7 @@ fn notify_byte_is_read_as_the_engine_sends_it() {
 fn every_write_type_is_sent_again_in_order() {
     let mut host = load();
     let message = [
-        Call::Begin {
-            destination: sys::MSG_ONE as c_int,
-            kind:        TEXT_MSG,
-            origin:      None,
-            receiver:    Some(PLAYER),
-        },
+        begin(sys::MSG_ALL, TEXT_MSG),
         Call::Byte(255),
         Call::Char(-128),
         Call::Short(-32768),
@@ -264,19 +259,21 @@ fn text_msg_id_is_looked_up_until_the_game_registers_it() {
 }
 
 #[test]
-fn destinations_are_sent_again_with_their_origin_and_receiver() {
+fn text_messages_to_one_player_or_an_area_stay_the_engines() {
     let mut host = load();
     let origin = Some([1.5, -2.0, 300.25]);
     let destinations = [
         (sys::MSG_BROADCAST, None, None),
         (sys::MSG_INIT, None, None),
         (sys::MSG_SPEC, None, None),
+        (sys::MSG_ONE, None, Some(PLAYER)),
         (sys::MSG_ONE_UNRELIABLE, None, Some(PLAYER)),
         (sys::MSG_PVS, origin, None),
         (sys::MSG_PVS_R, origin, None),
         (sys::MSG_PAS, origin, None),
         (sys::MSG_PAS_R, origin, None),
     ];
+    // An obituary line too: Sven sends obituaries only to all players.
     let messages: Vec<_> = destinations
         .into_iter()
         .map(|(destination, origin, receiver)| {
@@ -287,14 +284,14 @@ fn destinations_are_sent_again_with_their_origin_and_receiver() {
                     origin,
                     receiver,
                 },
-                Call::Byte(CONSOLE),
-                string(c"text\n"),
+                Call::Byte(NOTIFY),
+                string(c"Stefan was shot.\n"),
                 Call::End,
             ]
         })
         .collect();
     for message in &messages {
-        assert_eq!(host.play(message), [HELD; 4], "{:?}", message[0]);
+        assert_eq!(host.play(message), [PASSED; 4], "{:?}", message[0]);
     }
     assert_eq!(engine_calls(), messages.concat());
 }
@@ -328,28 +325,4 @@ fn destination_that_cannot_be_begun_again_stays_the_engines() {
         assert_eq!(host.play(&message), [PASSED; 4]);
     }
     assert_eq!(engine_calls().len(), 8);
-}
-
-#[test]
-fn held_message_ends_quietly_when_its_receiver_is_gone() {
-    let mut host = load();
-    let message = [
-        Call::Begin {
-            destination: sys::MSG_ONE as c_int,
-            kind:        TEXT_MSG,
-            origin:      None,
-            receiver:    Some(PLAYER),
-        },
-        Call::Byte(NOTIFY),
-        string(c"Vote failed.\n"),
-    ];
-    assert_eq!(host.play(&message), [HELD; 3]);
-    free_edict(PLAYER);
-    // The engine never began the message, so its end must not reach it.
-    assert_eq!(host.play(&[Call::End]), [HELD]);
-    assert_eq!(engine_calls(), []);
-    assert!(logs().contains(&("LogError", "lost a held TextMsg".into())));
-    let next = print_all(NOTIFY, c"Vote succeeded.\n");
-    host.play(&next);
-    assert_eq!(engine_calls(), next);
 }

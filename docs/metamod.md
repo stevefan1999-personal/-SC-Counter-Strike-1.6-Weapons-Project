@@ -15,13 +15,15 @@ loads in metamod-svencoop, its log tag is `CLIFE`, and the plugin code has no `u
    runs them.
 2. It finds the id of the `TextMsg` user message with metamod's `GetUserMsgID`. The game registers its messages after
    metamod loads the plugin, so the plugin repeats the lookup until it gets the id. The id is not in the code.
-3. It holds each `TextMsg` back: it supersedes the `MESSAGE_BEGIN` and each write, and keeps the destination, the
-   origin, the receiver and each typed write with its value. The engine does not see the message.
+3. It holds back each `TextMsg` to all players (`MSG_ALL` without an origin or a receiver, as `UTIL_ClientPrintAll`
+   sends the obituary): it supersedes the `MESSAGE_BEGIN` and each write, and keeps each typed write with its value. The
+   engine does not see the message.
 4. At `MESSAGE_END` it drops the message if the message is exactly the destination byte `HUD_PRINTNOTIFY` (1) and one
-   string that is an obituary line (see [Obituary lines](#obituary-lines)). It sends every other held message again,
-   with the same destination, origin, receiver and sequence of typed writes. It sends through the engine functions,
-   which skip the hooks of all plugins.
-5. Messages of other types go to the engine as usual.
+   string that is an obituary line (see [Obituary lines](#obituary-lines)). It sends every other held message again to
+   all players, with the same sequence of typed writes. It sends through the engine functions, which skip the hooks of
+   all plugins.
+5. Other messages go to the engine as usual. This includes each `TextMsg` to one player or to an area: Sven never sends
+   an obituary that way, so these messages never meet the copy of this plugin.
 
 Rules for open messages:
 
@@ -29,10 +31,9 @@ Rules for open messages:
   and its writes do not go into the held message.
 - A `TextMsg` that starts while the engine writes another message is not held. The plugin never starts a message while
   the engine has one open. (The engine stops the server for such a nested message also without the plugin.)
-- The plugin holds a message only if the safe API can start it again with the same destination code, origin and
-  receiver. For example, it does not hold a `TextMsg` to `MSG_ALL` with an origin.
-- A held message always ends without the engine. If the plugin cannot send the copy, for example because the receiver
-  entity is gone, it logs `lost a held TextMsg`.
+- The plugin does not hold a `TextMsg` to `MSG_ALL` with an origin or a receiver, which the engine ignores. It holds
+  only a message that the safe API can start again exactly.
+- A held message always ends without the engine. If the plugin cannot send the copy, it logs `lost a held TextMsg`.
 - A write value outside the range of its type (for example `WRITE_BYTE(300)`) goes out with the same low bits, which is
   all that the engine sends. A `WRITE_ENTITY` of an index without a live entity goes out as `WRITE_SHORT`, which is how
   the engine sends an entity index.
@@ -186,9 +187,9 @@ the top left, for example `Stefan died`. The CS kill feed prints this line to th
 - metamod-p-rs cannot give a hook a null string. A `WRITE_STRING(NULL)` in a `TextMsg` therefore goes to the engine,
   which stops the server (`WriteString called with no active message`). Without the plugin, the engine sends an empty
   string. `UTIL_ClientPrintAll` of `server.so` skips null parameters, and AngelScript strings are never null.
-- Two plugins that both hold `TextMsg` (for example `asusermsg` with a script hook on `TextMsg`) each send their own
-  copy. A message then arrives two times, and an obituary that this plugin drops still arrives from the other plugin. A
-  message that the other plugin blocks still arrives from this plugin.
+- Two plugins that both hold a `TextMsg` to all players (for example `asusermsg` with a script hook on `TextMsg`) each
+  send their own copy. A message then arrives two times, and an obituary that this plugin drops still arrives from the
+  other plugin. A message that the other plugin blocks still arrives from this plugin.
 - Do not use a plugin that changes a `TextMsg` with calls to the engine's message functions from its own hooks, for
   example `WRITE_STRING` with a different text. While this plugin holds the `TextMsg`, the engine has no open message,
   so such a call stops the server.

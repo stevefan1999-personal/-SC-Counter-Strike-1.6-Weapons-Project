@@ -2,11 +2,12 @@
 //! lines out of the top-left notify area, because Counter-Strike 1.6 shows
 //! deaths only in its kill feed (`docs/metamod.md`).
 //!
-//! Sven sends each obituary as a `TextMsg` to `HUD_PRINTNOTIFY`. The engine
-//! sends a message as soon as the game ends it, so the plugin holds every
-//! `TextMsg` back: it supersedes `MESSAGE_BEGIN` and each write, and at
-//! `MESSAGE_END` it drops an obituary or sends the message again, unchanged,
-//! through the engine functions, which skip the hooks of every plugin.
+//! Sven sends each obituary as a `TextMsg` to `HUD_PRINTNOTIFY` of every
+//! player. The engine sends a message as soon as the game ends it, so the
+//! plugin holds every `TextMsg` to all players back: it supersedes
+//! `MESSAGE_BEGIN` and each write, and at `MESSAGE_END` it drops an obituary
+//! or sends the message again, unchanged, through the engine functions, which
+//! skip the hooks of every plugin.
 
 pub mod obituary;
 
@@ -71,11 +72,10 @@ impl Write {
     }
 }
 
-/// A `TextMsg` that the engine has not seen yet.
+/// A `TextMsg` to all players that the engine has not seen yet.
 struct Held {
-    destination: MessageDestination,
-    kind:        MessageType,
-    writes:      Vec<Write>,
+    kind:   MessageType,
+    writes: Vec<Write>,
 }
 
 impl Held {
@@ -137,21 +137,17 @@ impl Plugin for CounterLife {
         origin: Option<[f32; 3]>,
         receiver: Option<Edict>,
     ) -> MetaResult<()> {
-        let held = self
-            .holds(kind)
-            .then(|| replayable(destination, origin, receiver))
-            .flatten();
+        let held = (self.holds(kind) && to_all_players(destination, origin, receiver)).then(|| {
+            Held {
+                kind,
+                writes: Vec::new(),
+            }
+        });
         let result = match held {
             Some(_) => MetaResult::Supercede(()),
             None => MetaResult::Ignored,
         };
-        self.open.borrow_mut().push(held.map(|destination| {
-            Held {
-                destination,
-                kind,
-                writes: Vec::new(),
-            }
-        }));
+        self.open.borrow_mut().push(held);
         result
     }
 
@@ -237,36 +233,23 @@ impl CounterLife {
             log::debug!("dropped obituary {line:?}");
             return;
         }
-        let sent = self.engine.message(held.destination, held.kind, |writer| {
-            for write in &held.writes {
-                write.replay(writer, self.engine);
-            }
-        });
+        let sent = self
+            .engine
+            .message(MessageDestination::All, held.kind, |writer| {
+                for write in &held.writes {
+                    write.replay(writer, self.engine);
+                }
+            });
         if let Err(error) = sent {
             log::error!("lost a TextMsg: {error}");
         }
     }
 }
 
-/// The destination of a message, if the safe API can begin it again with
-/// the same destination code, origin and receiver.
-fn replayable(
-    destination: i32,
-    origin: Option<[f32; 3]>,
-    receiver: Option<Edict>,
-) -> Option<MessageDestination> {
-    use MessageDestination as To;
-    Some(match (u32::try_from(destination).ok()?, origin, receiver) {
-        (sys::MSG_BROADCAST, None, None) => To::Broadcast,
-        (sys::MSG_ALL, None, None) => To::All,
-        (sys::MSG_INIT, None, None) => To::Init,
-        (sys::MSG_SPEC, None, None) => To::Spectators,
-        (sys::MSG_ONE, None, Some(player)) => To::One(player),
-        (sys::MSG_ONE_UNRELIABLE, None, Some(player)) => To::OneUnreliable(player),
-        (sys::MSG_PVS, Some(origin), None) => To::Visible(origin),
-        (sys::MSG_PVS_R, Some(origin), None) => To::VisibleReliable(origin),
-        (sys::MSG_PAS, Some(origin), None) => To::Audible(origin),
-        (sys::MSG_PAS_R, Some(origin), None) => To::AudibleReliable(origin),
-        _ => return None,
-    })
+/// Whether a message begins as `UTIL_ClientPrintAll` begins the obituary:
+/// `MSG_ALL`, no origin, no receiver. Only those are held, so a message to
+/// one player or to an area never meets the copy of this plugin, and the
+/// copy can always begin exactly the same message again.
+fn to_all_players(destination: i32, origin: Option<[f32; 3]>, receiver: Option<Edict>) -> bool {
+    u32::try_from(destination) == Ok(sys::MSG_ALL) && origin.is_none() && receiver.is_none()
 }

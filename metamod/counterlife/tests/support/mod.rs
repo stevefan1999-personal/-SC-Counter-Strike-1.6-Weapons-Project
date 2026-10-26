@@ -81,15 +81,6 @@ pub fn set_cvar(name: &str, value: f32) {
     }
 }
 
-/// Frees an edict slot, as the engine does when an entity is removed.
-pub fn free_edict(index: c_int) {
-    // SAFETY: the index is inside the fake edict array.
-    unsafe {
-        (*edict(index)).free = 1;
-        (*edict(index)).serialnumber += 1;
-    }
-}
-
 /// What the engine sends for these calls: each message header, then the
 /// bytes of each write as GoldSrc's `MSG_Write*` functions keep them (low
 /// 8 bits of a byte or char, low 16 bits of a short or entity). Angles and
