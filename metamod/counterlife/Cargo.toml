@@ -1,0 +1,16 @@
+[package]
+name = "counterlife"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+# metamod loads the cdylib; the tests in tests/ link the rlib to call the
+# same C entry points.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+log = "0.4"
+# Sven Co-op runs metamod-svencoop: see metamod-p-rs
+# docs/adr/0001-metamod-flavour.md.
+metamod-p = { path = "../../../metamod-p-rs", features = ["fallguys"] }
