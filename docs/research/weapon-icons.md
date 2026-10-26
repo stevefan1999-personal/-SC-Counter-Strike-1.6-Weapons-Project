@@ -5,13 +5,13 @@ build 10269, Linux) and against stock Counter-Strike 1.6 at 1600×900.
 
 ## Result
 
-| Item                                                       | Before                                                              | After                                                             |
-| ---------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Weapon selection icons (`weapon`, `weapon_s`)              | R4to0's `cs1024.spr`; seven icons restyled (asset audit, section 4) | CS 1.6 sheets and rects; 54 of 54 crops pixel-identical to CS 1.6 |
-| Ammo icons (`ammo`)                                        | CS rects in `640hud7.spr` (already identical)                       | the same rects, now in the icon folder; 27 of 27 crops identical  |
-| Native crosshair                                           | the whole `crosshairs.spr` frame: a red cross of 24 pixels          | a 1×1 transparent rect: no native crosshair                       |
-| Dropped weapons                                            | `pev.scale` 1.4, or a per-weapon value from 1.0 to 1.6              | 1.0, as in CS 1.6                                                 |
-| Ammo pickups without their own scale (M249, Glock 18, USP) | 1.5                                                                 | 1.0, as the other 15 magazines that use 1                         |
+| Item                                                       | Before                                                                                                        | After                                                                                                       |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Weapon selection icons (`weapon`, `weapon_s`)              | R4to0's `cs1024.spr`; seven icons restyled (asset audit, section 4)                                           | CS 1.6 sheets and rects; 54 of 54 crops pixel-identical to CS 1.6                                           |
+| Ammo icons (`ammo`)                                        | CS rects in `640hud7.spr` (already identical)                                                                 | the same rects, now in the icon folder; 27 of 27 crops identical                                            |
+| Native crosshair                                           | a red cross of 24 pixels (the whole `crosshairs.spr` frame) for 22 weapons; none for the C4 and the 4 snipers | the same cross for the 23 weapons that have a crosshair in CS 1.6 (now also the C4); none for the 4 snipers |
+| Dropped weapons                                            | `pev.scale` 1.4, or a per-weapon value from 1.0 to 1.6                                                        | 1.0, as in CS 1.6                                                                                           |
+| Ammo pickups without their own scale (M249, Glock 18, USP) | 1.5                                                                                                           | 1.0, as the other 15 magazines that use 1                                                                   |
 
 Evidence: `tests/weapon-lists.test.ts` (automatic), `tools/audit.ts` (81 of 81 crops with mean |Δ| 0 against CS 1.6),
 and the screenshots in [`weapon-icons/`](weapon-icons/).
@@ -29,11 +29,13 @@ Changes:
 - The lists copy the 640 rows `weapon`, `weapon_s` and `ammo` of `cstrike/sprites/weapon_*.txt`. Five names differ:
   `weapon_csm249` → `weapon_m249`, `weapon_csknife` → `weapon_knife`, `weapon_csdeagle` → `weapon_deagle`,
   `weapon_csglock18` → `weapon_glock18`, `weapon_dualelites` → `weapon_elite`.
-- `crosshair` (all 27) and `zoom` (AWP, G3SG1, Scout, SG550) use `cs16/icons/crosshairs 0 0 1 1`. Pixel (0, 0) of that
-  alpha-test sprite is palette index 255, which the engine drops. CS 1.6 hides the `crosshair` sprite and draws a
-  dynamic crosshair in code (`cs16-client/cl_dll/ammo.cpp:632-639`, `1053-1059`). It draws the `zoom` sprite (the sniper
-  scope) only at FOV 40 or less (`ammo.cpp:1061-1068`); the port draws `wpn/scope.mdl` instead. The CS HUD work must
-  draw the CS crosshair.
+- `crosshair` uses `cs16/icons/crosshairs 0 0 256 256` (the whole frame, as on `main`) in the 23 lists of weapons that
+  have a crosshair in CS 1.6. CS 1.6 hides the `crosshair` sprite and draws a dynamic crosshair in code
+  (`cs16-client/cl_dll/ammo.cpp:632-639`, `1053-1059`) for every weapon except the AWP, Scout, SG550 and G3SG1
+  (`ammo.cpp:1611-1615`). So the four snipers use `cs16/icons/crosshairs 0 0 1 1` for `crosshair` and `zoom`: pixel
+  (0, 0) of that alpha-test sprite is palette index 255, which the engine drops. CS draws the `zoom` sprite (the sniper
+  scope) only at FOV 40 or less (`ammo.cpp:1061-1068`); the port draws `wpn/scope.mdl` instead. The CS HUD work hides
+  the native crosshair with `HIDEHUD_CROSSHAIR` when it draws the CS crosshair, so the lists do not hide it.
 - No `autoaim` rows: Sven uses `crosshair` when `autoaim` is missing. CS also has a `zoom` row for the XM1014; Sven uses
   `crosshair` when `zoom` is missing, so the row is not necessary.
 - `CommonSpritePrecache` precaches `crosshairs` and the 16 sheets (`WEAPON_LIST_SPRITES`). `cs1024.spr` had no other
@@ -94,14 +96,15 @@ there (27 lists under `sprites/cs16/icons/` and `sprites/cs16/640hud17.spr`, `64
 ## 3. Crosshair
 
 `sprites/cs16/icons/crosshairs.spr` (moved from `sprites/cs16/`, unchanged) is a 256×256 alpha-test sprite with 24
-visible pixels (palette index 224) around (127, 127). The claim "100 % index 255" in
-[`sven-client-hud.md`](sven-client-hud.md) (review table, row 21) is wrong. The old rects (`256 0 256 256`, then
-`0 0 256 256`) drew the whole frame, so a red cross showed. The 80×80 crop at the screen centre has 24 red pixels before
-and 0 after:
+visible pixels (palette index 224, red) around (127, 127). The claim "100 % index 255" in
+[`sven-client-hud.md`](sven-client-hud.md) (review table, row 21) is wrong. The rect `0 0 256 256` draws the whole
+frame, so the red cross shows, as on `main`. The 80×80 crop at the screen centre has the 24 red pixels with the M4A1 and
+the AK-47, and none with the AWP:
 
-![Screen centre before (left) and after (right)](weapon-icons/crosshair-before-after.png)
+![Screen centre with the M4A1 (left) and the AWP (right)](weapon-icons/crosshair-rifle-sniper.png)
 
-Until the CS HUD work draws the CS 1.6 crosshair, the game shows no crosshair.
+This is a static stand-in. The CS 1.6 dynamic crosshair (green by default, with a gap that changes) comes with the CS
+HUD work.
 
 ## 4. In-game comparison with CS 1.6
 
@@ -168,7 +171,7 @@ the before/after ratio does not depend on them.
 ## Reproduce
 
 ```sh
-deno test -R -E tests/weapon-lists.test.ts      # lists against CS 1.6, transparent crosshair, shipped and precached
+deno test -R -E tests/weapon-lists.test.ts      # lists against CS 1.6, crosshair rows, shipped and precached
 deno run -R -E --allow-run=magick -W=docs/research/asset-audit tools/audit.ts > /tmp/report.md  # "(b) HUD lists"
 git checkout docs/research/asset-audit/hud-icons.png   # the run rewrites the montage of the old audit
 
@@ -185,7 +188,7 @@ CL_DISPLAY=:103 just con drop
 
 - Only the weapon pictures can match. Sven draws them in its own colour (100,130,200), with its own selection frame and
   bucket numbers.
-- The native crosshair is hidden; the CS crosshair is not drawn yet.
+- The native crosshair is the static red cross of `main`; the CS dynamic crosshair is not drawn yet.
 - The magazine pickups keep their own scales, because CS 1.6 has no model to compare.
 - `just check` fails at once in a new sandbox: `cat "$logdir"/*` has no file to read when `svencoop/logs/Angelscript` is
   missing or empty. The sandbox server writes that log only when a script prints something, so I put an empty file there

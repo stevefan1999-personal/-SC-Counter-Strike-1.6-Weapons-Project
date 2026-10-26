@@ -1,5 +1,5 @@
 // The weapon lists (sprites/cs16/icons/<category>/weapon_*.txt) must show the CS 1.6 icons: the same sheets and rects
-// as cstrike/sprites/weapon_*.txt, every sheet shipped and precached, and an invisible native crosshair.
+// as cstrike/sprites/weapon_*.txt, every sheet shipped and precached, and a native crosshair only where CS 1.6 draws one.
 // Run: deno test -R -E tests/weapon-lists.test.ts   (reads the CS 1.6 install at CSTRIKE_DIR, as "just install" does)
 import { assert, assertEquals } from "@std/assert";
 import { parseSpr } from "../tools/spr.ts";
@@ -11,6 +11,8 @@ const LIST_DIR = "sprites/cs16/icons";
 const HUD_RESOLUTION = "640";
 const ICON_KEYS = ["weapon", "weapon_s", "ammo"];
 const HIDDEN_KEYS = ["crosshair", "zoom"];
+// CS 1.6 draws no crosshair for these (cs16-client/cl_dll/ammo.cpp:1611-1615); every other weapon has one.
+const NO_CROSSHAIR = ["weapon_awp", "weapon_scout", "weapon_sg550", "weapon_g3sg1"];
 // Our class names that differ from the CS 1.6 list names.
 const CS_LIST_NAME: Record<string, string> = {
   weapon_csm249: "weapon_m249",
@@ -84,20 +86,27 @@ Deno.test("icon rows equal the CS 1.6 lists and stay inside their sheets", async
   }
 });
 
-Deno.test("crosshair and zoom rows draw nothing", async () => {
+Deno.test("the native crosshair shows the whole cross only where CS 1.6 draws a crosshair", async () => {
+  const visible = (pixels: Iterable<number>) => [...pixels].filter((index) => index !== TRANSPARENT_INDEX).length;
   for (const list of lists) {
+    const weapon = list.replace(/^.*\/|\.txt$/g, "");
     const rows = (await readList(list)).rows.filter((row) => HIDDEN_KEYS.includes(row.key));
     assert(rows.some((row) => row.key === "crosshair"), `${list}: no crosshair row`);
     for (const { key, sprite, rect: [x, y, width, height] } of rows) {
       const { header, frames: [frame] } = await loadSprite(sprite);
       assertEquals(header.textureFormat, "alpha-test", `${list}: ${key} sprite must be alpha-test`);
       assert(width > 0 && height > 0 && x + width <= frame.width && y + height <= frame.height, `${list}: ${key} rect`);
-      const visible = Array.from(
-        { length: width * height },
-        (_, pixel) => frame.pixels[(y + Math.floor(pixel / width)) * frame.width + x + pixel % width],
-      )
-        .filter((index) => index !== TRANSPARENT_INDEX);
-      assertEquals(visible.length, 0, `${list}: ${key} rect has visible pixels`);
+      const shown = visible(
+        Array.from(
+          { length: width * height },
+          (_, pixel) => frame.pixels[(y + Math.floor(pixel / width)) * frame.width + x + pixel % width],
+        ),
+      );
+      if (NO_CROSSHAIR.includes(weapon) || key === "zoom") {
+        assertEquals(shown, 0, `${list}: ${key} must draw nothing`);
+      } else {
+        assert(shown > 0 && shown === visible(frame.pixels), `${list}: ${key} must draw the whole cross`);
+      }
     }
   }
 });
