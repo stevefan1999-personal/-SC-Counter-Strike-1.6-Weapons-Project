@@ -224,10 +224,11 @@ namespace CS16KILLFEED {
         for (uint i = 0; i < g_Notices.length(); i++)
             g_Notices[i].iChannel = int(i) + 1;
 
-        // Console log (mirrors death.cpp ConsolePrint lines 262-301)
+        // Console log (mirrors death.cpp ConsolePrint lines 262-301): world deaths carry no killer name
+        string szSuicideText = szVictim + (szKiller.IsEmpty() ? " died" : " killed self");
         string log;
         if (bSuicide) {
-            log = szVictim + " suicided";
+            log = szSuicideText;
         } else if (szWeaponCls.IsEmpty()) {
             log = szKiller + " killed " + szVictim;
         } else {
@@ -243,7 +244,7 @@ namespace CS16KILLFEED {
         // HUD text line for players (once on push)
         string line;
         if (bSuicide) {
-            line = szVictim + " suicided";
+            line = szSuicideText;
         } else if (szWeaponCls.IsEmpty()) {
             line = szKiller + " killed " + szVictim;
         } else {
@@ -400,12 +401,13 @@ namespace CS16KILLFEED {
                 szWeaponCls = CS16BASE::g_PlayerLastWeapon[victimIdx];
                 bHeadshot   = CS16BASE::g_PlayerLastWasHeadshot[victimIdx];
             }
-        } else if (pKiller !is null) {
+        } else if (pKiller !is null && pKiller.IsMonster()) {
             string szNetname = string(pKiller.pev.netname);
             szKillerName = (szNetname.IsEmpty())
                 ? GetMonsterDisplayName(pKiller.GetClassname())
                 : szNetname;
         } else {
+            // World, falls, trigger_hurt: CS1.6 sends killer index 0, drawn as a skull with no killer name
             bSuicide = true;
         }
 
