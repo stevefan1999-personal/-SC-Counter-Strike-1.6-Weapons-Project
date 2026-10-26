@@ -90,7 +90,7 @@ server port='27015' map='hl_c01_a1' *args: (stop port)
   # The holder keeps the pipe open so the server never reads EOF between commands.
   sleep infinity > "$state/in" 2>/dev/null < /dev/null &
   echo $! > "$state/holder.pid"
-  ./svends_i686 -console -port {{port}} +maxplayers 8 +sv_lan 1 +sv_cheats 1 +map {{map}} {{args}} < "$state/in" > "$state/server.log" 2>&1 &
+  ./svends_i686 -console -nobreakpad -port {{port}} +maxplayers 8 +sv_lan 1 +sv_cheats 1 +map {{map}} {{args}} < "$state/in" > "$state/server.log" 2>&1 &
   echo $! > "$state/server.pid"
   for _ in $(seq 1 60); do
     rg -q 'Started map' "$state/server.log" && { echo "server {{port}} up on {{map}}"; exit 0; }
