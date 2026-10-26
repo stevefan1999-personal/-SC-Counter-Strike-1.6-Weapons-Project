@@ -2,7 +2,7 @@
 // kill feed still draws, other notify text still shows, and cl_obituary_filter 0 brings Sven's line back.
 // Usage: deno run -A tests/e2e/obituary.ts [port]
 // The server install (SVEN_SERVER_DIR) must hold the game content, the e2e plugin and metamod (just metamod-install).
-import { Client, crop, E2eError, Server, sleep } from "./driver.ts";
+import { Client, crop, E2eError, just, Server, sleep } from "./driver.ts";
 import { measure } from "./hudboxes.ts";
 
 const SETTLE_MS = 1_000;
@@ -93,6 +93,10 @@ async function dieFromTheWorld() {
   return since;
 }
 
+// metamod appends to metamod.log in the directory of the server that the recipes start; only this run's lines count.
+const metamodLog = `${(await just("--evaluate", "server_dir")).trim()}/metamod.log`;
+const metamodLogStart = (await Deno.readTextFile(metamodLog).catch(() => "")).length;
+
 try {
   // With a missing MOTD file no MOTD window opens, which would hide the notify area.
   await server.start("testcenter", "server-metamod", "+motdfile", "e2e-no-motd.txt");
@@ -142,8 +146,7 @@ try {
     throw new E2eError("the client got Sven's line while cl_obituary_filter was 1");
   }
 
-  const metamodLog = `${Deno.env.get("SVEN_SERVER_DIR") ?? ""}/metamod.log`;
-  const problems = [await server.log(), await Deno.readTextFile(metamodLog).catch(() => "")]
+  const problems = [await server.log(), (await Deno.readTextFile(metamodLog)).slice(metamodLogStart)]
     .flatMap((text) => text.split("\n"))
     .filter((line) => PROBLEMS.test(line));
   if (problems.length > 0) throw new E2eError(`errors in the logs:\n${problems.join("\n")}`);
