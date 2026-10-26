@@ -30,7 +30,6 @@ const HUD_PRINTNOTIFY: u8 = 1;
 static FILTER: StaticCvar = StaticCvar::new(c"cl_obituary_filter", c"1", CvarFlags::EXTDLL);
 
 /// One typed write of a held message, with the value that the game passed.
-#[derive(Debug, Clone, PartialEq)]
 enum Write {
     Byte(i32),
     Char(i32),
