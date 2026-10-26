@@ -6,8 +6,6 @@
 import { Client, crop, Server, sleep } from "./driver.ts";
 
 const MAX_SHOTS = 12;
-// The client still loads for a moment after the server logs the join; console keys typed then get lost.
-const JOIN_SETTLE_MS = 3_000;
 const DRAW_DELAY_MS = 1_500;
 const SHOT_INTERVAL_MS = 450;
 const NOTICE_GONE_MS = 7_000; // a notice lasts 6 s
@@ -26,16 +24,7 @@ const client = new Client();
 try {
   await server.start("testcenter");
   await server.command(`motdfile ${NO_MOTD_FILE}`);
-  const joined = (await server.log()).length;
-  await client.connect(port);
-  await server.waitFor(/entered the game/, joined, 120_000);
-  await sleep(JOIN_SETTLE_MS);
-  // The client reconnects at once when it downloads a soundcache that differs from its copy (the servers of other
-  // worktrees write other ones), so wait for its second join.
-  if ((await server.log()).slice(joined).includes("disconnected")) {
-    await server.waitFor(/entered the game[\s\S]*entered the game/, joined, 120_000);
-    await sleep(JOIN_SETTLE_MS);
-  }
+  await client.join(server);
   await client.console(`cl_showfps 0; net_graph 0; name ${PLAYER_NAME}`);
   await client.console(weapon);
   await sleep(DRAW_DELAY_MS);

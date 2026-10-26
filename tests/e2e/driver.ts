@@ -50,7 +50,7 @@ export class Server {
       const fresh = (await this.log()).slice(since);
       const match = fresh.match(pattern);
       if (match) return match[0];
-      await sleep(250);
+      await sleep(LOG_POLL_MS);
     }
     throw new E2eError(`timed out after ${timeoutMs} ms waiting for ${pattern} on port ${this.port}`);
   }
@@ -67,9 +67,34 @@ export class Server {
   }
 }
 
+const JOIN_TIMEOUT_MS = 120_000;
+// The client still loads for a moment after the server logs the join; console keys typed then get lost.
+const JOIN_SETTLE_MS = 3_000;
+const LOG_POLL_MS = 250;
+
 export class Client {
   async connect(port: number) {
     await just("client", `+connect 127.0.0.1:${port}`);
+  }
+
+  // Connects and returns once the player stays in the game. The client reconnects at once when it downloads a
+  // soundcache that differs from its copy, which happens when the servers of other worktrees wrote other ones.
+  async join(server: Server) {
+    const since = (await server.log()).length;
+    const inGame = async () => {
+      const fresh = (await server.log()).slice(since);
+      return fresh.lastIndexOf("entered the game") > fresh.lastIndexOf("disconnected");
+    };
+    await this.connect(server.port);
+    const deadline = Date.now() + JOIN_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      if (await inGame()) {
+        await sleep(JOIN_SETTLE_MS);
+        if (await inGame()) return;
+      }
+      await sleep(LOG_POLL_MS);
+    }
+    throw new E2eError(`the client did not stay in the game on port ${server.port}`);
   }
 
   async keys(...keys: string[]) {

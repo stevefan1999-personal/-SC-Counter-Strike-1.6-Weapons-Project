@@ -54,9 +54,7 @@ async function hold(action: () => Promise<void>, release: () => Promise<void>, s
 
 try {
   await server.start("testcenter");
-  const joined = (await server.log()).length;
-  await client.connect(port);
-  await server.waitFor(/entered the game/, joined, 120_000);
+  await client.join(server);
   await sleep(MOTD_DELAY_MS);
   await client.keys("Return");
   await client.console("cl_showfps 0; net_graph 0");
