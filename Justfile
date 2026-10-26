@@ -228,3 +228,113 @@ hudboxes image x y w h:
 [group('tools')]
 hud-sheet screenshot out=(justfile_directory() / 'docs/hud-sprites/contact-sheet.png'):
   deno run -R -W --allow-run=magick '{{justfile_directory()}}/tools/hudsheet.ts' '{{cstrike_dir}}' '{{screenshot}}' '{{out}}'
+
+# CS 1.6 kill-feed reference fixture: Valve's CS 1.6 client against a ReGameDLL_CS listen server (bots and "give").
+hl_dir := env('HL_DIR', steam_common / 'Half-Life')
+# Worktrees share the main checkout's .git, so its parent is the project root that holds ReGameDLL_CS.
+project_root := env('CL_PROJECT_ROOT', parent_directory(parent_directory(`git rev-parse --path-format=absolute --git-common-dir`)))
+regamedll_dir := env('REGAMEDLL_DIR', project_root / 'ReGameDLL_CS')
+fixture_root := env('CS_FIXTURE_ROOT', project_root / '.hl-fixture')
+fixture_display := env('CS_FIXTURE_DISPLAY', ':97')
+
+# Build ReGameDLL_CS (cstrike/dlls/cs.so, Linux i386) in an untracked build tree: just fixture-build
+[group('fixture')]
+fixture-build source=regamedll_dir:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  # Upstream asks for CMake 3.1; CMake 4 refuses that without a policy floor.
+  cmake -S '{{source}}' -B '{{source}}/build-linux-i386' -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -Wno-deprecated > /dev/null
+  cmake --build '{{source}}/build-linux-i386' -j "$(nproc)"
+  file '{{source}}/build-linux-i386/regamedll/cs.so'
+
+# Create or refresh the isolated Half-Life root (symlink farm, real ReGameDLL and writable files): just fixture-root
+[group('fixture')]
+fixture-root root=fixture_root source=regamedll_dir map='de_dust2': (fixture-build source)
+  #!/usr/bin/env bash
+  set -euo pipefail
+  test -d '{{root}}/cstrike' || cp -as '{{hl_dir}}' '{{root}}'
+  # The engine and VGUI rewrite config files; written through a farm symlink they would change the shared install.
+  for file in '{{root}}'/hl.conf '{{root}}'/cstrike/*.{cfg,dt,vdf} '{{root}}'/platform/config/*; do
+    if test -L "$file"; then cp --remove-destination "$(readlink "$file")" "$file"; fi
+  done
+  cp --remove-destination '{{source}}/build-linux-i386/regamedll/cs.so' '{{root}}/cstrike/dlls/cs.so'
+  # ZBot reads Condition Zero's bot profiles and navigation mesh; CS 1.6 ships neither.
+  cp --remove-destination '{{hl_dir}}'/czero/{BotProfile.db,BotChatter.db} '{{root}}/cstrike/'
+  cp --remove-destination '{{hl_dir}}/czero/maps/{{map}}.nav' '{{root}}/cstrike/maps/'
+  cp --remove-destination '{{justfile_directory()}}/tests/fixture/fixture.cfg' '{{root}}/cstrike/'
+  echo 'fixture root ready: {{root}}'
+
+# Launch CS 1.6 offscreen on its own Xvfb display; one game per fixture root at a time: just fixture-start :96 2560x1440
+[group('fixture')]
+fixture-start display=fixture_display resolution='1600x900' port='27049' clientport='27007' map='de_dust2' root=fixture_root: (fixture-stop display root)
+  #!/usr/bin/env bash
+  set -euo pipefail
+  state='{{state_root}}/fixture-{{trim_start_match(display, ":")}}'
+  mkdir -p "$state"
+  export DISPLAY='{{display}}'
+  Xvfb '{{display}}' -screen 0 '{{resolution}}x24' -nolisten tcp +extension GLX > "$state/xvfb.log" 2>&1 &
+  echo $! > "$state/xvfb.pid"
+  for _ in $(seq 1 40); do xdpyinfo >/dev/null 2>&1 && break; sleep 0.25; done
+  date '+%Y-%m-%d %H:%M:%S' > "$state/started-at"
+  rm -f '{{root}}/qconsole.log'
+  res='{{resolution}}'
+  cd '{{root}}'
+  SDL_VIDEODRIVER=x11 SteamAppId=10 SteamGameId=10 setsid '{{steam_runtime}}' ./hl.sh -steam -game cstrike \
+    -novid -nobreakpad -windowed -condebug -w "${res%x*}" -h "${res#*x}" -port {{port}} +clientport {{clientport}} \
+    +lservercfgfile fixture.cfg +sv_lan 1 +maxplayers 12 +map {{map}} > "$state/game.log" 2>&1 &
+  echo $! > "$state/game.pgid"
+  for _ in $(seq 1 240); do
+    # The runtime lacks en_US.UTF-8, so the engine first shows a blocking SDL message box; press its OK button.
+    if dialog=$(xdotool search --name '^Warning$' 2>/dev/null | head -1) && test -n "$dialog"; then
+      eval "$(xdotool getwindowgeometry --shell "$dialog")"
+      ok_button_from_bottom=27
+      xdotool mousemove --window "$dialog" $((WIDTH / 2)) $((HEIGHT - ok_button_from_bottom)) click 1
+    fi
+    if rg -q 'is joining the Counter-Terrorist force' '{{root}}/qconsole.log' 2>/dev/null; then
+      sleep 3
+      echo 'CS 1.6 in game on {{display}} ({{resolution}}); console log: {{root}}/qconsole.log'
+      exit 0
+    fi
+    kill -0 "$(cat "$state/game.pgid")" 2>/dev/null || { tail -20 "$state/game.log"; exit 1; }
+    sleep 0.5
+  done
+  echo 'CS 1.6 did not reach the game within 120 s' >&2
+  exit 1
+
+# Stop the offscreen CS 1.6 and its Xvfb, then list writes that escaped the fixture root: just fixture-stop :97
+[group('fixture')]
+fixture-stop display=fixture_display root=fixture_root:
+  #!/usr/bin/env bash
+  state='{{state_root}}/fixture-{{trim_start_match(display, ":")}}'
+  if test -f "$state/game.pgid"; then
+    pgid=$(cat "$state/game.pgid")
+    kill -- "-$pgid" 2>/dev/null
+    # The engine writes its config files while it exits: wait for the exit before the leak check, then force it.
+    for _ in $(seq 1 50); do kill -0 -- "-$pgid" 2>/dev/null || break; sleep 0.2; done
+    kill -9 -- "-$pgid" 2>/dev/null || true
+  fi
+  test -f "$state/xvfb.pid" && kill "$(cat "$state/xvfb.pid")" 2>/dev/null
+  rm -f "$state/game.pgid" "$state/xvfb.pid"
+  test -f "$state/started-at" || exit 0
+  # A farm symlink whose target changed during the run means a write went into the shared install.
+  escaped=$(fd -L -HI -t f --changed-within "$(cat "$state/started-at")" . '{{root}}' | while read -r path; do
+    if test -L "$path"; then echo "$path -> $(readlink "$path")"; fi
+  done)
+  test -z "$escaped" || printf 'WARNING: the run wrote through fixture symlinks into the shared install:\n%s\n' "$escaped" >&2
+  rm -f "$state/started-at"
+
+# Capture the kill-feed reference screenshots into .e2e/reference (de_dust2 only): just fixture-killfeed :96 2560x1440
+[group('fixture')]
+fixture-killfeed display=fixture_display resolution='1600x900' port='27049' clientport='27007' root=fixture_root: (fixture-root root regamedll_dir 'de_dust2') (fixture-start display resolution port clientport 'de_dust2' root)
+  #!/usr/bin/env bash
+  set -euo pipefail
+  trap "just fixture-stop '{{display}}' '{{root}}'" EXIT
+  mkdir -p '{{state_root}}/reference'
+  deno run -A '{{justfile_directory()}}/tests/fixture/killfeed.ts' '{{display}}' '{{resolution}}' \
+    '{{root}}/qconsole.log' '{{state_root}}/reference' '{{resolution}}'
+
+# Measure the kill feed of a screenshot against a frame of the same view without notices: just fixture-metrics a.png a-before.png
+[group('fixture')]
+[no-cd]
+fixture-metrics shot before:
+  @deno run -A '{{justfile_directory()}}/tests/fixture/feed-metrics.ts' '{{shot}}' '{{before}}'
