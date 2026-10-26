@@ -190,8 +190,5 @@ CL_DISPLAY=:103 just con drop
   bucket numbers.
 - The native crosshair is the static red cross of `main`; the CS dynamic crosshair is not drawn yet.
 - The magazine pickups keep their own scales, because CS 1.6 has no model to compare.
-- `just check` fails at once in a new sandbox: `cat "$logdir"/*` has no file to read when `svencoop/logs/Angelscript` is
-  missing or empty. The sandbox server writes that log only when a script prints something, so I put an empty file there
-  to run the check.
 - The kill feed sheets `sprites/cs16/640hud1.spr` and `640hud2.spr` can be foreign files in a player's cache (section
   2).

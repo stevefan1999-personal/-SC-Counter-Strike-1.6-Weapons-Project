@@ -92,12 +92,14 @@ check port='27015' map='hl_c01_a1':
   #!/usr/bin/env bash
   set -euo pipefail
   logdir='{{server_dir}}/svencoop/logs/Angelscript'
-  # The AngelScript log is one file per day, so only read what this run appends.
-  before=$(cat "$logdir"/* 2>/dev/null | wc -l)
+  # The AngelScript log is one file per day, so only read what this run appends. A new sandbox has no log until a
+  # script prints something, so an empty glob must read as no lines (/dev/null keeps cat off stdin).
+  shopt -s nullglob
+  before=$(cat "$logdir"/* /dev/null | wc -l)
   just install && just server {{port}} {{map}}
   sleep 3
   just stop {{port}}
-  fresh=$(cat "$logdir"/* | tail -n +$((before + 1)))
+  fresh=$(cat "$logdir"/* /dev/null | tail -n +$((before + 1)))
   echo "$fresh"
   if rg -q 'ERROR|failed' <<< "$fresh"; then exit 1; fi
   echo 'plugins compiled cleanly'
