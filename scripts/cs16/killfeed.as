@@ -15,7 +15,8 @@
 //   640hud2.spr  — contains d_famas, d_galil
 //   640hud16.spr — contains d_fiveseven, d_sg550, d_ump45
 //
-// Layout uses HUD channels 1-4 (channel 0 reserved for BuyMenu money display).
+// HUD sprite channels share one 0-15 space per plugin: 0 is the BuyMenu money counter and 4 the
+// C4 icon, so kill icons use 5-8 and headshot icons 9-12. Names are HudMessage text, a separate space.
 // Sprite sheet offsets match hud.txt exactly (640-res entries).
 
 #include "base"
@@ -220,8 +221,8 @@ namespace CS16KILLFEED {
 //
 // We approximate with:
 //   - HudMessage  channel N+8:  killer name, x=right-anchor offset
-//   - HUDSprite   channel N:    weapon sprite, x=right-anchor
-//   - HUDSprite   channel N+4:  headshot sprite (if HS), x=right-anchor - weaponWidth
+//   - HUDSprite   channel N+4:  weapon sprite, x=right-anchor
+//   - HUDSprite   channel N+8:  headshot sprite (if HS), x=right-anchor - weaponWidth
 //   - HudMessage  channel N+12: victim name, x=right edge (0.99)
 //
 // Approximate character width: ~8px per char at 640 ref width → 8/640 = 0.0125 per char.
@@ -275,7 +276,7 @@ namespace CS16KILLFEED {
 
                 // ── Weapon sprite ─────────────────────────────────────────
                 HUDSpriteParams wp;
-                wp.channel    = ch;
+                wp.channel    = ch + 4;
                 wp.flags      = 0;
                 wp.x          = xWeapon;
                 wp.y          = yNorm;
@@ -292,7 +293,7 @@ namespace CS16KILLFEED {
                 // ── Headshot sprite ───────────────────────────────────────
                 if (n.bHeadshot) {
                     HUDSpriteParams hp;
-                    hp.channel    = ch + 4;
+                    hp.channel    = ch + 8;
                     hp.flags      = 0;
                     hp.x          = xHS;
                     hp.y          = yNorm;
