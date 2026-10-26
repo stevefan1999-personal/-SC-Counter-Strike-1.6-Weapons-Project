@@ -2,9 +2,12 @@
 // Sven Co-op blocks cheat commands for non-admin players, so tests drive the game through these commands:
 //   as_command e2e.spawn <classname> [distance]   spawn in front of player 1; monsters are pinned in place after landing
 //   as_command e2e.aim [head|body] [classname]    turn player 1 towards the nearest live monster (default monster_*)
-//   as_command e2e.kill                           kill every live monster, credited to player 1 and its held weapon
+//   as_command e2e.kill [head|body] [count] [cls] kill the nearest live monsters, credited to player 1 and its held weapon
 //   as_command e2e.give <classname>               give player 1 an item or weapon
 //   as_command e2e.stuff <client command...>      run a console command on player 1's client
+//   as_command e2e.health <value>                 set player 1's health
+//   as_command e2e.armor <value>                  set player 1's armour
+//   as_command e2e.hurt <amount>                  damage player 1 from the world (pain, armour absorption)
 
 const float DEFAULT_SPAWN_DISTANCE = 160.0f;
 const float LETHAL_DAMAGE = 10000.0f;
@@ -19,9 +22,12 @@ void PluginInit()
   // Plugins must create console commands at init time; global CConCommand objects never register.
   g_Commands.insertLast( CConCommand( "spawn", "<classname> [distance] - spawn in front of player 1", @SpawnInFront ) );
   g_Commands.insertLast( CConCommand( "aim", "[head|body] [classname] - turn player 1 towards the nearest live monster", @AimAtNearestMonster ) );
-  g_Commands.insertLast( CConCommand( "kill", "- kill every live monster, credited to player 1", @KillMonsters ) );
+  g_Commands.insertLast( CConCommand( "kill", "[head|body] [count] [classname] - kill the nearest live monsters, credited to player 1", @KillMonsters ) );
   g_Commands.insertLast( CConCommand( "give", "<classname> - give player 1 an item", @GiveItem ) );
   g_Commands.insertLast( CConCommand( "stuff", "<command...> - run a client command on player 1", @StuffText ) );
+  g_Commands.insertLast( CConCommand( "health", "<value> - set player 1 health", @SetHealth ) );
+  g_Commands.insertLast( CConCommand( "armor", "<value> - set player 1 armour", @SetArmor ) );
+  g_Commands.insertLast( CConCommand( "hurt", "<amount> - damage player 1 from the world", @HurtPlayer ) );
 }
 
 CBasePlayer@ FirstPlayer()
@@ -102,21 +108,43 @@ void AimAtNearestMonster( const CCommand@ args )
   player.pev.angles = viewAngles;
   player.pev.v_angle = viewAngles;
   player.pev.fixangle = FAM_FORCEVIEWANGLES;
-  g_EngineFuncs.ServerPrint( "[e2e] aim " + ( aimAtHead ? "head" : "body" ) + " of " + nearest.pev.classname + "\n" );
+  g_EngineFuncs.ServerPrint( "[e2e] aim " + ( aimAtHead ? "head" : "body" ) + " of " + nearest.pev.classname + " live " + monsters.length() + "\n" );
 }
 
 // Scripted kill for tests that do not need real bullets: the held weapon is the inflictor, as when it fires.
+// Kills the nearest [count] live monsters; "head" marks the hit group so the kill feed shows a headshot.
 void KillMonsters( const CCommand@ args )
 {
   CBasePlayer@ player = FirstPlayer();
   if( player is null )
     return;
+  const bool headshot = args.ArgC() > 1 && args.Arg( 1 ) == "head";
+  array<CBaseEntity@> monsters = LiveMonsters( args.ArgC() > 3 ? args.Arg( 3 ) : "monster_*" );
+  const uint count = args.ArgC() > 2 ? Math.min( uint( atoi( args.Arg( 2 ) ) ), monsters.length() ) : monsters.length();
+  const Vector eye = player.EyePosition();
+  // Nearest first, so a test can predict the kill order.
+  for( uint first = 0; first < monsters.length(); ++first )
+  {
+    for( uint other = first + 1; other < monsters.length(); ++other )
+    {
+      if( ( monsters[other].Center() - eye ).Length() < ( monsters[first].Center() - eye ).Length() )
+      {
+        CBaseEntity@ nearer = monsters[other];
+        @monsters[other] = monsters[first];
+        @monsters[first] = nearer;
+      }
+    }
+  }
   CBaseEntity@ weapon = player.m_hActiveItem.GetEntity();
   entvars_t@ inflictor = weapon is null ? player.pev : weapon.pev;
-  array<CBaseEntity@> monsters = LiveMonsters();
-  for( uint index = 0; index < monsters.length(); ++index )
+  for( uint index = 0; index < count; ++index )
+  {
+    CBaseMonster@ monster = cast<CBaseMonster@>( monsters[index] );
+    if( monster !is null )
+      monster.m_LastHitGroup = headshot ? HITGROUP_HEAD : HITGROUP_CHEST;
     monsters[index].TakeDamage( inflictor, player.pev, LETHAL_DAMAGE, DMG_BULLET );
-  g_EngineFuncs.ServerPrint( "[e2e] killed " + monsters.length() + " monster(s) with " + inflictor.classname + "\n" );
+  }
+  g_EngineFuncs.ServerPrint( "[e2e] killed " + count + " monster(s) with " + inflictor.classname + ( headshot ? " (head)" : "" ) + "\n" );
 }
 
 void GiveItem( const CCommand@ args )
@@ -140,4 +168,32 @@ void StuffText( const CCommand@ args )
   message.WriteString( command + "\n" );
   message.End();
   g_EngineFuncs.ServerPrint( "[e2e] stuffed: " + command + "\n" );
+}
+
+void SetHealth( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null || args.ArgC() < 2 )
+    return;
+  player.pev.health = atof( args.Arg( 1 ) );
+  g_EngineFuncs.ServerPrint( "[e2e] health " + player.pev.health + "\n" );
+}
+
+void SetArmor( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null || args.ArgC() < 2 )
+    return;
+  player.pev.armorvalue = atof( args.Arg( 1 ) );
+  g_EngineFuncs.ServerPrint( "[e2e] armor " + player.pev.armorvalue + "\n" );
+}
+
+void HurtPlayer( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null || args.ArgC() < 2 )
+    return;
+  CBaseEntity@ world = g_EntityFuncs.Instance( 0 );
+  player.TakeDamage( world.pev, world.pev, atof( args.Arg( 1 ) ), DMG_GENERIC );
+  g_EngineFuncs.ServerPrint( "[e2e] hurt to " + player.pev.health + "\n" );
 }

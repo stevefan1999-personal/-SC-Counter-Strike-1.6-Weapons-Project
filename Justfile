@@ -133,7 +133,7 @@ client +args: display client-stop
   # -nosound crashes Sven's client in HUD_DrawTransparentTriangles, so mute with volume cvars instead.
   DISPLAY='{{display}}' SDL_VIDEODRIVER=x11 SteamAppId=225840 SteamGameId=225840 \
     setsid '{{steam_runtime}}' ./svencoop.sh -nosteamoverlay -nobreakpad -novid -windowed \
-    -w "${res%x*}" -h "${res#*x}" -port {{listen_port}} +volume 0 +MP3Volume 0 {{args}} \
+    -w "${res%x*}" -h "${res#*x}" -port {{listen_port}} +volume 0 +MP3Volume 0 +net_graph 0 +cl_showfps 0 {{args}} \
     > "$state/client.log" 2>&1 < /dev/null &
   echo $! > "$state/client.pgid"
   echo $! > '{{client_registry}}'/"$!"
@@ -210,3 +210,8 @@ sandbox dir:
 [group('e2e')]
 e2e-killfeed port='27017' weapon='weapon_csdeagle' aim='head':
   deno run -A '{{justfile_directory()}}/tests/e2e/killfeed.ts' {{port}} {{weapon}} {{aim}}
+
+# Walk through every CS HUD state on testcenter and save shots plus HUD crops: just e2e-hud 27017 hud
+[group('e2e')]
+e2e-hud port='27017' label='hud':
+  deno run -A '{{justfile_directory()}}/tests/e2e/hud.ts' {{port}} {{label}}

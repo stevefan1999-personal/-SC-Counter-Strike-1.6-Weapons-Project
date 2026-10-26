@@ -20,6 +20,7 @@ try {
   await server.waitFor(/entered the game/, joined, 120_000);
   await sleep(MOTD_DELAY_MS);
   await client.keys("Return");
+  await client.console("cl_showfps 0; net_graph 0");
   await client.console(weapon);
   await sleep(DRAW_DELAY_MS);
   await server.commandAndWait(`as_command e2e.spawn ${victim} 220`, /\[e2e\] pinned/);

@@ -81,6 +81,22 @@ export class Client {
     await run("xdotool", ["click", String(button)], { DISPLAY: display });
   }
 
+  async mouseDown(button: 1 | 3 = 1) {
+    await run("xdotool", ["mousedown", String(button)], { DISPLAY: display });
+  }
+
+  async mouseUp(button: 1 | 3 = 1) {
+    await run("xdotool", ["mouseup", String(button)], { DISPLAY: display });
+  }
+
+  async keyDown(key: string) {
+    await run("xdotool", ["keydown", key], { DISPLAY: display });
+  }
+
+  async keyUp(key: string) {
+    await run("xdotool", ["keyup", key], { DISPLAY: display });
+  }
+
   async shot(name: string): Promise<string> {
     return (await just("shot", name)).trim();
   }
