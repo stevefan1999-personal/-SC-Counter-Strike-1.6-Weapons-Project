@@ -10,6 +10,10 @@ steam_runtime := env('STEAM_RUNTIME_RUN', home_directory() / '.local/share/Steam
 display := env('CL_DISPLAY', ':99')
 resolution := env('CL_RESOLUTION', '1600x900')
 listen_port := env('CL_LISTEN_PORT', '27045')
+# Machine-wide e2e client bookkeeping, shared by every worktree.
+client_state := env('CL_CLIENT_STATE', home_directory() / '.local/state/counter-life')
+client_registry := client_state / 'clients'
+client_original := client_state / 'client-original'
 
 default:
   @just --list
@@ -117,9 +121,13 @@ client +args: display client-stop
   #!/usr/bin/env bash
   set -euo pipefail
   state='{{state_root}}/client'
-  mkdir -p "$state/backup"
-  # The engine rewrites the video mode and cvars on exit; client-stop puts the player's files back.
-  cp '{{client_dir}}/svencoop.conf' '{{client_dir}}/svencoop/config.cfg' "$state/backup/"
+  mkdir -p "$state" '{{client_registry}}' '{{client_original}}'
+  # The engine rewrites the video mode and cvars on exit. Keep one machine-wide copy of the player's
+  # real files, refreshed only while no e2e client runs, so parallel runs never back up a test config.
+  live=$(fd -t f . '{{client_registry}}' -x sh -c 'kill -0 -"$(cat {})" 2>/dev/null && echo {}' | wc -l)
+  if [ "$live" -eq 0 ]; then
+    cp '{{client_dir}}/svencoop.conf' '{{client_dir}}/svencoop/config.cfg' '{{client_original}}/'
+  fi
   res='{{resolution}}'
   cd '{{client_dir}}'
   # -nosound crashes Sven's client in HUD_DrawTransparentTriangles, so mute with volume cvars instead.
@@ -128,21 +136,27 @@ client +args: display client-stop
     -w "${res%x*}" -h "${res#*x}" -port {{listen_port}} +volume 0 +MP3Volume 0 {{args}} \
     > "$state/client.log" 2>&1 < /dev/null &
   echo $! > "$state/client.pgid"
+  echo $! > '{{client_registry}}'/"$!"
   echo "client starting (log: $state/client.log)"
 
-# Stop the offscreen client and restore the player's video settings and cvars: just client-stop
+# Stop the offscreen client; the last running e2e client restores the player's video settings and cvars: just client-stop
 [group('e2e')]
 client-stop:
   #!/usr/bin/env bash
   state='{{state_root}}/client'
-  test -f "$state/client.pgid" && kill -- "-$(cat "$state/client.pgid")" 2>/dev/null && sleep 2
-  rm -f "$state/client.pgid"
-  for file in svencoop.conf config.cfg; do
-    test -f "$state/backup/$file" || continue
-    target='{{client_dir}}/svencoop.conf'
-    test "$file" = config.cfg && target='{{client_dir}}/svencoop/config.cfg'
-    cp "$state/backup/$file" "$target" && rm "$state/backup/$file"
-  done
+  if test -f "$state/client.pgid"; then
+    pgid=$(cat "$state/client.pgid")
+    kill -- "-$pgid" 2>/dev/null
+    # Restore only after the game is gone, or a late exit could write its test config over the restore.
+    for _ in $(seq 1 50); do kill -0 -- "-$pgid" 2>/dev/null || break; sleep 0.2; done
+    kill -9 -- "-$pgid" 2>/dev/null || true
+    rm -f "$state/client.pgid" '{{client_registry}}'/"$pgid"
+  fi
+  live=$(fd -t f . '{{client_registry}}' -x sh -c 'kill -0 -"$(cat {})" 2>/dev/null && echo {}' 2>/dev/null | wc -l)
+  if [ "$live" -eq 0 ] && test -f '{{client_original}}/svencoop.conf'; then
+    cp '{{client_original}}/svencoop.conf' '{{client_dir}}/svencoop.conf'
+    cp '{{client_original}}/config.cfg' '{{client_dir}}/svencoop/config.cfg'
+  fi
 
 # Press keys in the offscreen game (xdotool key names): just ui Return
 [group('e2e')]
