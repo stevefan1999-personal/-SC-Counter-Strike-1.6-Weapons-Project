@@ -85,8 +85,9 @@ export class Canvas {
   // Draws a rect of the sheet the way CS 1.6 shows it. Valve's engine insets the texture coordinates of a sprite rect
   // by half a texel (AdjustSubRect, Half-Life hw.so 0x14a820) and filters bilinearly, so pixel k of a w-wide rect shows
   // texel k * (w - 1) / w. Sven draws a rect 1:1 (Sven hw.so 0x127AA0), so the frames carry CS's resampled pixels.
-  // Every CS HUD layer is additive (SPR_DrawAdditive, FillRGBA); with index = brightness, adding indices and clamping
-  // at white is that blend.
+  // Every CS HUD layer is additive (SPR_DrawAdditive, FillRGBA); with index = brightness, adding indices is that blend.
+  // CS multiplies each draw by the HUD colour before the framebuffer adds them, so a sum above white cannot be one
+  // frame: Sven would clip it before the colour multiply. Parts that overlap like that must be separate sprites.
   add(source: SpriteFrame, rect: Rect, x: number, y: number): this {
     const texel = (column: number, row: number) => source.pixels[(rect.y + row) * source.width + rect.x + column];
     const sample = (step: number, size: number) => {
@@ -101,7 +102,9 @@ export class Canvas {
         const blend = (sourceRow: number) => texel(near, sourceRow) * (1 - weight) + texel(far, sourceRow) * weight;
         const value = blend(vertical.near) * (1 - vertical.weight) + blend(vertical.far) * vertical.weight;
         const at = (y + row) * this.width + x + column;
-        this.pixels[at] = Math.min(WHITE, this.pixels[at] + Math.round(value));
+        const sum = this.pixels[at] + Math.round(value);
+        if (sum > WHITE) throw new RangeError(`parts overlap above white at ${x + column}, ${y + row}`);
+        this.pixels[at] = sum;
       }
     }
     return this;
@@ -151,18 +154,30 @@ export function hudSprites(sheet: Sheet): HudSprite[] {
   const cross = sheet.rect("cross");
   const healthDigitsX = cross.width / 2 + cell.width / 2;
 
-  // CS: the full icon replaces the empty one from the bottom up, (int)(24 * (100 - armour) / 100) rows stay empty.
+  // CS: the empty icon, then the digits right of it (battery.cpp).
   const armor = (file: string, prefix: string): HudSprite => {
-    const [empty, full] = [sheet.rect(`${prefix}_empty`), sheet.rect(`${prefix}_full`)];
+    const empty = sheet.rect(`${prefix}_empty`);
     return {
       file,
       frames: FRAME_LIMIT,
       content: { width: empty.width + NUMBER_CELLS * cell.width, height: height(empty, cell) },
       draw: (canvas, value) => {
-        const offset = Math.trunc(full.height * (PERCENT - Math.min(value, PERCENT)) / PERCENT);
         glyph(canvas, `${prefix}_empty`);
-        glyph(canvas, `${prefix}_full`, 0, { y: full.y + offset, height: full.height - offset });
         digits(canvas, threeCells(value), empty.width);
+      },
+    };
+  };
+  // CS: the full icon is drawn over the empty one from the bottom up, (int)(24 * (100 - armour) / 100) rows stay
+  // empty. It overlaps the empty icon above white, so it is its own sprite in the same box (Canvas.add).
+  const armorFull = (file: string, prefix: string): HudSprite => {
+    const full = sheet.rect(`${prefix}_full`);
+    return {
+      file,
+      frames: PERCENT + 1,
+      content: { width: full.width, height: height(full, cell) },
+      draw: (canvas, value) => {
+        const offset = Math.trunc(full.height * (PERCENT - value) / PERCENT);
+        glyph(canvas, `${prefix}_full`, 0, { y: full.y + offset, height: full.height - offset });
       },
     };
   };
@@ -195,8 +210,10 @@ export function hudSprites(sheet: Sheet): HudSprite[] {
     draw: (canvas, frame) => digits(canvas, twoCells(frame), 0),
   });
 
-  // CS flashlight: casing, the energy bar cut (int)((1 - bat) * 32) px from the left, the beam right of the casing.
+  // CS flashlight: casing, the beam right of it while on, the energy bar cut (int)((1 - bat) * 32) px from the left.
+  // The energy overlaps the casing above white, so it is its own sprite in the same box (Canvas.add).
   const [casing, energy, beam] = ["flash_empty", "flash_full", "flash_beam"].map((name) => sheet.rect(name));
+  const flashlightBox = { width: energy.width + beam.width, height: height(casing, energy, beam) };
 
   return [
     {
@@ -209,7 +226,9 @@ export function hudSprites(sheet: Sheet): HudSprite[] {
       },
     },
     armor("armor.spr", "suit"),
+    armorFull("armor_full.spr", "suit"),
     armor("armor_helmet.spr", "suithelmet"),
+    armorFull("armor_helmet_full.spr", "suithelmet"),
     {
       file: "clip.spr",
       frames: FRAME_LIMIT,
@@ -232,14 +251,20 @@ export function hudSprites(sheet: Sheet): HudSprite[] {
     moneyHigh("money_delta_minus_hi.spr", "minus"),
     {
       file: "flashlight.spr",
-      frames: 2 * (PERCENT + 1),
-      content: { width: energy.width + beam.width, height: height(casing, energy, beam) },
-      draw: (canvas, frame) => {
-        const battery = frame % (PERCENT + 1);
-        const offset = Math.trunc(energy.width * (PERCENT - battery) / PERCENT);
+      frames: 2,
+      content: flashlightBox,
+      draw: (canvas, on) => {
         glyph(canvas, "flash_empty");
+        if (on) glyph(canvas, "flash_beam", energy.width);
+      },
+    },
+    {
+      file: "flashlight_energy.spr",
+      frames: PERCENT + 1,
+      content: flashlightBox,
+      draw: (canvas, battery) => {
+        const offset = Math.trunc(energy.width * (PERCENT - battery) / PERCENT);
         glyph(canvas, "flash_full", 0, { x: energy.x + offset, width: energy.width - offset });
-        if (frame > PERCENT) glyph(canvas, "flash_beam", energy.width);
       },
     },
     {

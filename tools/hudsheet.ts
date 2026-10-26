@@ -122,6 +122,9 @@ const ammo = (clip: number, reserve: number) =>
     ],
     ["reserve_lo.spr", reserve % 10, 122],
   ]);
+// The full icon is its own element over the armour icon and digits, as the plugin draws it.
+const armor = (caption: string, file: string, value: number) =>
+  element(caption, [[`${file}.spr`, value, 0], [`${file}_full.spr`, Math.min(value, 100), 0]]);
 const moneyFiles = {
   "$": ["money_hi.spr", 18],
   "+": ["money_delta_plus_hi.spr", 17],
@@ -139,14 +142,14 @@ const money = (amount: number, sign: keyof typeof moneyFiles = "$") => {
 const row = screenHeight - FONT_HEIGHT - Math.floor(FONT_HEIGHT / 2);
 const references: [Element, number, number][] = [
   [single("health 100", "health.spr", 100), 12, row],
-  [single("armour 0", "armor.spr", 0), Math.floor(screenWidth / 5), row],
+  [armor("armour 0", "armor", 0), Math.floor(screenWidth / 5), row],
   [ammo(12, 24), screenWidth - 184, row],
   [money(800), screenWidth - 134, screenHeight - 3 * FONT_HEIGHT],
 ];
 const showcase: Element[] = [
   ...[0, 7, 25, 100, 255].map((value) => single(`health ${value}`, "health.spr", value)),
-  ...[0, 50, 100].map((value) => single(`armour ${value}`, "armor.spr", value)),
-  ...[13, 87].map((value) => single(`helmet ${value}`, "armor_helmet.spr", value)),
+  ...[0, 50, 100].map((value) => armor(`armour ${value}`, "armor", value)),
+  ...[13, 87].map((value) => armor(`helmet ${value}`, "armor_helmet", value)),
   ammo(0, 0),
   ammo(7, 90),
   ammo(30, 255),
@@ -155,7 +158,10 @@ const showcase: Element[] = [
   money(2500, "-"),
   ...[{ battery: 0, on: false }, { battery: 50, on: false }, { battery: 100, on: true }, { battery: 15, on: true }]
     .map(({ battery, on }) =>
-      single(`flashlight ${battery}% ${on ? "on" : "off"}`, "flashlight.spr", battery + (on ? 101 : 0))
+      element(`flashlight ${battery}% ${on ? "on" : "off"}`, [
+        ["flashlight.spr", Number(on), 0],
+        ["flashlight_energy.spr", battery, 0],
+      ])
     ),
 ];
 

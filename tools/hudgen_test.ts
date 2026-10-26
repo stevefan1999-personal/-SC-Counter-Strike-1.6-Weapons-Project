@@ -61,39 +61,39 @@ Deno.test("cstrike hud.txt has the contract rects on 640hud7", async () => {
   );
 });
 
-// An independent statement of the contract: each frame is the clamped sum of these layers as Valve's engine draws
-// them (half-texel inset, bilinear: pixel k of a w-wide rect shows texel k * (w - 1) / w), black elsewhere.
+// An independent statement of the contract: each frame is the sum of these layers as Valve's engine draws them
+// (half-texel inset, bilinear: pixel k of a w-wide rect shows texel k * (w - 1) / w), black elsewhere. The sum is not
+// clamped: CS multiplies each layer by the HUD colour before the framebuffer adds them, so a frame whose layers add
+// up above white could not look like CS and fails here.
 type Layer = { name: string; x: number; y: number; crop?: Partial<Rect> } | { fill: Rect };
 const digitLayers = (text: string, x: number): Layer[] =>
   [...text].flatMap((char, cell) => char === BLANK ? [] : [{ name: `number_${char}`, x: x + cell * 20, y: 0 }]);
 const groupText = (frame: number) =>
   frame < 100 ? `${Math.floor(frame / 10)}${frame % 10}` : frame < 110 ? ` ${frame - 100}` : "  ";
-const armorLayers = (prefix: string) => (value: number): Layer[] => {
-  const offset = Math.trunc(24 * (100 - Math.min(value, 100)) / 100);
-  return [
-    { name: `${prefix}_empty`, x: 0, y: 0 },
-    {
+const armorLayers = (prefix: string) => (value: number): Layer[] => [
+  { name: `${prefix}_empty`, x: 0, y: 0 },
+  ...digitLayers(String(value).padStart(3), 24),
+];
+// CS: rc.top = (int)(top + (100 - armour) * 0.01 * 24) for armour <= 99 (client.so 0xa4a93-0xa4ac2).
+const armorFullLayers = (prefix: string) => (value: number): Layer[] => {
+  const offset = Math.trunc((100 - value) * 0.01 * 24);
+  return offset < 24
+    ? [{
       name: `${prefix}_full`,
       x: 0,
       y: offset,
       crop: { y: CONTRACT_RECTS[`${prefix}_full`][1] + offset, height: 24 - offset },
-    },
-    ...digitLayers(String(value).padStart(3), 24),
-  ];
+    }]
+    : [];
 };
 const moneyLayers = (sign: string, signWidth: number) => (hundreds: number): Layer[] => [
   { name: sign, x: 0, y: 0 },
   ...digitLayers(String(hundreds * 100).padStart(5).slice(0, 3), signWidth),
 ];
 // CS keeps the battery as a float fraction: off = (int)((1 - bat) * 32).
-const flashlightLayers = (frame: number): Layer[] => {
-  const battery = frame % 101;
+const energyLayers = (battery: number): Layer[] => {
   const offset = Math.trunc((1 - Math.fround(battery / 100)) * 32);
-  return [
-    { name: "flash_empty", x: 0, y: 0 },
-    { name: "flash_full", x: offset, y: 0, crop: { x: 160 + offset, width: 32 - offset } },
-    ...(frame > 100 ? [{ name: "flash_beam", x: 32, y: 0 }] : []),
-  ];
+  return offset < 32 ? [{ name: "flash_full", x: offset, y: 0, crop: { x: 160 + offset, width: 32 - offset } }] : [];
 };
 
 const CONTRACT: Record<
@@ -107,7 +107,9 @@ const CONTRACT: Record<
     layers: (value) => [{ name: "cross", x: 0, y: 0 }, ...digitLayers(String(value).padStart(3), 22)],
   },
   "armor.spr": { frames: 256, size: [128, 32], content: [84, 25], layers: armorLayers("suit") },
+  "armor_full.spr": { frames: 101, size: [32, 32], content: [24, 25], layers: armorFullLayers("suit") },
   "armor_helmet.spr": { frames: 256, size: [128, 32], content: [84, 25], layers: armorLayers("suithelmet") },
+  "armor_helmet_full.spr": { frames: 101, size: [32, 32], content: [24, 25], layers: armorFullLayers("suithelmet") },
   "clip.spr": {
     frames: 256,
     size: [128, 32],
@@ -135,7 +137,13 @@ const CONTRACT: Record<
   },
   "money_delta_plus_hi.spr": { frames: 256, size: [128, 32], content: [77, 25], layers: moneyLayers("plus", 17) },
   "money_delta_minus_hi.spr": { frames: 256, size: [128, 32], content: [73, 25], layers: moneyLayers("minus", 13) },
-  "flashlight.spr": { frames: 202, size: [64, 32], content: [48, 32], layers: flashlightLayers },
+  "flashlight.spr": {
+    frames: 2,
+    size: [64, 32],
+    content: [48, 32],
+    layers: (on) => [{ name: "flash_empty", x: 0, y: 0 }, ...(on ? [{ name: "flash_beam", x: 32, y: 0 }] : [])],
+  },
+  "flashlight_energy.spr": { frames: 101, size: [64, 32], content: [48, 32], layers: energyLayers },
   "fill.spr": {
     frames: 1,
     size: [64, 64],
@@ -145,27 +153,24 @@ const CONTRACT: Record<
 };
 
 const expectedPixel = (layers: Layer[], x: number, y: number) =>
-  Math.min(
-    255,
-    layers.reduce((sum, layer) => {
-      if ("fill" in layer) {
-        const { fill } = layer;
-        return sum + (x >= fill.x && x < fill.x + fill.width && y >= fill.y && y < fill.y + fill.height ? 255 : 0);
-      }
-      const [rectX, rectY, rectWidth, rectHeight] = CONTRACT_RECTS[layer.name];
-      const crop = { x: rectX, y: rectY, width: rectWidth, height: rectHeight, ...layer.crop };
-      const [column, row] = [x - layer.x, y - layer.y];
-      if (column < 0 || row < 0 || column >= crop.width || row >= crop.height) return sum;
-      const [sourceX, sourceY] = [column * (crop.width - 1) / crop.width, row * (crop.height - 1) / crop.height];
-      const [left, top] = [Math.floor(sourceX), Math.floor(sourceY)];
-      const [right, bottom] = [Math.min(left + 1, crop.width - 1), Math.min(top + 1, crop.height - 1)];
-      const at = (texelX: number, texelY: number) =>
-        sheet.frame.pixels[(crop.y + texelY) * sheet.frame.width + crop.x + texelX];
-      const [fractionX, fractionY] = [sourceX - left, sourceY - top];
-      const across = (texelY: number) => at(left, texelY) * (1 - fractionX) + at(right, texelY) * fractionX;
-      return sum + Math.round(across(top) * (1 - fractionY) + across(bottom) * fractionY);
-    }, 0),
-  );
+  layers.reduce((sum, layer) => {
+    if ("fill" in layer) {
+      const { fill } = layer;
+      return sum + (x >= fill.x && x < fill.x + fill.width && y >= fill.y && y < fill.y + fill.height ? 255 : 0);
+    }
+    const [rectX, rectY, rectWidth, rectHeight] = CONTRACT_RECTS[layer.name];
+    const crop = { x: rectX, y: rectY, width: rectWidth, height: rectHeight, ...layer.crop };
+    const [column, row] = [x - layer.x, y - layer.y];
+    if (column < 0 || row < 0 || column >= crop.width || row >= crop.height) return sum;
+    const [sourceX, sourceY] = [column * (crop.width - 1) / crop.width, row * (crop.height - 1) / crop.height];
+    const [left, top] = [Math.floor(sourceX), Math.floor(sourceY)];
+    const [right, bottom] = [Math.min(left + 1, crop.width - 1), Math.min(top + 1, crop.height - 1)];
+    const at = (texelX: number, texelY: number) =>
+      sheet.frame.pixels[(crop.y + texelY) * sheet.frame.width + crop.x + texelX];
+    const [fractionX, fractionY] = [sourceX - left, sourceY - top];
+    const across = (texelY: number) => at(left, texelY) * (1 - fractionX) + at(right, texelY) * fractionX;
+    return sum + Math.round(across(top) * (1 - fractionY) + across(bottom) * fractionY);
+  }, 0);
 
 Deno.test("hudgen writes the contract files", () => {
   assertEquals(hudSprites(sheet).map(({ file }) => file), Object.keys(CONTRACT));
