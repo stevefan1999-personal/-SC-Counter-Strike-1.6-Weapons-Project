@@ -18,14 +18,15 @@ const DRAW_MS = 2_500;
 // Longer than the slowest CS cycle time (AWP 1.45 s), so every click fires.
 const SHOT_INTERVAL_MS = 1_600;
 const LEAD_MS = 700;
-// Rise of the mean grey level (0-1) from one game frame to the next that can start a flash; the smallest flashes add
-// about 0.007 in a 1000x660 region.
-const FLASH_RISE = 0.004;
+// Rise of the mean grey level (0-1) from one game frame to the next that can start a flash; the smallest flash, the
+// silenced M4A1's, adds about 0.003 in a 1000x660 region.
+const FLASH_RISE = 0.002;
 // A flash core gains 243-255 grey levels; recoil, pump and bolt motion or a lit gun alone gain at most about 175.
 const CORE_MIN_GAIN = 200;
-// A later frame shows a flash again when this share of the first flash's upper-left quadrant box is still lit; a full
-// quarter disc fills pi / 4 of it.
-const FLASH_COVER = 0.3;
+// A later frame shows a flash again when it has a core again and a lit patch of at least this share of the first
+// flash's. The event fires again at the muzzle of the moved gun (100-250 pixels away), so the patch can be anywhere; a
+// scene that the CS 1.6 view punch moves lights about a fifth.
+const REFLASH_AREA = 0.5;
 // Grey levels (0-255) a pixel must gain over the frame before the shot to count as flash light.
 const PIXEL_RISE = 32;
 // Pixels that gain at least this share of the largest gain form the white-hot core at the flash centre.
@@ -121,23 +122,9 @@ export function measureFlash(before: Uint8Array, flash: Uint8Array, width: numbe
   };
 }
 
-// Share of the box between a flash's centre and its radius up and left that is brighter than the frame before the shot.
-export function quadrantCover(
-  before: Uint8Array,
-  frame: Uint8Array,
-  width: number,
-  { centerX, centerY, radius }: { centerX: number; centerY: number; radius: number },
-  rise: number,
-) {
-  const rows = Array.from({ length: radius + 1 }, (_, step) => centerY - step).filter((row) => row >= 0);
-  const columns = Array.from({ length: radius + 1 }, (_, step) => centerX - step).filter((column) => column >= 0);
-  const lit = rows.reduce(
-    (sum, row) =>
-      sum + columns.filter((column) => frame[row * width + column] - before[row * width + column] > rise).length,
-    0,
-  );
-  return lit / Math.max(1, rows.length * columns.length);
-}
+// Whether a later frame, measured against the same frame before the shot, shows the flash again.
+export const flashesAgain = (first: { area: number }, next: { peak: number; area: number }) =>
+  next.peak >= CORE_MIN_GAIN && next.area >= first.area * REFLASH_AREA;
 
 async function magick(...args: string[]): Promise<Uint8Array> {
   const output = await new Deno.Command("magick", { args, stdout: "piped", stderr: "piped" }).output();
@@ -205,11 +192,11 @@ async function capture(display: string, outDir: string, region: string, weapons:
       const before = await grey(frames[flash - 1].path);
       const size = measureFlash(before, await grey(frames[flash].path), width, PIXEL_RISE);
       if (size.peak < CORE_MIN_GAIN) continue;
-      // Count the game frames that show a flash: the first one plus any later frame lit again at the same place.
+      // Count the game frames that show a flash: the first one plus any later frame that flashes again.
       let flashFrames = 1;
       while (
         flash + flashFrames < frames.length &&
-        quadrantCover(before, await grey(frames[flash + flashFrames].path), width, size, PIXEL_RISE) > FLASH_COVER
+        flashesAgain(size, measureFlash(before, await grey(frames[flash + flashFrames].path), width, PIXEL_RISE))
       ) flashFrames++;
       const after = frames[Math.min(flash + flashFrames, frames.length - 1)].path;
       const evidence = `${outDir}/${label}-${++shot}.png`;
@@ -297,12 +284,17 @@ Deno.test("measureFlash reach gives an X the same size at any angle", async () =
   [0, 20, 45, 70].forEach((degrees) => assertEquals(Math.abs(reachAt(degrees) - arm) <= 2, true, `${degrees} deg`));
 });
 
-Deno.test("quadrantCover tells a lit quadrant from a dark one", async () => {
+Deno.test("flashesAgain finds the flash at the moved muzzle but not a shifted bright edge", async () => {
   const { assertEquals } = await import("@std/assert");
-  const width = 10;
-  const before = new Uint8Array(width * width);
-  const frame = before.map((_, pixel) => pixel % width <= 4 && Math.floor(pixel / width) <= 4 ? 100 : 0);
-  const flash = { centerX: 4, centerY: 4, radius: 4 };
-  assertEquals(quadrantCover(before, frame, width, flash, 32), 1);
-  assertEquals(quadrantCover(before, before, width, flash, 32), 0);
+  const [width, radius] = [160, 20];
+  const before = new Uint8Array(width * width).fill(20);
+  const disc = (centerX: number) =>
+    before.map((level, pixel) =>
+      Math.hypot(pixel % width - centerX, Math.floor(pixel / width) - 40) <= radius ? 250 : level
+    );
+  // A bright edge 2 pixels further right, as the moon moves under the CS 1.6 view punch.
+  const edge = before.map((level, pixel) => pixel % width >= 120 && pixel % width < 122 ? 250 : level);
+  const first = measureFlash(before, disc(40), width, 32);
+  const again = (frame: Uint8Array) => flashesAgain(first, measureFlash(before, frame, width, 32));
+  assertEquals([again(disc(40 + 3 * radius)), again(edge), again(before)], [true, false, false]);
 });
