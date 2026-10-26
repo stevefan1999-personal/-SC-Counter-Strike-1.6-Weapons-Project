@@ -110,7 +110,7 @@ just metamod-install /path/to/server      # default: SVEN_SERVER_DIR
 just server-metamod 27015 testcenter      # just server with -dll addons/metamod/dlls/metamod.so
 ```
 
-`metamod-install`:
+`metamod-install` needs `curl`, `sha256sum` and `unzip`. It:
 
 1. Downloads metamod-svencoop `v20261009a` (`metamod-fallguys-ubuntu-i386.zip`) to `.e2e/metamod/` and checks its
    SHA-256.
