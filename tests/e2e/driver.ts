@@ -4,6 +4,7 @@
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const stateRoot = Deno.env.get("CL_STATE_DIR") ?? `${repoRoot}.e2e`;
 const display = Deno.env.get("CL_DISPLAY") ?? ":99";
+const resolution = Deno.env.get("CL_RESOLUTION") ?? "1600x900";
 
 export class E2eError extends Error {}
 
@@ -28,8 +29,10 @@ export class Server {
     return `${stateRoot}/server-${this.port}/server.log`;
   }
 
+  // The CS HUD lays out icons in screen pixels and cannot read the client's size, so it gets the size of the e2e client.
   async start(map: string) {
     await just("server", String(this.port), map);
+    await this.command(`as_command .cs16_hud_res ${resolution}`);
   }
 
   async command(command: string) {
