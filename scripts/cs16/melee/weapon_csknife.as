@@ -100,7 +100,7 @@ class weapon_csknife : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase, CS16B
         CS16BASE::PrecacheSounds( KnifeSlashSounds );
         //Sprites
         CommonSpritePrecache();
-        g_Game.PrecacheGeneric( CS16BASE::MAIN_SPRITE_DIR + CS16BASE::MAIN_CSTRIKE_DIR + SPR_CAT + self.pev.classname + ".txt" );
+        g_Game.PrecacheGeneric( CS16BASE::MAIN_SPRITE_DIR + CS16BASE::WEAPON_LIST_DIR + SPR_CAT + self.pev.classname + ".txt" );
     }
 
     bool GetItemInfo( ItemInfo& out info )
@@ -166,7 +166,7 @@ string GetName()
 
 void Register()
 {
-    CS16BASE::RegisterCWEntityEX( "CS16_KNIFE::", "weapon_csknife", GetName(), "", CS16BASE::MAIN_CSTRIKE_DIR + SPR_CAT, AMMO_TYPE );
+    CS16BASE::RegisterCWEntityEX( "CS16_KNIFE::", "weapon_csknife", GetName(), "", CS16BASE::WEAPON_LIST_DIR + SPR_CAT, AMMO_TYPE );
 }
 
 }

@@ -107,7 +107,7 @@ class weapon_sg550 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         CS16BASE::PrecacheSounds( WeaponSoundEvents );
         //Sprites
         CommonSpritePrecache();
-        g_Game.PrecacheGeneric( CS16BASE::MAIN_SPRITE_DIR + CS16BASE::MAIN_CSTRIKE_DIR + SPR_CAT + self.pev.classname + ".txt" );
+        g_Game.PrecacheGeneric( CS16BASE::MAIN_SPRITE_DIR + CS16BASE::WEAPON_LIST_DIR + SPR_CAT + self.pev.classname + ".txt" );
     }
 
     bool GetItemInfo( ItemInfo& out info )
@@ -312,7 +312,7 @@ string GetName()
 void Register()
 {
     CS16BASE::RegisterCWEntity( "CS16_SG550::", "weapon_sg550", GetName(), GetAmmoName(), "SG550_MAG", 
-        CS16BASE::MAIN_CSTRIKE_DIR + SPR_CAT, (CS16BASE::ShouldUseCustomAmmo) ? AMMO_TYPE : CS16BASE::DF_AMMO_357 );
+        CS16BASE::WEAPON_LIST_DIR + SPR_CAT, (CS16BASE::ShouldUseCustomAmmo) ? AMMO_TYPE : CS16BASE::DF_AMMO_357 );
 }
 
 }

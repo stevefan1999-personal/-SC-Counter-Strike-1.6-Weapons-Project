@@ -79,10 +79,13 @@ const listDiff = (ours: string[], theirs: string[]) => {
 };
 const round = (value: number) => Math.round(value * 100) / 100;
 
-// CS 1.6 assets that `just install` copies into <dir>/cs16/ (cstrike-assets.txt).
+// CS 1.6 assets that `just install` copies: "<path in cstrike/> [destination]" (default <dir>/cs16/<file>).
 const csImports = (await Deno.readTextFile(join(repo, "cstrike-assets.txt"))).split("\n")
-  .map((line) => line.trim()).filter((line) => line && !line.startsWith("#"))
-  .map((asset) => ({ installed: join(dirname(asset), "cs16", basename(asset)), source: join(cstrikeDir, asset) }));
+  .map((line) => line.trim()).filter((line) => line && !line.startsWith("#")).map((line) => line.split(/\s+/))
+  .map(([asset, destination]) => ({
+    installed: destination ?? join(dirname(asset), "cs16", basename(asset)),
+    source: join(cstrikeDir, asset),
+  }));
 
 // Where a game-relative path resolves for a client: the addon repo, CS imports, then Sven's base content.
 const resolveAsset = async (gamePath: string) => {
@@ -309,7 +312,7 @@ async function auditSprites(): Promise<string[]> {
       : "no byte-identical CS 1.6 sprite";
     return `| ${relative(repo, path)} | ${type} | ${textureFormat} | ${width}x${height} | ${numFrames} | ${verdict} |`;
   }));
-  const crosshair = await loadSprite(join(repo, "sprites/cs16/crosshairs.spr"));
+  const crosshair = await loadSprite(join(repo, "sprites/cs16/icons/crosshairs.spr"));
   return [
     "| sprite | type | format | size | frames | vs CS 1.6 |",
     "| --- | --- | --- | --- | --- | --- |",
@@ -445,13 +448,13 @@ async function auditReferences(): Promise<string[]> {
       }))
     ).map(async ({ where, literal }) => ({ where, literal, found: await labelOf(gamePathOf(literal)) })),
   );
-  // Weapon HUD lists are precached as MAIN_SPRITE_DIR + MAIN_CSTRIKE_DIR + SPR_CAT + classname + ".txt".
+  // Weapon HUD lists are precached as MAIN_SPRITE_DIR + WEAPON_LIST_DIR + SPR_CAT + classname + ".txt".
   const hudLists = await Promise.all(
     [...texts].flatMap(([path, text]) => {
       const category = text.match(/SPR_CAT\s*=\s*"([^"]+)"/)?.[1];
       const weapon = text.match(/string GetName\(\)\s*\{\s*return "([^"]+)"/)?.[1];
       return category && weapon
-        ? [{ where: relative(repo, path), literal: `sprites/cs16/${category}${weapon}.txt` }]
+        ? [{ where: relative(repo, path), literal: `sprites/cs16/icons/${category}${weapon}.txt` }]
         : [];
     }).map(async ({ where, literal }) => ({ where, literal, found: await labelOf(literal) })),
   );

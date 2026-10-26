@@ -82,7 +82,6 @@ class weapon_g3sg1 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         m_flAccuracyStart = 0.2f;
         m_flAccuracy = 0.2f;
         m_flLastFireTime = 0.0f;
-        self.pev.scale = 1.3;
     }
 
     void Precache()
@@ -103,7 +102,7 @@ class weapon_g3sg1 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         CS16BASE::PrecacheSounds( WeaponSoundEvents );
         //Sprites
         CommonSpritePrecache();
-        g_Game.PrecacheGeneric( CS16BASE::MAIN_SPRITE_DIR + CS16BASE::MAIN_CSTRIKE_DIR + SPR_CAT + self.pev.classname + ".txt" );
+        g_Game.PrecacheGeneric( CS16BASE::MAIN_SPRITE_DIR + CS16BASE::WEAPON_LIST_DIR + SPR_CAT + self.pev.classname + ".txt" );
     }
 
     bool GetItemInfo( ItemInfo& out info )
@@ -311,7 +310,7 @@ string GetName()
 void Register()
 {
     CS16BASE::RegisterCWEntity( "CS16_G3SG1::", "weapon_g3sg1", GetName(), GetAmmoName(), "G3SG1_MAG", 
-        CS16BASE::MAIN_CSTRIKE_DIR + SPR_CAT, (CS16BASE::ShouldUseCustomAmmo) ? AMMO_TYPE : CS16BASE::DF_AMMO_357 );
+        CS16BASE::WEAPON_LIST_DIR + SPR_CAT, (CS16BASE::ShouldUseCustomAmmo) ? AMMO_TYPE : CS16BASE::DF_AMMO_357 );
 }
 
 }

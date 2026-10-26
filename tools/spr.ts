@@ -1,4 +1,4 @@
-// GoldSrc sprite (SPR v2) decoder.
+// GoldSrc sprite (SPR v2) decoder and encoder.
 // Usage: deno run -R tools/spr.ts <file.spr>                                  (prints JSON)
 //        deno run -R --allow-run=magick tools/spr.ts <file.spr> <frame> <out.png> [x y w h]
 // Self-check: deno test tools/spr.ts
@@ -86,6 +86,60 @@ export function parseSpr(bytes: Uint8Array) {
 }
 
 export type Sprite = ReturnType<typeof parseSpr>;
+
+// What encodeSpr needs: a decoded sprite, or one built in memory. The frame and palette counts come from the arrays.
+export type SpriteSource = {
+  header: Pick<
+    Sprite["header"],
+    "type" | "textureFormat" | "boundingRadius" | "width" | "height" | "beamLength" | "syncType"
+  >;
+  palette: Uint8Array;
+  frames: SpriteFrame[];
+};
+
+// Writes the fields in dsprite_t / dspriteframe_t order, so encodeSpr(parseSpr(bytes)) gives the same bytes back.
+// Frames are always single: a HUD draw shows no frame of a group (R_GetSpriteFrame, Sven hw.so 0x120390).
+export function encodeSpr({ header, palette, frames }: SpriteSource): Uint8Array {
+  const code = (names: string[], name: string) => {
+    if (!names.includes(name)) throw new Error(`cannot encode sprite value "${name}"`);
+    return names.indexOf(name);
+  };
+  if (frames.some(({ interval }) => interval !== 0)) throw new Error("cannot encode frame groups");
+  const framesSize = frames.reduce((size, { pixels }) => size + INT_SIZE + FRAME_HEADER_SIZE + pixels.length, 0);
+  const bytes = new Uint8Array(HEADER_SIZE + SHORT_SIZE + palette.length + framesSize);
+  const view = new DataView(bytes.buffer);
+  let cursor = 0;
+  const int = (value: number) => {
+    view.setInt32(cursor, value, true);
+    cursor += INT_SIZE;
+  };
+  const float = (value: number) => {
+    view.setFloat32(cursor, value, true);
+    cursor += INT_SIZE;
+  };
+  const raw = (data: Uint8Array) => {
+    bytes.set(data, cursor);
+    cursor += data.length;
+  };
+
+  raw(new TextEncoder().encode(IDENT_SPRITE));
+  [SPRITE_VERSION, code(SPRITE_TYPES, header.type), code(TEXTURE_FORMATS, header.textureFormat)].forEach(int);
+  float(header.boundingRadius);
+  [header.width, header.height, frames.length].forEach(int);
+  float(header.beamLength);
+  int(header.syncType);
+  view.setInt16(cursor, palette.length / RGB_SIZE, true);
+  cursor += SHORT_SIZE;
+  raw(palette);
+  frames.forEach(({ origin, width, height, pixels }) => {
+    if (pixels.length !== width * height) {
+      throw new RangeError(`frame has ${pixels.length} pixels, not ${width}x${height}`);
+    }
+    [FRAME_SINGLE, ...origin, width, height].forEach(int);
+    raw(pixels);
+  });
+  return bytes;
+}
 
 // Additive texels become straight alpha (alpha = brightest channel), so the PNG over black matches the additive blend.
 export function frameRgba(sprite: Sprite, frame: SpriteFrame): Uint8Array {
@@ -183,6 +237,7 @@ Deno.test("decodes a synthetic sprite in every texture format", async () => {
   };
   const sprite = parseSpr(bytes);
   assertEquals(sprite.header.trailingBytes, 0);
+  assertEquals(encodeSpr(sprite), bytes);
   assertEquals(sprite.frames.map(({ origin, width, height }) => ({ origin, width, height })), [
     { origin: [-1, 1], width: 2, height: 1 },
   ]);
