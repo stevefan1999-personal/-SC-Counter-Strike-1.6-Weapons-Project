@@ -3,6 +3,7 @@
 #include "killfeed"
 #include "../DamageMoneyScore"
 #include "hud/hud"
+#include "hud/status"
 
 void PluginInit()
 {
@@ -53,6 +54,7 @@ void PluginInit()
     DMS_PluginInit();
     // Shared CS 1.6 HUD foundation: element registry, native HUD hiding, screen size (docs/hud-architecture.md).
     CS16HUD::PluginInit();
+    CS16HUD::RegisterStatus();
 
     g_Hooks.RegisterHook( Hooks::Player::PlayerSpawn,    @CS16_PlayerSpawn );
     g_Hooks.RegisterHook( Hooks::Player::PlayerKilled,   @CS16KILLFEED::OnPlayerKilled );
