@@ -470,3 +470,8 @@ metamod-install target=server_dir profile='release': (metamod-build profile)
 # Start a dedicated server with metamod (install it first with metamod-install): just server-metamod 27015 testcenter
 [group('metamod')]
 server-metamod port='27015' map='hl_c01_a1' *args: (server port map '-dll' metamod_dll args)
+# Measure FOV captures as JSON (view-model boxes, scope geometry, focal length): just fov-metrics .e2e/fov/cs16-1600x900
+[group('fixture')]
+[no-cd]
+fov-metrics +dirs:
+  @deno run -A '{{justfile_directory()}}/tests/fixture/fov-metrics.ts' {{dirs}}
