@@ -96,7 +96,9 @@ client log has no missing sprite.
 
 The offscreen test client uses the player's own `svencoop_downloads`. A test run that offers an intermediate version of
 a file leaves that version in the player's cache. After this work I removed the files that my intermediate run had put
-there (27 lists under `sprites/cs16/icons/` and `sprites/cs16/640hud17.spr`, `640hud18.spr`).
+there (27 lists under `sprites/cs16/icons/` and `sprites/cs16/640hud17.spr`, `640hud18.spr`). The review removed the
+whole `sprites/cs16/icons/` folder from that cache at the end, as before this work, so the next connection downloads the
+current files.
 
 ## 3. Crosshair
 
@@ -131,6 +133,16 @@ The menu columns before and after the change (slots 2, 4, 6 and 8; each pair is 
 Elites, UMP45, FAMAS, Galil and the selected M249 change visibly:
 
 ![Sven weapon menu before and after](weapon-icons/menu-before-after.png)
+
+Pixel check of the Sven shots (independent review, client with an empty `sprites/cs16/icons/` cache, so it downloaded
+every list and sheet from the server). For each selected weapon, the residual `shot − background` (a shot with the menu
+closed) was fitted with the additive model `selection frame + weapon_s icon`, both times (100,130,200)/255; the frame is
+Sven's own `640hud3 0 180 170 45`. Among the `weapon` and `weapon_s` pictures of all 27 lists, the expected one fits
+best for all 27 weapons (the next other picture has 2 to 4 times the error, except where CS uses the same picture for
+both keys). The engine brightens dark texels (10 → 16, 20 → 27 on red), so the linear fit leaves an RMS of 6 to 7; with
+one lookup table for that transfer, shared by all weapons, the RMS is 0.6 to 1.5 levels and 96 to 99.5 % of the samples
+are within ±2. The 19 unselected rows in the same shots fit their `weapon` picture best. Thus the client draws the CS
+rects 1:1, with no offset.
 
 `tools/audit.ts` (run on this branch, output not committed) gives mean |Δ| 0 against CS 1.6 for all 81 `weapon`,
 `weapon_s` and `ammo` crops of the 27 lists, and reports no rect outside its sheet and no missing file.
