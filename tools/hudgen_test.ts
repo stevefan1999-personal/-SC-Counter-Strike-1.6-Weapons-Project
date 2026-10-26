@@ -116,7 +116,7 @@ const CONTRACT: Record<
     content: [72, 25],
     layers: (value) => [...digitLayers(String(value).padStart(3), 0), { fill: { x: 70, y: 0, width: 2, height: 25 } }],
   },
-  "reserve_hi.spr": {
+  "two_cells.spr": {
     frames: 111,
     size: [64, 32],
     content: [40, 25],
@@ -129,12 +129,6 @@ const CONTRACT: Record<
     layers: (digit) => digit < 10 ? digitLayers(String(digit), 0) : [],
   },
   "money_hi.spr": { frames: 256, size: [128, 32], content: [78, 25], layers: moneyLayers("dollar", 18) },
-  "money_lo.spr": {
-    frames: 111,
-    size: [64, 32],
-    content: [40, 25],
-    layers: (frame) => digitLayers(groupText(frame), 0),
-  },
   "money_delta_plus_hi.spr": { frames: 256, size: [128, 32], content: [77, 25], layers: moneyLayers("plus", 17) },
   "money_delta_minus_hi.spr": { frames: 256, size: [128, 32], content: [73, 25], layers: moneyLayers("minus", 13) },
   "flashlight.spr": {

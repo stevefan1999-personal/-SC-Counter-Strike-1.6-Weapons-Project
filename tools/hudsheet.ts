@@ -116,7 +116,7 @@ const ammo = (clip: number, reserve: number) =>
   element(`ammo ${clip} | ${reserve}`, [
     ["clip.spr", clip, 0],
     [
-      "reserve_hi.spr",
+      "two_cells.spr",
       reserve >= 100 ? Math.floor(reserve / 10) : reserve >= 10 ? 100 + Math.floor(reserve / 10) : 110,
       82,
     ],
@@ -134,7 +134,7 @@ const money = (amount: number, sign: keyof typeof moneyFiles = "$") => {
   const [file, signWidth] = moneyFiles[sign];
   return element(`money ${sign}${amount}`, [
     [String(file), Math.floor(amount / 100), 0],
-    ["money_lo.spr", amount >= 10 ? amount % 100 : 100 + amount, Number(signWidth) + 60],
+    ["two_cells.spr", amount >= 10 ? amount % 100 : 100 + amount, Number(signWidth) + 60],
   ]);
 };
 

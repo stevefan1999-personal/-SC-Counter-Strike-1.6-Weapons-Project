@@ -1,7 +1,7 @@
 # CS 1.6 HUD sprites (`sprites/cs16/hud/`)
 
 `just install` runs `tools/hudgen.ts`. The tool reads `sprites/640hud7.spr` and `sprites/hud.txt` from `CSTRIKE_DIR` and
-writes 15 sprites to `<addon>/sprites/cs16/hud/`. Git does not contain these sprites. The same input always gives the
+writes 14 sprites to `<addon>/sprites/cs16/hud/`. Git does not contain these sprites. The same input always gives the
 same bytes.
 
 Each sprite holds one HUD element (or one part of it) for every value, so a plugin shows a CS number with one
@@ -15,28 +15,27 @@ base icon, and CS adds the two draws after the colour multiply (see
 `width` and `height` (see [Element parameters](#element-parameters)). The frames are larger (power of two, black outside
 the content).
 
-| File                       | Frames | Frame number                    | Content | Frame  | CS box (left, top)                     | x, y to send        | Raw bytes | bzip2  |
-| -------------------------- | ------ | ------------------------------- | ------- | ------ | -------------------------------------- | ------------------- | --------- | ------ |
-| `health.spr`               | 256    | health                          | 82×25   | 128×32 | (12, H−37)                             | 12, −12             | 1,054,506 | 20,275 |
-| `armor.spr`                | 256    | armour (vest)                   | 84×25   | 128×32 | (W/5, H−37)                            | 0.2 (fraction), −12 | 1,054,506 | 20,682 |
-| `armor_full.spr`           | 101    | min(armour, 100), vest          | 24×25   | 32×32  | (W/5, H−37)                            | 0.2 (fraction), −12 | 106,254   | 5,887  |
-| `armor_helmet.spr`         | 256    | armour (vest and helmet)        | 84×25   | 128×32 | (W/5, H−37)                            | 0.2 (fraction), −12 | 1,054,506 | 20,717 |
-| `armor_helmet_full.spr`    | 101    | min(armour, 100), helmet        | 24×25   | 32×32  | (W/5, H−37)                            | 0.2 (fraction), −12 | 106,254   | 7,064  |
-| `clip.spr`                 | 256    | clip                            | 72×25   | 128×32 | (W−184, H−37)                          | −112, −12           | 1,054,506 | 20,268 |
-| `reserve_hi.spr`           | 111    | two-cell group, reserve         | 40×25   | 64×32  | (W−102, H−37); no clip: (W−104, H−37)  | −62 (−64), −12      | 230,358   | 12,034 |
-| `reserve_lo.spr`           | 11     | reserve % 10; 10 = blank        | 20×25   | 32×32  | (W−62, H−37); no clip: (W−64, H−37)    | −42 (−44), −12      | 12,294    | 3,406  |
-| `money_hi.spr`             | 256    | money / 100                     | 78×25   | 128×32 | (W−134, H−75)                          | −56, −50            | 1,054,506 | 20,506 |
-| `money_lo.spr`             | 111    | two-cell group, money and delta | 40×25   | 64×32  | (W−56, H−75); delta row: (W−56, H−112) | −16, −50 (−87)      | 230,358   | 12,034 |
-| `money_delta_plus_hi.spr`  | 256    | delta / 100, delta > 0          | 77×25   | 128×32 | (W−133, H−112)                         | −56, −87            | 1,054,506 | 20,370 |
-| `money_delta_minus_hi.spr` | 256    | −delta / 100, delta < 0         | 73×25   | 128×32 | (W−129, H−112)                         | −56, −87            | 1,054,506 | 20,656 |
-| `flashlight.spr`           | 2      | on ? 1 : 0                      | 48×32   | 64×32  | (W−48, 16)                             | 1.0 (fraction), 16  | 4,946     | 1,397  |
-| `flashlight_energy.spr`    | 101    | battery %                       | 48×32   | 64×32  | (W−48, 16)                             | 1.0 (fraction), 16  | 209,678   | 5,555  |
-| `fill.spr`                 | 1      | 0                               | 64×64   | 64×64  | any (crosshair lines, bars)            | –                   | 4,926     | 596    |
+| File                       | Frames | Frame number                                                  | Content | Frame  | CS box (left, top)                                                                    | x, y to send                                           | Raw bytes | bzip2  |
+| -------------------------- | ------ | ------------------------------------------------------------- | ------- | ------ | ------------------------------------------------------------------------------------- | ------------------------------------------------------ | --------- | ------ |
+| `health.spr`               | 256    | health                                                        | 82×25   | 128×32 | (12, H−37)                                                                            | 12, −12                                                | 1,054,506 | 20,275 |
+| `armor.spr`                | 256    | armour (vest)                                                 | 84×25   | 128×32 | (W/5, H−37)                                                                           | 0.2 (fraction), −12                                    | 1,054,506 | 20,682 |
+| `armor_full.spr`           | 101    | min(armour, 100), vest                                        | 24×25   | 32×32  | (W/5, H−37)                                                                           | 0.2 (fraction), −12                                    | 106,254   | 5,887  |
+| `armor_helmet.spr`         | 256    | armour (vest and helmet)                                      | 84×25   | 128×32 | (W/5, H−37)                                                                           | 0.2 (fraction), −12                                    | 1,054,506 | 20,717 |
+| `armor_helmet_full.spr`    | 101    | min(armour, 100), helmet                                      | 24×25   | 32×32  | (W/5, H−37)                                                                           | 0.2 (fraction), −12                                    | 106,254   | 7,064  |
+| `clip.spr`                 | 256    | clip                                                          | 72×25   | 128×32 | (W−184, H−37)                                                                         | −112, −12                                              | 1,054,506 | 20,268 |
+| `reserve_lo.spr`           | 11     | reserve % 10; 10 = blank                                      | 20×25   | 32×32  | (W−62, H−37); no clip: (W−64, H−37)                                                   | −42 (−44), −12                                         | 12,294    | 3,406  |
+| `money_hi.spr`             | 256    | money / 100                                                   | 78×25   | 128×32 | (W−134, H−75)                                                                         | −56, −50                                               | 1,054,506 | 20,506 |
+| `two_cells.spr`            | 111    | two-cell group: reserve high cells, money and delta low cells | 40×25   | 64×32  | reserve (W−102, H−37), no clip (W−104, H−37); money (W−56, H−75); delta (W−56, H−112) | reserve −62 (−64), −12; money −16, −50; delta −16, −87 | 230,358   | 12,034 |
+| `money_delta_plus_hi.spr`  | 256    | delta / 100, delta > 0                                        | 77×25   | 128×32 | (W−133, H−112)                                                                        | −56, −87                                               | 1,054,506 | 20,370 |
+| `money_delta_minus_hi.spr` | 256    | −delta / 100, delta < 0                                       | 73×25   | 128×32 | (W−129, H−112)                                                                        | −56, −87                                               | 1,054,506 | 20,656 |
+| `flashlight.spr`           | 2      | on ? 1 : 0                                                    | 48×32   | 64×32  | (W−48, 16)                                                                            | 1.0 (fraction), 16                                     | 4,946     | 1,397  |
+| `flashlight_energy.spr`    | 101    | battery %                                                     | 48×32   | 64×32  | (W−48, 16)                                                                            | 1.0 (fraction), 16                                     | 209,678   | 5,555  |
+| `fill.spr`                 | 1      | 0                                                             | 64×64   | 64×64  | any (crosshair lines, bars)                                                           | –                                                      | 4,926     | 596    |
 
-There is no `money_delta_lo.spr`. The last two cells of the delta row are the same as for money, so the delta row uses
-`money_lo.spr`.
+`two_cells.spr` serves three elements: the first two cells of the reserve and the last two cells of money and of the
+delta row. They show the same frames, so separate files would be byte-identical downloads and textures.
 
-Totals: 8,286,610 bytes raw, 191,447 bytes with `bzip2 -9`. The server can compress in-game downloads with bzip2
+Totals: 8,056,252 bytes raw, 179,413 bytes with `bzip2 -9`. The server can compress in-game downloads with bzip2
 (`sv_filetransfercompression`, `engine_i686.so` "Creating compressed version of file %s"). An HTTP download
 (`sv_downloadurl`) sends the raw files.
 
@@ -45,21 +44,22 @@ Totals: 8,286,610 bytes raw, 191,447 bytes with `bzip2 -9`. The server can compr
 All divisions are integer divisions. Values outside the range are clamped, as CS sends health, armour and ammo in bytes.
 
 ```text
-health       frame = clamp(health, 0, 255)
-armour       frame = clamp(armour, 0, 255)                  armor_helmet.spr if the player has a helmet
-             full  = clamp(armour, 0, 100)                  armor_full.spr or armor_helmet_full.spr, same box
-clip         frame = clamp(clip, 0, 255)                    only for weapons with a clip
-reserve      R  = clamp(reserve, 0, 255)
-             hi = R >= 100 ? R / 10 : (R >= 10 ? 100 + R / 10 : 110)
-             lo = R % 10
-money        M  = clamp(money, 0, 25599)
-             hi = M / 100
-             lo = M >= 10 ? M % 100 : 100 + M
-money delta  D  = clamp(abs(delta), 0, 25599)               plus file if delta > 0, minus file if delta < 0
-             hi = D / 100
-             lo = D >= 10 ? D % 100 : 100 + D               on money_lo.spr
-flashlight   frame = on ? 1 : 0                             flashlight.spr
-             energy = clamp(battery, 0, 100)                flashlight_energy.spr, same box
+health       frame  = clamp(health, 0, 255)                               health.spr
+armour       frame  = clamp(armour, 0, 255)                               armor.spr, or armor_helmet.spr with a helmet
+             full   = clamp(armour, 0, 100)                               armor_full.spr or armor_helmet_full.spr
+clip         frame  = clamp(clip, 0, 255)                                 clip.spr, only for weapons with a clip
+reserve      R      = clamp(reserve, 0, 255)
+             hi     = R >= 100 ? R / 10 : (R >= 10 ? 100 + R / 10 : 110)  two_cells.spr
+             lo     = R % 10                                              reserve_lo.spr
+money        M      = clamp(money, 0, 25599)
+             hi     = M / 100                                             money_hi.spr
+             lo     = M >= 10 ? M % 100 : 100 + M                         two_cells.spr
+money delta  D      = clamp(abs(delta), 0, 25599)
+             hi     = D / 100                                             money_delta_plus_hi.spr if delta > 0,
+                                                                          money_delta_minus_hi.spr if delta < 0
+             lo     = D >= 10 ? D % 100 : 100 + D                         two_cells.spr
+flashlight   frame  = on ? 1 : 0                                          flashlight.spr
+             energy = clamp(battery, 0, 100)                              flashlight_energy.spr
 ```
 
 `tools/hudgen_test.ts` checks that these formulas give the cells that CS draws, for every money value from 0 to 25599
@@ -99,7 +99,7 @@ the `hud.txt` rects of `640hud7.spr`. Cells are 20×25, as `number_0`.
 | `armor.spr`, `armor_helmet.spr`           | `suit_empty` (24,25) or `suithelmet_empty` (24,124) at (0,0). Three cells at x 24, 44, 64.                                                                                  |
 | `armor_full.spr`, `armor_helmet_full.spr` | Frame v: rows `off`…23 of `suit_full` (0,25) or `suithelmet_full` (0,124) at y = `off`, `off = (int)(24 * (100 − v) / 100)`. Frame 0 is empty.                              |
 | `clip.spr`                                | Three cells at x 0, 20, 40. A white 2×25 bar at x 70 (CS `FillRGBA`, dw/10 wide, dw/2 after the digits).                                                                    |
-| `reserve_hi.spr`, `money_lo.spr`          | Two-cell group: frame f = 0…99 draws both digits of f (also a tens 0), f = 100…109 draws a blank cell and the digit f − 100, f = 110 draws nothing.                         |
+| `two_cells.spr`                           | Two-cell group: frame f = 0…99 draws both digits of f (also a tens 0), f = 100…109 draws a blank cell and the digit f − 100, f = 110 draws nothing.                         |
 | `reserve_lo.spr`                          | Frame d = 0…9: the digit d. Frame 10: nothing.                                                                                                                              |
 | `money_hi.spr`                            | `dollar` (192,25,18,25) at (0,0). Cells at x 18, 38, 58: the first three cells of the `"%5i"` field of `100 × frame` (blank before the first digit, all blank for frame 0). |
 | `money_delta_plus_hi.spr`                 | `plus` (223,25,17,23) at (0,0), cells at x 17, 37, 57, as `money_hi.spr`.                                                                                                   |
@@ -169,9 +169,9 @@ by 0.5. Every 1 px shift of step 1 gives 14.6 or more.
 
 ## Limits and costs
 
-- HUD sprite paths: 15 of the 256 that the engine allows (`SPR_Load`).
-- Textures: each frame is one GL texture, 2,331 in total. Sven keeps its textures in a growing list (`hw.so` 0x12B8C0)
-  and has no fixed count. When all files are loaded, they use 31.4 MiB of texture memory (RGBA8).
+- HUD sprite paths: 14 of the 256 that the engine allows (`SPR_Load`).
+- Textures: each frame is one GL texture, 2,220 in total. Sven keeps its textures in a growing list (`hw.so` 0x12B8C0)
+  and has no fixed count. When all files are loaded, they use 30.5 MiB of texture memory (RGBA8).
 - `left` and `top` are bytes and `frame` is a byte. All values in this document fit.
 
 ## Changes

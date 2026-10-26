@@ -203,13 +203,6 @@ export function hudSprites(sheet: Sheet): HudSprite[] {
       },
     };
   };
-  const twoCellGroup = (file: string): HudSprite => ({
-    file,
-    frames: TWO_CELL_BLANK + 1,
-    content: { width: 2 * cell.width, height: cell.height },
-    draw: (canvas, frame) => digits(canvas, twoCells(frame), 0),
-  });
-
   // CS flashlight: casing, the beam right of it while on, the energy bar cut (int)((1 - bat) * 32) px from the left.
   // The energy overlaps the casing above white, so it is its own sprite in the same box (Canvas.add).
   const [casing, energy, beam] = ["flash_empty", "flash_full", "flash_beam"].map((name) => sheet.rect(name));
@@ -238,7 +231,13 @@ export function hudSprites(sheet: Sheet): HudSprite[] {
         canvas.fill(bar);
       },
     },
-    twoCellGroup("reserve_hi.spr"),
+    // The first two reserve cells and the last two money and delta cells are the same frames, so one file serves all.
+    {
+      file: "two_cells.spr",
+      frames: TWO_CELL_BLANK + 1,
+      content: { width: 2 * cell.width, height: cell.height },
+      draw: (canvas, frame) => digits(canvas, twoCells(frame), 0),
+    },
     {
       file: "reserve_lo.spr",
       frames: DIGITS + 1,
@@ -246,7 +245,6 @@ export function hudSprites(sheet: Sheet): HudSprite[] {
       draw: (canvas, digit) => digits(canvas, digit < DIGITS ? String(digit) : BLANK, 0),
     },
     moneyHigh("money_hi.spr", "dollar"),
-    twoCellGroup("money_lo.spr"),
     moneyHigh("money_delta_plus_hi.spr", "plus"),
     moneyHigh("money_delta_minus_hi.spr", "minus"),
     {
