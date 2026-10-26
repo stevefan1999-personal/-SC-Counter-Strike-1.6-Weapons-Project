@@ -105,7 +105,9 @@ reports only writes through farm symlinks.
 7. Steps 3 to 6 run for these captures: a chest kill (`m4a1`), a head kill (`headshot`), and a head kill with three
    extra passive bots that F9 kills 2 s later (`stack4`). Then five passive bots die together through F9 (`max4`). At
    the end, bots fight with `bot_zombie 0`, `bot_difficulty 3` and `mp_forcerespawn 1`. The script saves a frame when
-   four deaths happen within 5 s and the player has been alive for 3 s (`fight`).
+   four deaths happen within 5 s and the player has been alive for 3 s (`fight`). This can fail: in one 2560x1440 run,
+   39 deaths in 240 s never met the condition. Then the script writes no `fight` frame, records
+   `"fight": { "captured": false }` in the timeline, prints a warning and keeps the other captures.
 
 ## 3. Rerun
 

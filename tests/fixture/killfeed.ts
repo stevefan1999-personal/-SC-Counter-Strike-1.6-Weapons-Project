@@ -8,7 +8,7 @@
 //   m4a1, headshot  one kill each, watched until the notice expires
 //   stack4          a kill, then 2 s later bot_kill on three passive bots: four lines, aging one by one
 //   max4            bot_kill on five passive bots: five deaths, four lines
-//   fight           bots fight each other and the player: four lines in both team colours
+//   fight           bots fight each other and the player: four lines in both team colours (best effort)
 // Every capture except "fight" has a <name>-before.png of the same view without notices for feed-metrics.ts.
 // bot_kill comes from a key bind: notices that arrive while the console is open expire with older ones.
 import { type Box, changedPixels, type Frame, grab, runs, save } from "./frame.ts";
@@ -349,9 +349,20 @@ while (!fight && Date.now() < fightDeadline) {
   else await sleep(40);
 }
 await game.console("bot_kick");
-if (!fight) throw new Error("bots never had four deaths inside one notice lifetime");
-await save(fight, fileFor("fight"));
-timeline.fight = { deathsInWindow: deaths.filter((at) => deaths.at(-1)! - at < FIGHT_WINDOW_MS).length };
+// The fight is random and only a visual reference, so a miss must not cost the deterministic captures above.
+// Remove an older run's fight frame so the reference set never mixes runs.
+await Deno.remove(fileFor("fight")).catch((error) => {
+  if (!(error instanceof Deno.errors.NotFound)) throw error;
+});
+if (fight) {
+  await save(fight, fileFor("fight"));
+  timeline.fight = { deathsInWindow: deaths.filter((at) => deaths.at(-1)! - at < FIGHT_WINDOW_MS).length };
+} else {
+  timeline.fight = { captured: false, deaths: deaths.length };
+  console.error(
+    `warning: no fight frame; ${deaths.length} deaths in ${FIGHT_TIMEOUT_MS / 1000} s never left four lines`,
+  );
+}
 
 await Deno.writeTextFile(`${outDir}/cs16-killfeed-${tag}-timeline.json`, JSON.stringify(timeline, null, 2));
 console.log(JSON.stringify(timeline, (key, value) => (key === "samples" ? undefined : value), 2));
