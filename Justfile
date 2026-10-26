@@ -470,6 +470,15 @@ metamod-install target=server_dir profile='release': (metamod-build profile)
 # Start a dedicated server with metamod (install it first with metamod-install): just server-metamod 27015 testcenter
 [group('metamod')]
 server-metamod port='27015' map='hl_c01_a1' *args: (server port map '-dll' metamod_dll args)
+
+# Capture CS 1.6's view models, scopes and turned views on de_dust2 into <out>-<WxH> (docs/fov.md): just fixture-fov :96 2560x1440
+[group('fixture')]
+fixture-fov display=fixture_display resolution='1600x900' port='27049' clientport='27007' root=fixture_root out=(state_root / 'fov' / 'cs16'): (fixture-root root regamedll_dir 'de_dust2') (fixture-start display resolution port clientport 'de_dust2' root)
+  #!/usr/bin/env bash
+  set -euo pipefail
+  trap "just fixture-stop '{{display}}' '{{root}}'" EXIT
+  deno run -A '{{justfile_directory()}}/tests/fixture/fov.ts' '{{display}}' '{{resolution}}' '{{out}}-{{resolution}}'
+
 # Measure FOV captures as JSON (view-model boxes, scope geometry, focal length): just fov-metrics .e2e/fov/cs16-1600x900
 [group('fixture')]
 [no-cd]
