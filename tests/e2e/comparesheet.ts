@@ -1,8 +1,8 @@
 // Side-by-side comparison sheets of the CS 1.6 HUD (docs/hud.md, "Compared with CS 1.6"): Counter-Life on the left,
 // CS 1.6 on the right, the same crop of both screenshots at 2x without smoothing, with a caption over each side.
 // Usage: deno run -A tests/e2e/comparesheet.ts <WxH> <shots dir> <hud label> <elements label> <reference dir> <out dir>
-// The shots come from just e2e-hud <port> <hud label>, just e2e-elements <port> <elements label> and
-// just e2e-killfeed <port> weapon_m4a1 head; the references from .e2e/reference (the CS fixture captures).
+// The shots come from just e2e-hud <port> <hud label>, just e2e-elements <port> <elements label>,
+// just e2e-killfeed <port> weapon_m4a1 head and just e2e-hudproof; the references from .e2e/reference (the CS fixture).
 
 export type Region = { x: number; y: number; width: number; height: number };
 export type Sheet = { name: string; ours: string; cs: string; region: Region };
@@ -17,9 +17,13 @@ const CAPTION_COLOUR = "#e0e0e0";
 const FONT = "DejaVu-Sans";
 // The CS 1.6 screenshots of the reference state (health 100, armour 0, $800, USP 12 | 24), by screen size.
 const HUD_REFERENCES: Record<string, string> = { "1600x900": "cs16-ref-hud.png", "2560x1440": "cs16-1440-hud.png" };
+// The CS 1.6 weapon menu, against the native Sven menu that just e2e-hudproof opens with the slot key 2.
+const MENU_REFERENCES: Record<string, string> = { "1600x900": "cs16-ref-weaponmenu.png" };
+const MENU_REGION: Region = { x: 0, y: 0, width: 420, height: 180 };
 
 // Every sheet of one screen size. Regions cover the CS parts with a margin: health and armour (W/5 plus the armour
-// digits), money and ammo, the crosshair at its widest spread, the first kill-feed row and all four rows.
+// digits), money and ammo, the crosshair at its widest spread, the first kill-feed row and all four rows, and the
+// weapon menu where a CS reference of it exists.
 export function sheets(width: number, height: number, hudLabel: string, elementsLabel: string): Sheet[] {
   const size = `${width}x${height}`;
   const scaled = (units: number) => Math.floor(units * height / SCALE_BASE_HEIGHT);
@@ -32,6 +36,7 @@ export function sheets(width: number, height: number, hudLabel: string, elements
     height: scaled(16) * (rows + 1),
   });
   const reference = HUD_REFERENCES[size];
+  const menu = MENU_REFERENCES[size];
   const elements = `${elementsLabel}-reference.png`;
   return [
     {
@@ -71,6 +76,7 @@ export function sheets(width: number, height: number, hudLabel: string, elements
       cs: `cs16-killfeed-${size}-stack4.png`,
       region: feed(4),
     },
+    ...(menu ? [{ name: "weapon-menu", ours: "hudproof-weapon-menu.png", cs: menu, region: MENU_REGION }] : []),
   ];
 }
 
