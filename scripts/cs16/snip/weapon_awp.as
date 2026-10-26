@@ -163,8 +163,8 @@ class weapon_awp : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         }
         else if( WeaponZoomMode == CS16BASE::MODE_FOV_2X_ZOOM )
         {
-            ApplyFoVSniper( CS16BASE::DEFAULT_2X_ZOOM_VALUE, AIM_SPEED );
-            self.SendWeaponAnim( CS16BASE::SCP_IDLE_FOV15, 0, GetBodygroup() );
+            ApplyFoVSniper( CS16BASE::AWP_2X_ZOOM_VALUE, AIM_SPEED );
+            self.SendWeaponAnim( CS16BASE::SCP_IDLE_FOV10, 0, GetBodygroup() );
         }
     }
 
@@ -252,10 +252,10 @@ class weapon_awp : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
             {
                 WeaponZoomMode = CS16BASE::MODE_FOV_2X_ZOOM;
 
-                ApplyFoVSniper( CS16BASE::DEFAULT_2X_ZOOM_VALUE, AIM_SPEED );
+                ApplyFoVSniper( CS16BASE::AWP_2X_ZOOM_VALUE, AIM_SPEED );
 
                 m_pPlayer.pev.viewmodel = CS16BASE::SCOPE_MODEL;
-                self.SendWeaponAnim( CS16BASE::SCP_IDLE_FOV15, 0, GetBodygroup() );
+                self.SendWeaponAnim( CS16BASE::SCP_IDLE_FOV10, 0, GetBodygroup() );
                 break;
             }
             case CS16BASE::MODE_FOV_2X_ZOOM:
