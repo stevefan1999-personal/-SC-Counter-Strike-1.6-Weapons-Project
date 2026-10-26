@@ -510,6 +510,30 @@ async function auditReferences(): Promise<string[]> {
       return `| ${where} | ${flash} | ${sprite} | ${resolved?.label ?? MISSING} | ${verdict} |`;
     }));
   }))).flat();
+  // A weapon script's animation enum indexes its view model's sequences; MAG_BDYGRP picks a submodel of the magazine
+  // model that its ammo entity shows. Both print as name=target so a wrong index stands out.
+  const indexRows = await Promise.all(viewModels.map(async ({ where, text, viewModel }) => {
+    const labels = (parseMdl(await Deno.readFile(join(repo, viewModel))).sequences ?? []).map((sequence) =>
+      sequence.label
+    );
+    const entries = (text.match(/enum\s+\w*Animations?\w*\s*\{([^}]*)\}/)?.[1] ?? "").replace(/\/\/.*$/gm, "").split(
+      ",",
+    )
+      .map((entry) => entry.trim()).filter(Boolean)
+      .reduce<{ name: string; value: number }[]>((all, entry) => {
+        const [name, value] = entry.split("=").map((part) => part.trim());
+        return [...all, { name, value: value === undefined ? (all.at(-1)?.value ?? -1) + 1 : Number(value) }];
+      }, []);
+    const magazine = text.match(/A_MODEL\s*=\s*"([^"]+)"/)?.[1];
+    const bodygroup = Number(text.match(/MAG_BDYGRP\s*=\s*(\d+)/)?.[1]);
+    const submodel = magazine && Number.isInteger(bodygroup)
+      ? `${bodygroup}=${
+        parseMdl(await Deno.readFile(join(repo, magazine))).bodyParts?.[0]?.models[bodygroup]?.name ?? MISSING
+      }`
+      : "-";
+    const sequences = entries.map(({ name, value }) => `${name}=${labels[value] ?? MISSING}`).join(", ");
+    return `| ${where} | ${sequences} | ${submodel} |`;
+  }));
   // Sven's client widens a zero width/height HUD sprite rect to the sprite's right/bottom edge
   // (CHud::FixupSpriteRect, client.so 0xd5002), so such a rect draws the rest of the sheet, not one icon.
   const zeroRects = codeLines.filter(({ code }) => /\.(width|height)\s*=\s*0\s*;/.test(code))
@@ -529,6 +553,11 @@ async function auditReferences(): Promise<string[]> {
     "| model (script) | event options | sprite | resolves to | vs CS 1.6 |",
     "| --- | --- | --- | --- | --- |",
     ...muzzleRows,
+    "",
+    "#### Animation enums and magazine body groups",
+    "| model (script) | enum value = view model sequence | MAG_BDYGRP = mags.mdl submodel |",
+    "| --- | --- | --- |",
+    ...indexRows,
     "",
     "#### HUD sprite rects with a zero width or height",
     ...(zeroRects.length ? zeroRects : ["- none"]),
