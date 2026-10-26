@@ -24,7 +24,7 @@ enum CS16_Scout_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/scout/w_scout.mdl";
-string V_MODEL      = "models/cs16/wpn/scout/v_scout.mdl";
+string V_MODEL      = "models/cs16/wpn/scout/v_scout_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/scout/p_scout.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 4;

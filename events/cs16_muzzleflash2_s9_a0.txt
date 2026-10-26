@@ -1,0 +1,9 @@
+// CS 1.6 R_MuzzleFlash type 31: muzzleflash2.spr is 64 units wide at scale 1, so 19.2 units. Sven draws 2 x scale units; 9 matched the CS AWP flash on screen better than 10.
+attachment 0
+spritename sprites/cs16/muzzle/muzzleflash2.spr
+scale 9
+colorR 255
+colorG 255
+colorB 255
+rendermode 5
+transparency 255

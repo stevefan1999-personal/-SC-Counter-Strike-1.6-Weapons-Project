@@ -37,7 +37,7 @@ enum CS16_Elites_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/elite/w_elite.mdl";
-string V_MODEL      = "models/cs16/wpn/elite/v_elite.mdl";
+string V_MODEL      = "models/cs16/wpn/elite/v_elite_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/elite/p_elite.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 18;

@@ -24,7 +24,7 @@ enum CS16_M249_Animation
 
 // Models
 string W_MODEL      = "models/cs16/wpn/m249/w_m249.mdl";
-string V_MODEL      = "models/cs16/wpn/m249/v_m249.mdl";
+string V_MODEL      = "models/cs16/wpn/m249/v_m249_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/m249/p_m249.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 5;

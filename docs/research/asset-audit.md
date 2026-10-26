@@ -19,7 +19,7 @@ from how the Sven client draws them and (**Added:**) from how Sven reads FOV val
 | Rank | Defect                                                                                                                                                                                  | Where it shows                                                                               | Status                                     |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | 1    | The kill feed drew a 64×176 slice of `640hud1.spr` (a column of 13 icons) instead of one kill icon                                                                                      | Top right, on every player or monster kill (`cs16_register.as:52-53`)                        | Fixed, `95ae240`                           |
-| 2    | 15 view models fire Sven's Half-Life muzzle flash sprite, not the CS 1.6 one                                                                                                            | Every shot of all pistols, M3, XM1014, MAC-10, MP5, TMP, UMP45, AWP, Scout and silenced M4A1 | Not fixed: needs a model event edit        |
+| 2    | 15 view models fire Sven's Half-Life muzzle flash sprite, not the CS 1.6 one                                                                                                            | Every shot of all pistols, M3, XM1014, MAC-10, MP5, TMP, UMP45, AWP, Scout and silenced M4A1 | Fixed, [muzzle-flash.md](muzzle-flash.md)  |
 | 3    | The crosshair is a static red cross, not the dynamic green CS crosshair; its rect lay outside the sprite                                                                                | Screen centre, always                                                                        | Rect fixed, `584b15d`; look needs HUD work |
 | 4    | The selection icons of seven weapons are restyled and do not match CS 1.6                                                                                                               | Weapon selection                                                                             | Not fixed: design choice                   |
 | 5    | Dropped weapons are drawn 1.0–1.6× larger than in CS 1.6                                                                                                                                | World models                                                                                 | Not fixed: design choice                   |
@@ -74,7 +74,10 @@ output of `tools/audit.ts`.
   when a new message arrives on that channel (client.so 0xd893a). With four kill notices on screen, the two icons
   replace each other.
 
-## 2. Muzzle flashes use Sven's Half-Life sprite (not fixed)
+## 2. Muzzle flashes use Sven's Half-Life sprite (fixed)
+
+Fixed on `feat/cs-muzzle-flash`: all 24 firearms now fire event 5005 with the CS 1.6 sprite and size. Method, sizes and
+the in-game comparison: [muzzle-flash.md](muzzle-flash.md). The audit text below is the state before the fix.
 
 - Sven's `HUD_StudioEvent` (client.so 0xb62a4) sends events 5001/5011/5021/5031 to the engine's `R_MuzzleFlash` (efx API
   slot 19, `cs16-client/common/r_efx.h:143`) with attachment 0/1/2/3. Events 5005/5006 instead read a muzzle flash

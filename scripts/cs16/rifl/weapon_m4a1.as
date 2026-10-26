@@ -35,7 +35,7 @@ enum CS16_M4a1_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/m4a1/w_m4a1.mdl";
-string V_MODEL      = "models/cs16/wpn/m4a1/v_m4a1.mdl";
+string V_MODEL      = "models/cs16/wpn/m4a1/v_m4a1_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/m4a1/p_m4a1.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 16;

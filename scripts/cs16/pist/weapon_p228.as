@@ -28,7 +28,7 @@ enum CS16_P228_Animation
 
 // Models
 string W_MODEL      = "models/cs16/wpn/p228/w_p228.mdl";
-string V_MODEL      = "models/cs16/wpn/p228/v_p228.mdl";
+string V_MODEL      = "models/cs16/wpn/p228/v_p228_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/p228/p_p228.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 10;

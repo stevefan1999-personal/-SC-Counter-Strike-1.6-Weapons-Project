@@ -24,7 +24,7 @@ enum CS16_G3sg1_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/g3sg1/w_g3sg1.mdl";
-string V_MODEL      = "models/cs16/wpn/g3sg1/v_g3sg1.mdl";
+string V_MODEL      = "models/cs16/wpn/g3sg1/v_g3sg1_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/g3sg1/p_g3sg1.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 17;

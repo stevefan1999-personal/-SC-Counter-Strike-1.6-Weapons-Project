@@ -128,6 +128,18 @@ just hudboxes .e2e/shots/run1-spawn.png 0 820 460 80
 Each line is the box of one HUD-coloured glyph in screen pixels. CS 1.6 draws its HUD sprites 1:1 at every resolution
 and anchors them to the screen edges, so the boxes must match.
 
+### Muzzle flash
+
+`just e2e-muzzleflash` fires weapons in a game that already runs on a display (the Sven client or stock CS 1.6). It
+prints the size of each flash and the number of frames that show it. First give both games the same scene size (Sven
+`default_fov 74`, CS 1.6 FOV 90) and look up at a dark sky. The steps for CS 1.6 and the results are in
+[research/muzzle-flash.md](research/muzzle-flash.md).
+
+```sh
+just e2e-muzzleflash :102 .e2e/muzzle/sven 1000x660+500+240 deagle=weapon_csdeagle awp=weapon_awp
+just e2e-muzzleflash measure .e2e/muzzle/sven/deagle-1.png   # measure a saved shot again
+```
+
 ### Kill-feed reference
 
 `just fixture-killfeed` runs Valve's CS 1.6 client offscreen against a ReGameDLL_CS listen server, kills bots with an

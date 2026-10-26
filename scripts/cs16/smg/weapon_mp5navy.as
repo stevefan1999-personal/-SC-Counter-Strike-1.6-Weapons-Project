@@ -27,7 +27,7 @@ enum CS16_Mp5navy_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/mp5/w_mp5.mdl";
-string V_MODEL      = "models/cs16/wpn/mp5/v_mp5.mdl";
+string V_MODEL      = "models/cs16/wpn/mp5/v_mp5_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/mp5/p_mp5.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 11;
