@@ -133,6 +133,13 @@ string ZOOM_SOUND           = "cs16/misc/zoom.wav";
 //Main Sprite Folder
 string MAIN_SPRITE_DIR      = "sprites/";
 string MAIN_CSTRIKE_DIR     = "cs16/";
+//Weapon lists (weapon_*.txt) and the sprites they use. A client never downloads a file again once it has one, so
+//changed lists need a new folder, and the CS sheets (from cstrike-assets.txt) avoid the sprites/cs16/640hud*.spr
+//names that other packs also use
+string WEAPON_LIST_DIR      = MAIN_CSTRIKE_DIR + "icons/";
+const array<string> WEAPON_LIST_SPRITES = { "crosshairs", "640hud1", "640hud2", "640hud3", "640hud4", "640hud5",
+    "640hud6", "640hud7", "640hud10", "640hud11", "640hud12", "640hud13", "640hud14", "640hud15", "640hud16", "640hud17",
+    "640hud18" };
 //Zoom information
 int RESET_ZOOM_VALUE         = 0;
 int DEFAULT_AUG_SG_ZOOM     = 55;
@@ -251,9 +258,9 @@ mixin class WeaponBase
         g_Game.PrecacheModel( MAIN_SPRITE_DIR + MAIN_CSTRIKE_DIR + "csflashx.spr" );
         g_Game.PrecacheGeneric( "events/" + "cs16_flashx.txt" );
         //HUD
-        g_Game.PrecacheGeneric( MAIN_SPRITE_DIR + MAIN_CSTRIKE_DIR + "cs1024.spr" );
         g_Game.PrecacheGeneric( MAIN_SPRITE_DIR + MAIN_CSTRIKE_DIR + "640hud7.spr" );
-        g_Game.PrecacheGeneric( MAIN_SPRITE_DIR + MAIN_CSTRIKE_DIR + "crosshairs.spr" );
+        for( uint sprite = 0; sprite < WEAPON_LIST_SPRITES.length(); sprite++ )
+            g_Game.PrecacheGeneric( MAIN_SPRITE_DIR + WEAPON_LIST_DIR + WEAPON_LIST_SPRITES[sprite] + ".spr" );
         g_Game.PrecacheModel( g_watersplash_spr );
     }
 

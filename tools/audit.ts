@@ -312,7 +312,7 @@ async function auditSprites(): Promise<string[]> {
       : "no byte-identical CS 1.6 sprite";
     return `| ${relative(repo, path)} | ${type} | ${textureFormat} | ${width}x${height} | ${numFrames} | ${verdict} |`;
   }));
-  const crosshair = await loadSprite(join(repo, "sprites/cs16/crosshairs.spr"));
+  const crosshair = await loadSprite(join(repo, "sprites/cs16/icons/crosshairs.spr"));
   return [
     "| sprite | type | format | size | frames | vs CS 1.6 |",
     "| --- | --- | --- | --- | --- | --- |",
@@ -448,13 +448,13 @@ async function auditReferences(): Promise<string[]> {
       }))
     ).map(async ({ where, literal }) => ({ where, literal, found: await labelOf(gamePathOf(literal)) })),
   );
-  // Weapon HUD lists are precached as MAIN_SPRITE_DIR + MAIN_CSTRIKE_DIR + SPR_CAT + classname + ".txt".
+  // Weapon HUD lists are precached as MAIN_SPRITE_DIR + WEAPON_LIST_DIR + SPR_CAT + classname + ".txt".
   const hudLists = await Promise.all(
     [...texts].flatMap(([path, text]) => {
       const category = text.match(/SPR_CAT\s*=\s*"([^"]+)"/)?.[1];
       const weapon = text.match(/string GetName\(\)\s*\{\s*return "([^"]+)"/)?.[1];
       return category && weapon
-        ? [{ where: relative(repo, path), literal: `sprites/cs16/${category}${weapon}.txt` }]
+        ? [{ where: relative(repo, path), literal: `sprites/cs16/icons/${category}${weapon}.txt` }]
         : [];
     }).map(async ({ where, literal }) => ({ where, literal, found: await labelOf(literal) })),
   );
