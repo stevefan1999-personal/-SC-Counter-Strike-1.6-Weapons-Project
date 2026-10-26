@@ -1,7 +1,8 @@
 set shell := ['bash', '-euo', 'pipefail', '-c']
 
 steam_common := env('STEAM_COMMON', home_directory() / '.local/share/Steam/steamapps/common')
-server_dir := env('SVEN_SERVER_DIR', steam_common / 'Sven Co-op Dedicated Server')
+server_base := env('SVEN_SERVER_BASE', steam_common / 'Sven Co-op Dedicated Server')
+server_dir := env('SVEN_SERVER_DIR', server_base)
 client_dir := env('SVEN_CLIENT_DIR', steam_common / 'Sven Co-op')
 cstrike_dir := env('CSTRIKE_DIR', steam_common / 'Half-Life/cstrike')
 state_root := env('CL_STATE_DIR', justfile_directory() / '.e2e')
@@ -177,3 +178,16 @@ install-e2e target=server_dir:
   sed -i '$ d' "$addon/default_plugins.txt"
   printf '\t"plugin"\n\t{\n\t\t"name" "Counter-Life E2E"\n\t\t"script" "e2e/e2e"\n\t\t"concommandns" "e2e"\n\t}\n}\n' >> "$addon/default_plugins.txt"
   echo "e2e plugin added to $addon"
+
+# Create an isolated server root (symlinks plus its own addon, logs and plugin store): just sandbox /abs/path/.svends-hud
+[group('server')]
+sandbox dir:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  test -d '{{dir}}/svencoop' && { echo 'sandbox already exists: {{dir}}'; exit 0; }
+  cp -as '{{server_base}}' '{{dir}}'
+  # Paths our install or the server writes must be real directories so a run never touches the shared install.
+  for writable in svencoop_addon svencoop/logs svencoop/scripts/plugins/store; do
+    rm -rf '{{dir}}'/"$writable" && mkdir -p '{{dir}}'/"$writable"
+  done
+  echo 'sandbox ready; use it with: export SVEN_SERVER_DIR={{dir}}'
