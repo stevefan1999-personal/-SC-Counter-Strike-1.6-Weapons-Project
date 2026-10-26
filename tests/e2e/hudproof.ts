@@ -14,6 +14,8 @@ const SETTLE_MS = 3_000;
 const MENU_OPEN_MS = 800;
 const MENU_CLOSE_MS = 2_500; // hud_selection_timeout 1.5 s plus the 0.5 s fade-out
 const CLICK_HOLD_MS = 400;
+// A chat line shows for a few seconds only: shoot it soon after the reply.
+const CHAT_DRAW_MS = 1_000;
 const RESPAWN_RETRY_MS = 1_000;
 const RESPAWN_TRIES = 30;
 // The proof texts hold 200 s; shots after 140 s show that holds above 127.99 s survive the unsigned 1/256 s field.
@@ -366,7 +368,7 @@ try {
   await waitResend(since, HUDRES_CHAT);
   const badResends = (await server.log()).slice(since).match(/\[hudproof\] resend/g)?.length ?? 0;
   check("bad .hudres refused without a resend, bare !hudres resends", badResends === 1, { resends: badResends });
-  await sleep(SETTLE_MS);
+  await sleep(CHAT_DRAW_MS);
   const chat = await client.shot("hudproof-hudres-chat");
   const stored = (await Deno.readTextFile(`${serverDir}/${LAN_STORE_FILE}`)).trim();
   check("stored .hudres", stored === HUDRES_CHAT, { stored });
