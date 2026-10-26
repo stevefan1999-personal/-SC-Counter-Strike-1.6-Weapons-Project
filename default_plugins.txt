@@ -12,7 +12,9 @@
 		"script" "admin/PlayerManagement"
 		"concommandns" "plrmgr"
 	}
-	// CS16 Weapons — CS16 weapons, buy menu, kill feed, CS1.6 damage system.
+	// CS16 Weapons — CS16 weapons, buy menu, kill feed, CS1.6 damage system,
+	// and DamageMoneyScore (damage-based money; it shares the buy menu's wallet,
+	// so it is compiled into this plugin instead of loading as its own).
 	// Load this on any map where you want CS16 weapons available.
 	"plugin"
 	{
@@ -26,11 +28,6 @@
 	{
 		"name" "Counter-Life"
 		"script" "counterlife"
-	}
-	"plugin"
-	{
-		"name" "DamageMoneyScore"
-		"script" "DamageMoneyScore"
 	}
 //	"plugin"
 //	{

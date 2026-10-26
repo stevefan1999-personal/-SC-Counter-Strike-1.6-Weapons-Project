@@ -15,7 +15,8 @@
 //   640hud2.spr  — contains d_famas, d_galil
 //   640hud16.spr — contains d_fiveseven, d_sg550, d_ump45
 //
-// Layout uses HUD channels 1-4 (channel 0 reserved for BuyMenu money display).
+// HUD sprite channels share one 0-15 space per plugin: 0 is the BuyMenu money counter and 4 the
+// C4 icon, so kill icons use 5-8 and headshot icons 9-12. Names are HudMessage text, a separate space.
 // Sprite sheet offsets match hud.txt exactly (640-res entries).
 
 #include "base"
@@ -114,38 +115,6 @@ namespace CS16KILLFEED {
         return "d_skull";
     }
 
-// ── Weapon display name (for console log, matching death.cpp ConsolePrint) ──
-    string GetWeaponDisplayName(const string& in cls) {
-        if (cls == "weapon_ak47")       return "AK-47";
-        if (cls == "weapon_m4a1")       return "M4A1";
-        if (cls == "weapon_awp")        return "AWP";
-        if (cls == "weapon_scout")      return "Scout";
-        if (cls == "weapon_sg550")      return "SG-550";
-        if (cls == "weapon_g3sg1")      return "G3SG1";
-        if (cls == "weapon_aug")        return "AUG";
-        if (cls == "weapon_sg552")      return "SG-552";
-        if (cls == "weapon_famas")      return "FAMAS";
-        if (cls == "weapon_galil")      return "Galil";
-        if (cls == "weapon_csdeagle")   return "Desert Eagle";
-        if (cls == "weapon_csglock18")  return "Glock-18";
-        if (cls == "weapon_usp")        return "USP";
-        if (cls == "weapon_p228")       return "P228";
-        if (cls == "weapon_fiveseven")  return "Five-SeveN";
-        if (cls == "weapon_dualelites") return "Dual Elites";
-        if (cls == "weapon_m3")         return "M3";
-        if (cls == "weapon_xm1014")     return "XM1014";
-        if (cls == "weapon_mac10")      return "MAC-10";
-        if (cls == "weapon_tmp")        return "TMP";
-        if (cls == "weapon_mp5navy")    return "MP5";
-        if (cls == "weapon_ump45")      return "UMP-45";
-        if (cls == "weapon_p90")        return "P90";
-        if (cls == "weapon_csm249")     return "M249";
-        if (cls == "weapon_csknife")    return "Knife";
-        if (cls == "weapon_hegrenade")  return "HE Grenade";
-        if (cls == "weapon_c4")         return "C4";
-        return cls;
-    }
-
 // ── Monster display name ────────────────────────────────────────────────────
     string GetMonsterDisplayName(const string& in cls) {
         if (cls == "monster_zombie")             return "Zombie";
@@ -203,6 +172,17 @@ namespace CS16KILLFEED {
         g_Game.PrecacheGeneric("sprites/cs16/640hud16.spr");
     }
 
+// ── Per-map reset (call from MapInit) ──────────────────────────────────────
+// g_Engine.time restarts with every map, so a notice from the last map would stay on screen until
+// the new clock reached its old expiry time. Monster hit records are keyed by entindex, which the
+// new map gives to different monsters.
+    void ResetForNewMap() {
+        g_Notices.resize(0);
+        CS16BASE::g_MonsterLastHitter.deleteAll();
+        CS16BASE::g_MonsterLastWeapon.deleteAll();
+        CS16BASE::g_MonsterLastHeadshot.deleteAll();
+    }
+
 // ── PushNotice (mirrors MsgFunc_DeathMsg logic) ────────────────────────────
     void PushNotice(const string& in szKiller, const string& in szVictim,
                     const string& in szWeaponCls, bool bHeadshot, bool bSuicide) {
@@ -224,34 +204,26 @@ namespace CS16KILLFEED {
         for (uint i = 0; i < g_Notices.length(); i++)
             g_Notices[i].iChannel = int(i) + 1;
 
-        // Console log (mirrors death.cpp ConsolePrint lines 262-301)
+        // Console line, as death.cpp prints it (lines 262-322): world deaths carry no killer name,
+        // and the weapon is named by its kill icon without the "d_" prefix ("with m4a1").
         string log;
         if (bSuicide) {
-            log = szVictim + " suicided";
+            log = szVictim + (szKiller.IsEmpty() ? " died" : " killed self");
         } else if (szWeaponCls.IsEmpty()) {
             log = szKiller + " killed " + szVictim;
         } else {
+            string szWeapon = notice.szWeaponSpriteName.SubString(2);
             if (bHeadshot) log = "*** ";
             log += szKiller + " killed " + szVictim;
             if (bHeadshot)
-                log += " with a headshot from " + GetWeaponDisplayName(szWeaponCls) + " ***";
+                log += " with a headshot from " + szWeapon + " ***";
             else
-                log += " with " + GetWeaponDisplayName(szWeaponCls);
+                log += " with " + szWeapon;
         }
         g_Game.AlertMessage(at_notice, "[KillFeed] " + log + "\n");
 
-        // HUD text line for players (once on push)
-        string line;
-        if (bSuicide) {
-            line = szVictim + " suicided";
-        } else if (szWeaponCls.IsEmpty()) {
-            line = szKiller + " killed " + szVictim;
-        } else {
-            line = szKiller;
-            if (bHeadshot) line += " (HS)";
-            line += " " + szVictim;
-        }
-        g_PlayerFuncs.ClientPrintAll(HUD_PRINTNOTIFY, line + "\n");
+        // CS 1.6 writes kills to the console only; on screen there is just the icon row from DrawNotices.
+        g_PlayerFuncs.ClientPrintAll(HUD_PRINTCONSOLE, log + "\n");
     }
 
 // ── DrawNotices (mirrors CHudDeathNotice::Draw) ─────────────────────────────
@@ -260,8 +232,8 @@ namespace CS16KILLFEED {
 //
 // We approximate with:
 //   - HudMessage  channel N+8:  killer name, x=right-anchor offset
-//   - HUDSprite   channel N:    weapon sprite, x=right-anchor
-//   - HUDSprite   channel N+4:  headshot sprite (if HS), x=right-anchor - weaponWidth
+//   - HUDSprite   channel N+4:  weapon sprite, x=right-anchor
+//   - HUDSprite   channel N+8:  headshot sprite (if HS), x=right-anchor - weaponWidth
 //   - HudMessage  channel N+12: victim name, x=right edge (0.99)
 //
 // Approximate character width: ~8px per char at 640 ref width → 8/640 = 0.0125 per char.
@@ -315,15 +287,16 @@ namespace CS16KILLFEED {
 
                 // ── Weapon sprite ─────────────────────────────────────────
                 HUDSpriteParams wp;
-                wp.channel    = ch;
+                wp.channel    = ch + 4;
                 wp.flags      = 0;
                 wp.x          = xWeapon;
                 wp.y          = yNorm;
                 wp.spritename = wf.sheet;
                 wp.left       = wf.left;
                 wp.top        = wf.top;
-                wp.width      = 0;   // 0 = auto (full sprite width)
-                wp.height     = 0;   // 0 = auto (full sprite height)
+                // 0 would mean "to the sheet's edge" and draw every icon below and right of this one
+                wp.width      = wf.width;
+                wp.height     = wf.height;
                 wp.color1     = RGBA(255, 80, 0, 255);
                 wp.holdTime   = 0.15f;
                 g_PlayerFuncs.HudCustomSprite(pPlayer, wp);
@@ -331,7 +304,7 @@ namespace CS16KILLFEED {
                 // ── Headshot sprite ───────────────────────────────────────
                 if (n.bHeadshot) {
                     HUDSpriteParams hp;
-                    hp.channel    = ch + 4;
+                    hp.channel    = ch + 8;
                     hp.flags      = 0;
                     hp.x          = xHS;
                     hp.y          = yNorm;
@@ -381,7 +354,7 @@ namespace CS16KILLFEED {
     }
 
 // ── PlayerKilled hook ───────────────────────────────────────────────────────
-    HookReturnCode OnPlayerKilled(CBasePlayer@ pVictim, CBaseEntity@ pKiller, entvars_t@ pevInflictor) {
+    HookReturnCode OnPlayerKilled(CBasePlayer@ pVictim, CBaseEntity@ pKiller, int iGib) {
         if (pVictim is null) return HOOK_CONTINUE;
 
         string szVictimName = string(pVictim.pev.netname);
@@ -400,12 +373,13 @@ namespace CS16KILLFEED {
                 szWeaponCls = CS16BASE::g_PlayerLastWeapon[victimIdx];
                 bHeadshot   = CS16BASE::g_PlayerLastWasHeadshot[victimIdx];
             }
-        } else if (pKiller !is null) {
+        } else if (pKiller !is null && pKiller.IsMonster()) {
             string szNetname = string(pKiller.pev.netname);
             szKillerName = (szNetname.IsEmpty())
                 ? GetMonsterDisplayName(pKiller.GetClassname())
                 : szNetname;
         } else {
+            // World, falls, trigger_hurt: CS1.6 sends killer index 0, drawn as a skull with no killer name
             bSuicide = true;
         }
 

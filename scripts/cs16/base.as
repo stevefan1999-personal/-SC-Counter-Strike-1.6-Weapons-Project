@@ -644,12 +644,12 @@ mixin class WeaponBase
                     {
                         float flCurrentDist = tr.flFraction * flMaxDist;
                         string hitClass = (pHit !is null) ? pHit.GetClassname() : "world/BSP";
-                        g_Game.AlertMessage( at_notice, "[PEN] Hit: " + hitClass + "  dist=" + int(flCurrentDist) + "  pen_range=" + int(m_flPenDist) + "\n" );
+                        g_Game.AlertMessage( at_aiconsole, "[PEN] Hit: " + hitClass + "  dist=" + int(flCurrentDist) + "  pen_range=" + int(m_flPenDist) + "\n" );
 
                         // CS16: skip penetration if hit occurred beyond this bullet type's range
                         if( m_flPenDist > 0.0f && flCurrentDist > m_flPenDist )
                         {
-                            g_Game.AlertMessage( at_notice, "[PEN] BLOCKED: beyond pen range\n" );
+                            g_Game.AlertMessage( at_aiconsole, "[PEN] BLOCKED: beyond pen range\n" );
                             continue;
                         }
 
@@ -667,12 +667,12 @@ mixin class WeaponBase
 
                             if( trExit.fStartSolid != 0 )
                             {
-                                g_Game.AlertMessage( at_notice, "[PEN] BLOCKED: wall thicker than " + m_iPenPower + " units\n" );
+                                g_Game.AlertMessage( at_aiconsole, "[PEN] BLOCKED: wall thicker than " + m_iPenPower + " units\n" );
                                 break;
                             }
                             if( trExit.flFraction >= 1.0f )
                             {
-                                g_Game.AlertMessage( at_notice, "[PEN] BLOCKED: no exit face found\n" );
+                                g_Game.AlertMessage( at_aiconsole, "[PEN] BLOCKED: no exit face found\n" );
                                 break;
                             }
 
@@ -686,7 +686,7 @@ mixin class WeaponBase
                             flPenDmg *= Math.max( 0.15f, 1.0f - (PEN_LOSS_RATE * flWallThick) );
                             if( flPenDmg < 1.0f ) break;
 
-                            g_Game.AlertMessage( at_notice, "[PEN] Wall thick=" + flWallThick + "  rem=" + int(flRemDist) + "  dmg=" + int(flPenDmg) + "\n" );
+                            g_Game.AlertMessage( at_aiconsole, "[PEN] Wall thick=" + flWallThick + "  rem=" + int(flRemDist) + "  dmg=" + int(flPenDmg) + "\n" );
 
                             // Step past exit face using plane normal (correct for angled/triangular geometry)
                             Vector vecAfterWall = trExit.vecEndPos + trExit.vecPlaneNormal * 2.0f;
@@ -697,7 +697,7 @@ mixin class WeaponBase
 
                             if( trBehind.flFraction >= 1.0f || trBehind.pHit is null )
                             {
-                                g_Game.AlertMessage( at_notice, "[PEN] EXIT OK, nothing behind\n" );
+                                g_Game.AlertMessage( at_aiconsole, "[PEN] EXIT OK, nothing behind\n" );
                                 break;
                             }
 
@@ -734,7 +734,7 @@ mixin class WeaponBase
                             // hitgroup multipliers on top of ours inside TraceAttack.
                             trBehind.iHitgroup = HITGROUP_GENERIC;
 
-                            g_Game.AlertMessage( at_notice, "[PEN] HIT BEHIND: " + pBehind.GetClassname() + "  dmg=" + iFinalDmg + "\n" );
+                            g_Game.AlertMessage( at_aiconsole, "[PEN] HIT BEHIND: " + pBehind.GetClassname() + "  dmg=" + iFinalDmg + "\n" );
 
                             if( iFinalDmg >= 1 )
                             {
