@@ -44,6 +44,11 @@ The recipes find the installs with these environment variables. The defaults are
    just install
    ```
 
+   Each line of `cstrike-assets.txt` is a path in `cstrike/` and an optional destination in `svencoop_addon/`. Without a
+   destination, the file goes to `<dir>/cs16/<file>`. A client does not download a file again when it has a file with
+   that path, so a changed file must get a new path. Use a path that other packs do not use: player caches can hold
+   other files at `sprites/cs16/640hud*.spr`, so the weapon list sheets go to `sprites/cs16/icons/`.
+
 3. Do a compile check. The recipe starts a server, reads the AngelScript log of this run only, and fails on an error:
 
    ```sh
@@ -113,3 +118,16 @@ just hudboxes .e2e/shots/run1-spawn.png 0 820 460 80
 
 Each line is the box of one HUD-coloured glyph in screen pixels. CS 1.6 draws its HUD sprites 1:1 at every resolution
 and anchors them to the screen edges, so the boxes must match.
+
+### Kill-feed reference
+
+`just fixture-killfeed` runs Valve's CS 1.6 client offscreen against a ReGameDLL_CS listen server, kills bots with an
+M4A1 and saves the kill feed to `.e2e/reference/cs16-killfeed-<W>x<H>-*.png`. Measure a Counter-Life screenshot the same
+way, against a frame of the same view without notices:
+
+```sh
+just fixture-killfeed :96 2560x1440
+just fixture-metrics .e2e/shots/run1-killfeed.png .e2e/shots/run1-killfeed-before.png
+```
+
+[CS 1.6 kill-feed reference](research/cs16-killfeed-reference.md) describes the fixture and the measured layout.

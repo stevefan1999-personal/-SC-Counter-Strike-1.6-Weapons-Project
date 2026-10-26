@@ -80,7 +80,6 @@ class weapon_scout : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         m_flPenDist = 5000.0f;
         m_flRangeModifier = 0.98f;
         m_flAccuracyStart = 0.0f;
-        self.pev.scale = 1.15;
     }
 
     void Precache()
@@ -102,7 +101,7 @@ class weapon_scout : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         CS16BASE::PrecacheSounds( WeaponSoundEvents );
         //Sprites
         CommonSpritePrecache();
-        g_Game.PrecacheGeneric( CS16BASE::MAIN_SPRITE_DIR + CS16BASE::MAIN_CSTRIKE_DIR + SPR_CAT + self.pev.classname + ".txt" );
+        g_Game.PrecacheGeneric( CS16BASE::MAIN_SPRITE_DIR + CS16BASE::WEAPON_LIST_DIR + SPR_CAT + self.pev.classname + ".txt" );
     }
 
     bool GetItemInfo( ItemInfo& out info )
@@ -337,7 +336,7 @@ string GetName()
 void Register()
 {
     CS16BASE::RegisterCWEntity( "CS16_SCOUT::", "weapon_scout", GetName(), GetAmmoName(), "SCOUT_MAG", 
-        CS16BASE::MAIN_CSTRIKE_DIR + SPR_CAT, (CS16BASE::ShouldUseCustomAmmo) ? AMMO_TYPE : CS16BASE::DF_AMMO_M40A1 );
+        CS16BASE::WEAPON_LIST_DIR + SPR_CAT, (CS16BASE::ShouldUseCustomAmmo) ? AMMO_TYPE : CS16BASE::DF_AMMO_M40A1 );
 }
 
 }

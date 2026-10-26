@@ -1,5 +1,21 @@
 # CS 1.6 files copied from the local Counter-Strike install at install time.
-# Each path is relative to cstrike/ and lands under <dir>/cs16/<file> in svencoop_addon.
-sprites/640hud1.spr
-sprites/640hud2.spr
-sprites/640hud16.spr
+# Each line is a path relative to cstrike/ and an optional destination relative to svencoop_addon/.
+# Without a destination the file lands under <dir>/cs16/<file>.
+# The weapon list and kill feed sheets get their own folder: player caches can hold other packs' files at
+# sprites/cs16/640hud*.spr, and a client never downloads a file again once it has one.
+sprites/640hud1.spr sprites/cs16/icons/640hud1.spr
+sprites/640hud2.spr sprites/cs16/icons/640hud2.spr
+sprites/640hud3.spr sprites/cs16/icons/640hud3.spr
+sprites/640hud4.spr sprites/cs16/icons/640hud4.spr
+sprites/640hud5.spr sprites/cs16/icons/640hud5.spr
+sprites/640hud6.spr sprites/cs16/icons/640hud6.spr
+sprites/640hud7.spr sprites/cs16/icons/640hud7.spr
+sprites/640hud10.spr sprites/cs16/icons/640hud10.spr
+sprites/640hud11.spr sprites/cs16/icons/640hud11.spr
+sprites/640hud12.spr sprites/cs16/icons/640hud12.spr
+sprites/640hud13.spr sprites/cs16/icons/640hud13.spr
+sprites/640hud14.spr sprites/cs16/icons/640hud14.spr
+sprites/640hud15.spr sprites/cs16/icons/640hud15.spr
+sprites/640hud16.spr sprites/cs16/icons/640hud16.spr
+sprites/640hud17.spr sprites/cs16/icons/640hud17.spr
+sprites/640hud18.spr sprites/cs16/icons/640hud18.spr

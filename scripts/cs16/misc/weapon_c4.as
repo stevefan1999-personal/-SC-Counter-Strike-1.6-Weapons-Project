@@ -88,7 +88,6 @@ class weapon_c4 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase, CS16BASE::
         }*/
 
         CommonSpawn( W_MODEL, DEFAULT_GIVE );
-        self.pev.scale = 1;
     }
 
     void Precache()
@@ -106,7 +105,7 @@ class weapon_c4 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase, CS16BASE::
         CS16BASE::PrecacheSound( PLANT_S );
         //Sprites
         CommonSpritePrecache();
-        g_Game.PrecacheGeneric( CS16BASE::MAIN_SPRITE_DIR + CS16BASE::MAIN_CSTRIKE_DIR + SPR_CAT + self.pev.classname + ".txt" );
+        g_Game.PrecacheGeneric( CS16BASE::MAIN_SPRITE_DIR + CS16BASE::WEAPON_LIST_DIR + SPR_CAT + self.pev.classname + ".txt" );
     }
 
     bool GetItemInfo( ItemInfo& out info )
@@ -349,7 +348,7 @@ void Register()
 {
     CS16_BOMBTARGET::Register();
     CS16C4PROJECTILE::Register();
-    CS16BASE::RegisterCWEntityEX( "CS16_C4::", "weapon_c4", GetName(), GetName(), CS16BASE::MAIN_CSTRIKE_DIR + SPR_CAT, AMMO_TYPE );
+    CS16BASE::RegisterCWEntityEX( "CS16_C4::", "weapon_c4", GetName(), GetName(), CS16BASE::WEAPON_LIST_DIR + SPR_CAT, AMMO_TYPE );
 }
 
 }

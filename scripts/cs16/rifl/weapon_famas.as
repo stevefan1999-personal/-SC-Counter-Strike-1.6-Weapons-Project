@@ -87,7 +87,6 @@ class weapon_famas : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         m_flPenDist = 4000.0f;
         m_flRangeModifier = 0.96f;
         m_flAccuracyStart = ACCURACY_START;
-        self.pev.scale = 1;
     }
 
     void Precache()
@@ -107,7 +106,7 @@ class weapon_famas : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         CS16BASE::PrecacheSounds( WeaponSoundEvents );
         //Sprites
         CommonSpritePrecache();
-        g_Game.PrecacheGeneric( CS16BASE::MAIN_SPRITE_DIR + CS16BASE::MAIN_CSTRIKE_DIR + SPR_CAT + self.pev.classname + ".txt" );
+        g_Game.PrecacheGeneric( CS16BASE::MAIN_SPRITE_DIR + CS16BASE::WEAPON_LIST_DIR + SPR_CAT + self.pev.classname + ".txt" );
     }
 
     bool GetItemInfo( ItemInfo& out info )
@@ -342,7 +341,7 @@ string GetName()
 void Register()
 {
     CS16BASE::RegisterCWEntity( "CS16_FAMAS::", "weapon_famas", GetName(), GetAmmoName(), "FAMAS_MAG", 
-        CS16BASE::MAIN_CSTRIKE_DIR + SPR_CAT, (CS16BASE::ShouldUseCustomAmmo) ? AMMO_TYPE : CS16BASE::DF_AMMO_556 );
+        CS16BASE::WEAPON_LIST_DIR + SPR_CAT, (CS16BASE::ShouldUseCustomAmmo) ? AMMO_TYPE : CS16BASE::DF_AMMO_556 );
 }
 
 }
