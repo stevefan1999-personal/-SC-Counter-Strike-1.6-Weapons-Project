@@ -12,6 +12,9 @@
 const float DEFAULT_SPAWN_DISTANCE = 160.0f;
 const float LETHAL_DAMAGE = 10000.0f;
 const float PIN_DELAY = 1.0f;
+// Head shots aim this share of the height below the top of the box, as the CS 1.6 reference capture does
+// (cs16-killfeed-reference.md 2.4); the eye position of a monster lies below its head hit box.
+const float HEAD_DROP = 0.08f;
 
 array<CConCommand@> g_Commands;
 
@@ -100,7 +103,7 @@ void AimAtNearestMonster( const CCommand@ args )
     g_EngineFuncs.ServerPrint( "[e2e] aim: no live monster\n" );
     return;
   }
-  const Vector target = aimAtHead ? nearest.EyePosition() : nearest.Center();
+  const Vector target = aimAtHead ? HeadOf( nearest ) : nearest.Center();
   Vector viewAngles;
   g_EngineFuncs.VecToAngles( target - eye, viewAngles );
   // VecToAngles returns model pitch; player view pitch has the opposite sign.
@@ -109,6 +112,12 @@ void AimAtNearestMonster( const CCommand@ args )
   player.pev.v_angle = viewAngles;
   player.pev.fixangle = FAM_FORCEVIEWANGLES;
   g_EngineFuncs.ServerPrint( "[e2e] aim " + ( aimAtHead ? "head" : "body" ) + " of " + nearest.pev.classname + " live " + monsters.length() + "\n" );
+}
+
+Vector HeadOf( CBaseEntity@ monster )
+{
+  const Vector centre = monster.Center();
+  return Vector( centre.x, centre.y, monster.pev.absmax.z - HEAD_DROP * monster.pev.size.z );
 }
 
 // Scripted kill for tests that do not need real bullets: the held weapon is the inflictor, as when it fires.
