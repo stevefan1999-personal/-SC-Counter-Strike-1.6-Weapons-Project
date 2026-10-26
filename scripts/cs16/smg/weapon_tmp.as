@@ -85,7 +85,6 @@ class weapon_tmp : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         m_iPenPower = 21;
         m_flPenDist = 800.0f;
         m_flRangeModifier = 0.85f;
-        //self.pev.scale = 1;
         m_flAccuracyStart = ACCURACY_START;
     }
 

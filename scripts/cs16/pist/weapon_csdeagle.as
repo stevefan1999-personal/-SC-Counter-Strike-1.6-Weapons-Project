@@ -88,7 +88,6 @@ class weapon_csdeagle : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         m_iPenPower = 30;
         m_flPenDist = 1000.0f;
         m_flRangeModifier = 0.81f;
-        self.pev.scale = 1.6;
         m_flAccuracyStart = ACCURACY_START;
     }
 

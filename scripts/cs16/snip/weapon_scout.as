@@ -80,7 +80,6 @@ class weapon_scout : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         m_flPenDist = 5000.0f;
         m_flRangeModifier = 0.98f;
         m_flAccuracyStart = 0.0f;
-        self.pev.scale = 1.15;
     }
 
     void Precache()

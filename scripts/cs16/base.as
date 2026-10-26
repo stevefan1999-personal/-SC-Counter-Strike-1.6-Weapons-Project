@@ -247,7 +247,7 @@ mixin class WeaponBase
         m_flAccuracy = m_flAccuracyStart;
         g_EntityFuncs.SetModel( self, self.GetW_Model( worldModel ) );
         self.m_iDefaultAmmo = GiveDefaultAmmo;
-        self.pev.scale = 1.4;
+        self.pev.scale = 1.0; // CS 1.6 never scales weapon world models
 
         self.FallInit();
     }
@@ -1093,7 +1093,6 @@ mixin class AmmoBase
     {
         g_EntityFuncs.SetModel( self, worldModel );
         self.pev.body = iBodygroup;
-        self.pev.scale = 1.5;
 
         BaseClass.Spawn();
     }

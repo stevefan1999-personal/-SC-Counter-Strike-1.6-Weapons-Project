@@ -86,7 +86,6 @@ class weapon_sg552 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         m_flPenDist = 4000.0f;
         m_flRangeModifier = 0.955f;
         m_flAccuracyStart = ACCURACY_START;
-        self.pev.scale = 1.3;
     }
 
     void Precache()

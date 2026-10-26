@@ -100,7 +100,6 @@ class weapon_m4a1 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         m_flPenDist = 4000.0f;
         m_flRangeModifier = 0.97f;
         m_flAccuracyStart = ACCURACY_START;
-        self.pev.scale = 1.3;
     }
 
     void Precache()

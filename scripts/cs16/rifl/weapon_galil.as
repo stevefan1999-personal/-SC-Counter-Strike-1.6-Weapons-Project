@@ -86,7 +86,6 @@ class weapon_galil : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         m_flPenDist = 4000.0f;
         m_flRangeModifier = 0.98f;
         m_flAccuracyStart = ACCURACY_START;
-        self.pev.scale = 1;
     }
 
     void Precache()

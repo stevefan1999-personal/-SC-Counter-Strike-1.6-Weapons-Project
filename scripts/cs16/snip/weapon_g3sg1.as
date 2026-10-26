@@ -82,7 +82,6 @@ class weapon_g3sg1 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         m_flAccuracyStart = 0.2f;
         m_flAccuracy = 0.2f;
         m_flLastFireTime = 0.0f;
-        self.pev.scale = 1.3;
     }
 
     void Precache()

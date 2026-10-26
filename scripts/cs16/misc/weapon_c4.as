@@ -88,7 +88,6 @@ class weapon_c4 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase, CS16BASE::
         }*/
 
         CommonSpawn( W_MODEL, DEFAULT_GIVE );
-        self.pev.scale = 1;
     }
 
     void Precache()

@@ -86,7 +86,6 @@ class weapon_ak47 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         m_flPenDist = 5000.0f;
         m_flRangeModifier = 0.98f;
         m_flAccuracyStart = ACCURACY_START;
-        self.pev.scale = 1.2;
     }
 
     void Precache()

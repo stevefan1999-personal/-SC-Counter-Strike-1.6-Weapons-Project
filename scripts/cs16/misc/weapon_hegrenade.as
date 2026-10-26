@@ -70,7 +70,6 @@ class weapon_hegrenade : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase, CS1
 
         self.pev.dmg = DAMAGE;
         CommonSpawn( W_MODEL, DEFAULT_GIVE );
-        self.pev.scale = 1;
     }
 
     void Precache()

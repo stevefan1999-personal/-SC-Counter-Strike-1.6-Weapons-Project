@@ -87,7 +87,6 @@ class weapon_mac10 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         m_iPenPower = 15;
         m_flPenDist = 500.0f;
         m_flRangeModifier = 0.82f;
-        self.pev.scale = 1;
         m_flAccuracyStart = ACCURACY_START;
     }
 

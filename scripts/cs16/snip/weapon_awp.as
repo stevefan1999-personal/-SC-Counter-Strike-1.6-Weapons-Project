@@ -82,7 +82,6 @@ class weapon_awp : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         m_iPenPower = 45;
         m_flPenDist = 8000.0f;
         m_flRangeModifier = 0.99f;
-        //self.pev.scale = 1.15;
     }
 
     void Precache()

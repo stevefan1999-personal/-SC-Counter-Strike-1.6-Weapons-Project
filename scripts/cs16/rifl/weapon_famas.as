@@ -87,7 +87,6 @@ class weapon_famas : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
         m_flPenDist = 4000.0f;
         m_flRangeModifier = 0.96f;
         m_flAccuracyStart = ACCURACY_START;
-        self.pev.scale = 1;
     }
 
     void Precache()
