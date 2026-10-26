@@ -1,7 +1,7 @@
 // Counter-Life end-to-end helpers. Loaded only by "just install-e2e", never in production plugin lists.
 // Sven Co-op blocks cheat commands for non-admin players, so tests drive the game through these commands:
 //   as_command e2e.spawn <classname> [distance]   spawn in front of player 1; monsters are pinned in place after landing
-//   as_command e2e.aim [head|body]                turn player 1 towards the nearest live monster
+//   as_command e2e.aim [head|body] [classname]    turn player 1 towards the nearest live monster (default monster_*)
 //   as_command e2e.kill                           kill every live monster, credited to player 1 and its held weapon
 //   as_command e2e.give <classname>               give player 1 an item or weapon
 //   as_command e2e.stuff <client command...>      run a console command on player 1's client
@@ -18,7 +18,7 @@ void PluginInit()
   g_Module.ScriptInfo.SetContactInfo( "e2e test helpers" );
   // Plugins must create console commands at init time; global CConCommand objects never register.
   g_Commands.insertLast( CConCommand( "spawn", "<classname> [distance] - spawn in front of player 1", @SpawnInFront ) );
-  g_Commands.insertLast( CConCommand( "aim", "[head|body] - turn player 1 towards the nearest live monster", @AimAtNearestMonster ) );
+  g_Commands.insertLast( CConCommand( "aim", "[head|body] [classname] - turn player 1 towards the nearest live monster", @AimAtNearestMonster ) );
   g_Commands.insertLast( CConCommand( "kill", "- kill every live monster, credited to player 1", @KillMonsters ) );
   g_Commands.insertLast( CConCommand( "give", "<classname> - give player 1 an item", @GiveItem ) );
   g_Commands.insertLast( CConCommand( "stuff", "<command...> - run a client command on player 1", @StuffText ) );
@@ -35,11 +35,11 @@ CBasePlayer@ FirstPlayer()
   return player;
 }
 
-array<CBaseEntity@> LiveMonsters()
+array<CBaseEntity@> LiveMonsters( const string& in classname = "monster_*" )
 {
   array<CBaseEntity@> monsters;
   CBaseEntity@ entity = null;
-  while( ( @entity = g_EntityFuncs.FindEntityByClassname( entity, "monster_*" ) ) !is null )
+  while( ( @entity = g_EntityFuncs.FindEntityByClassname( entity, classname ) ) !is null )
   {
     if( entity.IsMonster() && entity.IsAlive() )
       monsters.insertLast( entity );
@@ -83,7 +83,7 @@ void AimAtNearestMonster( const CCommand@ args )
   const bool aimAtHead = args.ArgC() < 2 || args.Arg( 1 ) != "body";
   const Vector eye = player.EyePosition();
   CBaseEntity@ nearest = null;
-  array<CBaseEntity@> monsters = LiveMonsters();
+  array<CBaseEntity@> monsters = LiveMonsters( args.ArgC() > 2 ? args.Arg( 2 ) : "monster_*" );
   for( uint index = 0; index < monsters.length(); ++index )
   {
     if( nearest is null || ( monsters[index].Center() - eye ).Length() < ( nearest.Center() - eye ).Length() )

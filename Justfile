@@ -41,7 +41,7 @@ server port='27015' map='hl_c01_a1' *args: (stop port)
   cd '{{server_dir}}'
   export LD_LIBRARY_PATH="$PWD:$PWD/redist:${LD_LIBRARY_PATH:-}"
   # The holder keeps the pipe open so the server never reads EOF between commands.
-  sleep infinity > "$state/in" &
+  sleep infinity > "$state/in" 2>/dev/null < /dev/null &
   echo $! > "$state/holder.pid"
   ./svends_i686 -console -port {{port}} +maxplayers 8 +sv_lan 1 +sv_cheats 1 +map {{map}} {{args}} < "$state/in" > "$state/server.log" 2>&1 &
   echo $! > "$state/server.pid"
@@ -106,7 +106,7 @@ display:
   state='{{state_root}}/display'
   mkdir -p "$state"
   test -f "$state/xvfb.pid" && kill -0 "$(cat "$state/xvfb.pid")" 2>/dev/null && exit 0
-  Xvfb '{{display}}' -screen 0 '{{resolution}}x24' -nolisten tcp +extension GLX > "$state/xvfb.log" 2>&1 &
+  Xvfb '{{display}}' -screen 0 '{{resolution}}x24' -nolisten tcp +extension GLX > "$state/xvfb.log" 2>&1 < /dev/null &
   echo $! > "$state/xvfb.pid"
   for _ in $(seq 1 40); do DISPLAY='{{display}}' xdpyinfo >/dev/null 2>&1 && exit 0; sleep 0.25; done
   echo 'Xvfb did not come up' >&2; exit 1
@@ -126,7 +126,7 @@ client +args: display client-stop
   DISPLAY='{{display}}' SDL_VIDEODRIVER=x11 SteamAppId=225840 SteamGameId=225840 \
     setsid '{{steam_runtime}}' ./svencoop.sh -nosteamoverlay -nobreakpad -novid -windowed \
     -w "${res%x*}" -h "${res#*x}" -port {{listen_port}} +volume 0 +MP3Volume 0 {{args}} \
-    > "$state/client.log" 2>&1 &
+    > "$state/client.log" 2>&1 < /dev/null &
   echo $! > "$state/client.pgid"
   echo "client starting (log: $state/client.log)"
 
@@ -191,3 +191,8 @@ sandbox dir:
     rm -rf '{{dir}}'/"$writable" && mkdir -p '{{dir}}'/"$writable"
   done
   echo 'sandbox ready; use it with: export SVEN_SERVER_DIR={{dir}}'
+
+# Shoot a pinned scientist with a CS weapon and capture the kill feed: just e2e-killfeed 27017 weapon_csdeagle head
+[group('e2e')]
+e2e-killfeed port='27017' weapon='weapon_csdeagle' aim='head':
+  deno run -A '{{justfile_directory()}}/tests/e2e/killfeed.ts' {{port}} {{weapon}} {{aim}}
