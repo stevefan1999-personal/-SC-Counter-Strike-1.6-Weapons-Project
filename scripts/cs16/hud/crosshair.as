@@ -67,8 +67,8 @@ namespace CS16CROSSHAIR
   // Every update is four reliable CustSpr messages, so the four lines move at most 10 times per second.
   const float MIN_SEND_INTERVAL = 0.1f;
 
-  // When CS draws it (cs16-hud-spec.md 3.12.1). FOV 0 is the client's default FOV; the AUG and SG552 zoom to 55.
-  const int MAX_SCOPED_FOV = 54;
+  // When CS draws it (cs16-hud-spec.md 3.12.1), in CS degrees (CS16BASE::CsFov): the AUG and SG552 zoom to 55.
+  const float MAX_SCOPED_FOV = 54.0f;
   const int HIDING_BITS = HIDEHUD_WEAPONS | HIDEHUD_ALL;
 
   // Bytes in the reliable stream, for the developer 2 log: the user message id, the size byte of a variable-size
@@ -276,8 +276,7 @@ namespace CS16CROSSHAIR
       PlayerCrosshair@ state = m_players[player.entindex()];
       CBaseEntity@ weapon = player.m_hActiveItem.GetEntity();
       const WeaponRules@ rules = RulesOf( weapon );
-      const int fov = player.m_iFOV;
-      if( weapon is null || !player.IsAlive() || IsSniperRifle( rules.id ) || ( fov != 0 && fov <= MAX_SCOPED_FOV )
+      if( weapon is null || !player.IsAlive() || IsSniperRifle( rules.id ) || CS16BASE::CsFov( player ) <= MAX_SCOPED_FOV
         || ( player.m_iHideHUD & HIDING_BITS ) != 0 )
       {
         Hide( player, state );
