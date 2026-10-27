@@ -65,6 +65,13 @@ just log 27015 40                 # read the console
 just stop 27015
 ```
 
+Crash dumps: `-nobreakpad` does not stop Steam's crash handler. The server's `steamclient.so` asserts (for example
+`Assert( !BLoggedOn() )`, often at the first `changelevel` of a server process), writes a minidump to `/tmp/dumps` and
+sends it to Valve through the proxy of the environment. Thus the `server` recipe also passes steamclient's `-noassert`
+(no assert dumps in 12 `changelevel`s, against 2 dumps in 11 without it) and sets `http_proxy` and `HTTP_PROXY` to a
+closed local port, so that any other dump stays on the machine (its log then says `upload no: 'Could not connect to
+server'`). `just stop` deletes the dumps that the server log names.
+
 ## Drive the game client without a monitor
 
 The client runs on an Xvfb display, so it does not take over the desktop. Input goes through `xdotool`, and screenshots

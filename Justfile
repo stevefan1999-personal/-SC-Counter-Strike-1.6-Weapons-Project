@@ -47,10 +47,14 @@ server port='27015' map='hl_c01_a1' *args: (stop port)
   mkdir -p "$state" && rm -f "$state/in" && mkfifo "$state/in"
   cd '{{server_dir}}'
   export LD_LIBRARY_PATH="$PWD:$PWD/redist:${LD_LIBRARY_PATH:-}"
+  # -nobreakpad does not reach Steam's crash handler: a steamclient assert (often at the first changelevel) still
+  # writes a minidump to /tmp/dumps and uploads it through the proxy of the environment. steamclient's -noassert stops
+  # the assert dumps, and a closed local proxy keeps any other dump on this machine (docs/development.md).
+  export http_proxy=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9
   # The holder keeps the pipe open so the server never reads EOF between commands.
   sleep infinity > "$state/in" 2>/dev/null < /dev/null &
   echo $! > "$state/holder.pid"
-  ./svends_i686 -console -nobreakpad -port {{port}} +maxplayers 8 +sv_lan 1 +sv_cheats 1 +map {{map}} {{args}} < "$state/in" > "$state/server.log" 2>&1 &
+  ./svends_i686 -console -nobreakpad -noassert -port {{port}} +maxplayers 8 +sv_lan 1 +sv_cheats 1 +map {{map}} {{args}} < "$state/in" > "$state/server.log" 2>&1 &
   echo $! > "$state/server.pid"
   for _ in $(seq 1 60); do
     rg -q 'Started map' "$state/server.log" && { echo "server {{port}} up on {{map}}"; exit 0; }
@@ -79,6 +83,8 @@ stop port='27015':
     rm -f "$pidfile"
   done
   rm -f "$state/in"
+  # A dump that the server still wrote stays in /tmp (RAM), where Steam's crash handler may send it later.
+  rg -o '/tmp/dumps/[A-Za-z0-9_]+\.dmp' "$state/server.log" 2>/dev/null | sort -u | xargs -r rm -f
 
 # Show errors and warnings from the newest AngelScript log of an install: just aslog
 [group('server')]
