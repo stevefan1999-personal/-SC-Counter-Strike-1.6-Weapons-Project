@@ -623,6 +623,7 @@ image-root: (fetch-cs-sprites)
   cp -a '{{justfile_directory()}}/scripts/store' "$root/scripts/store"
   cp -a '{{justfile_directory()}}/scripts/counterlife.as' '{{justfile_directory()}}/scripts/DamageMoneyScore.as' "$root/scripts/"
   cp -a '{{justfile_directory()}}/events/.' "$root/events/"
+  command -v rg >/dev/null || { echo 'rg is required to read cstrike-assets.txt' >&2; exit 1; }
   local_cs='{{cstrike_dir}}'
   if test -f "$local_cs/sprites/640hud7.spr"; then cs="$local_cs"; else cs='{{justfile_directory()}}/.image/half-life/cstrike'; fi
   while read -r asset destination; do

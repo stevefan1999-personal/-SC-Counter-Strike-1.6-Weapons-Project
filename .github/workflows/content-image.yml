@@ -40,7 +40,7 @@ jobs:
       - name: 32-bit C toolchain and libclang
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc-multilib g++-multilib libc6-dev-i386 libclang-dev pkg-config
+          sudo apt-get install -y --no-install-recommends gcc-multilib g++-multilib libc6-dev-i386 libclang-dev pkg-config ripgrep
 
       - uses: taiki-e/install-action@just
       - uses: denoland/setup-deno@v2
