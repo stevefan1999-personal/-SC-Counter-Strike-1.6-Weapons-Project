@@ -319,16 +319,17 @@ Measured on the test server and client (the proof logs the rates every 5 s):
 
 ### When elements draw again
 
-| Event                                   | What the foundation does                                                                                |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| connection, `changelevel`, reconnection | marks the player ready, sets the hide bits, calls `OnSpawn`, then `OnResend` after the client HUD reset |
-| respawn, revive                         | sets the hide bits, calls `OnSpawn`, then `OnResend` after the client HUD reset                         |
-| death                                   | calls `OnDeath`                                                                                         |
-| `cs16_hud 0`                            | clears the recorded hide bits, hides the recorded channels, empties the recorded slots                  |
-| `cs16_hud 1`                            | sets the hide bits, calls `OnResend` at the next tick                                                   |
-| `.hudres`, `cs16_hud_res`               | calls `OnResend` at the next tick                                                                       |
-| plugin reload                           | takes over the connected players, calls `OnResend` at the next tick                                     |
-| video mode change on the client         | nothing: the server cannot see it. The player types `.hudres` to get the HUD back.                      |
+| Event                                   | What the foundation does                                                                                     |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| connection, `changelevel`, reconnection | marks the player ready, sets the hide bits, calls `OnSpawn`, then `OnResend` after the client HUD reset      |
+| respawn, revive                         | sets the hide bits, calls `OnSpawn`, then `OnResend` after the client HUD reset                              |
+| death                                   | calls `OnDeath`                                                                                              |
+| `cs16_hud 0`                            | clears the recorded hide bits, hides the recorded channels, empties the recorded slots                       |
+| `cs16_hud 1`                            | sets the hide bits, calls `OnResend` at the next tick                                                        |
+| `.hudres`, `cs16_hud_res`               | calls `OnResend` at the next tick                                                                            |
+| plugin reload                           | takes over the connected players, calls `OnResend` at the next tick                                          |
+| video mode change on the client         | nothing: the server cannot see it. The player types `.hudres` to get the HUD back.                           |
+| a bot (`FL_FAKECLIENT`) connects        | nothing: a bot never becomes ready, so no element runs or sends for it. Its kills still reach the kill feed. |
 
 Two client resets make these resends necessary:
 

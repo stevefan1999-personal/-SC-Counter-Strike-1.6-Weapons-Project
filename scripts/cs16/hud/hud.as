@@ -112,7 +112,7 @@ namespace CS16HUD
     for( int slot = 1; slot <= g_Engine.maxClients; ++slot )
     {
       CBasePlayer@ player = g_PlayerFuncs.FindPlayerByIndex( slot );
-      if( player is null || !player.IsConnected() )
+      if( player is null || !player.IsConnected() || IsBot( player ) )
         continue;
       g_OwnedHideBits[slot] = player.m_iHideHUD & NATIVE_HIDE_BITS;
       MarkReady( player );
@@ -163,8 +163,17 @@ namespace CS16HUD
     }
   }
 
+  // A bot (fake client) has no client that draws, so it never becomes ready: no element runs or sends for it. The
+  // kills of bots still reach the kill feed of the players.
+  bool IsBot( CBasePlayer@ player )
+  {
+    return ( player.pev.flags & FL_FAKECLIENT ) != 0;
+  }
+
   HookReturnCode OnClientPutInServer( CBasePlayer@ player )
   {
+    if( IsBot( player ) )
+      return HOOK_CONTINUE;
     ForgetSent( player );
     ForgetNative( player );
     LoadPlayerScreen( player );
