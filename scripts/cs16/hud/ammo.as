@@ -8,6 +8,12 @@ namespace CS16HUD
   const int NO_AMMO_TYPE = 0; // Half-Life never gives ammo index 0 to an ammo type, Sven gives -1 for none
   const int AMMO_ICON_SIZE = 24;
   const float CLIPLESS_SHIFT = -2.0f; // CS draws the reserve and the icon 2 px further left without a clip
+  // Each shot restarts the CS ammo fade, and sending all four parts for each shot cost a P90 player 60 reliable messages
+  // a second. The clip goes out with each shot; the reserve and the icon take the fade of the clip when they are
+  // AMMO_PARTS_SYNC behind it, and again AMMO_PARTS_SETTLE after the last shot. So during fire their alpha is at most
+  // 10 below the clip's (the fade falls 20 a second), and once the shots stop all parts fade together again.
+  const float AMMO_PARTS_SYNC = 0.5f;
+  const float AMMO_PARTS_SETTLE = 0.3f;
 
   // "<left>,<top>,<ammo type>,...": the 24x24 CS ammo icons on 640hud7.spr (cs16-hud-spec.md 3.3) and the ammo types
   // that show them. CS weapons use the AMMO_TYPE of scripts/cs16/**/weapon_*.as; the HE grenade and the C4 are their
@@ -44,7 +50,8 @@ namespace CS16HUD
     private array<int> m_reserve = array<int>( MAX_PLAYERS + 1 );
     private array<int> m_fov = array<int>( MAX_PLAYERS + 1 );
     private array<bool> m_spawned = array<bool>( MAX_PLAYERS + 1 );
-    private array<float> m_fadeStart = array<float>( MAX_PLAYERS + 1, SETTLED );
+    private array<float> m_fadeStart = array<float>( MAX_PLAYERS + 1, SETTLED ); // of the clip
+    private array<float> m_partsFadeStart = array<float>( MAX_PLAYERS + 1, SETTLED ); // of the reserve and the icon
 
     AmmoElement()
     {
@@ -95,12 +102,21 @@ namespace CS16HUD
       const int id = weapon.entindex();
       const int clip = weapon.m_iClip;
       const int reserve = Math.clamp( 0, MAX_RESERVE, player.m_rgAmmo( ammoType ) );
-      const bool restart = m_spawned[slot] || id != m_weapon[slot] || clip != m_clipCount[slot]
-        || player.m_iFOV != m_fov[slot];
-      if( !restart && reserve == m_reserve[slot] && !resend )
+      // CS restarts the fade for a new weapon, clip or FOV and at a spawn (CurWeapon). A new clip (a shot, a reload)
+      // sends the clip; the other changes and a resend draw every part.
+      const bool changed = m_spawned[slot] || id != m_weapon[slot] || player.m_iFOV != m_fov[slot];
+      const bool restart = changed || clip != m_clipCount[slot];
+      const bool layout = changed || resend;
+      const float now = g_Engine.time;
+      // A start of an earlier map lies in the future (g_Engine.time restarts with each map): the parts are not behind.
+      const float partsBehind = m_fadeStart[slot] - m_partsFadeStart[slot];
+      const bool partsSettle = partsBehind > 0.0f && now - m_fadeStart[slot] >= AMMO_PARTS_SETTLE;
+      if( !restart && !layout && reserve == m_reserve[slot] && !partsSettle )
         return;
       if( restart )
-        m_fadeStart[slot] = g_Engine.time;
+        m_fadeStart[slot] = now;
+      const bool sendParts = layout || reserve != m_reserve[slot] || partsSettle
+        || now - m_partsFadeStart[slot] >= AMMO_PARTS_SYNC || now < m_partsFadeStart[slot];
       m_spawned[slot] = false;
       m_weapon[slot] = id;
       m_clipCount[slot] = clip;
@@ -108,17 +124,21 @@ namespace CS16HUD
       m_fov[slot] = player.m_iFOV;
 
       Look@ look = Fading( WithAlpha( HUD_ORANGE, AMMO_FADE_ALPHA ), WithAlpha( HUD_ORANGE, MIN_ALPHA ), FADE_TIME,
-        g_Engine.time - m_fadeStart[slot] );
+        now - m_fadeStart[slot] );
       const bool clipped = clip >= 0; // grenades and the C4 have no clip
       const float shift = clipped ? 0.0f : CLIPLESS_SHIFT;
+      if( restart || layout )
+      {
+        if( clipped )
+          SendPart( player, CLIP, m_clip, clip, look );
+        else
+          HideElement( player, CLIP );
+      }
+      if( !sendParts )
+        return;
+      m_partsFadeStart[slot] = m_fadeStart[slot];
       SendPart( player, RESERVE_HIGH, m_reserveHigh.Moved( shift ), ReserveHighFrame( reserve ), look );
       SendPart( player, RESERVE_LOW, m_reserveLow.Moved( shift ), reserve % DECIMAL, look );
-      if( !restart && !resend )
-        return;
-      if( clipped )
-        SendPart( player, CLIP, m_clip, clip, look );
-      else
-        HideElement( player, CLIP );
       Part@ icon;
       if( m_icons.get( weapon.pszAmmo1(), @icon ) )
         SendPart( player, AMMO_ICON, icon.Moved( shift ), 0, look );

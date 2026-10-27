@@ -376,8 +376,10 @@ The software-rendered test client (Xvfb, llvmpipe) can stall at 2560×1440 when 
 
 ### Limits
 
-- Each message is reliable and costs about 70 bytes. A shot changes the clip and restarts the fade of all four ammo
-  parts, so a P90 (15 shots per second) sends about 4 KB/s to its player.
+- Each message is reliable and costs about 70 bytes. A shot changes the clip and restarts the CS fade of all four ammo
+  parts. Only the clip goes out with each shot; the reserve and the icon take the fade of the clip when they are 0.5 s
+  behind it, and 0.3 s after the last shot. So during fire their alpha can be up to 10 below the alpha of the clip (the
+  fade falls 20 a second), and a P90 (15 shots per second) sends about 21 messages a second (1.4 KB/s) instead of 60.
 - `HUD_ELEM_EFFECT_ONCE` holds a fade at 99.9 % of its time, so a settled colour can be 1 level from the CS colour.
 - The armour shows the Sven armour (`pev.armorvalue`), which protects against all damage. The CS16 buy menu's Kevlar
   sets the plugin's own CS armour (`CS16BASE::g_PlayerArmor`), which only bullets of CS weapons use. The HUD does not
