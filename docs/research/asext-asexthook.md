@@ -606,6 +606,9 @@ void SaveClientScreen( CBasePlayer@ player, const ScreenSize@ size )
 The experiment ran from a temporary branch, which is deleted. This is its code, for a new run (for example in full
 screen or on Windows). It needs one `unsafe` call, so it does not belong in the Counter-Life plugin.
 
+The answers file holds the value of each cvar of the test client, also `rcon_password` and `password` (section 5). Run
+the sweep only on an own test client, keep the file out of the repository, and delete it after the compare.
+
 <details>
 <summary><code>metamod/counterlife/src/cvarsweep.rs</code> and its wiring</summary>
 
