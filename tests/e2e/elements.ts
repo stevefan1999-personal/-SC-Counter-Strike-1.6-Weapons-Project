@@ -16,7 +16,9 @@ const LOAD_TIMEOUT_MS = 600_000; // a first connection downloads about 8 MB of H
 const SETTLE_MS = 1_200;
 const FADE_SETTLE_MS = 5_600; // CS fades end after 5 s
 const CHANGE_SHOT_MS = 300; // inside the 2.5 s change row of the money
-const CLIP_SECONDS = 2; // a recording around a command: the blink takes 0.3 s, a flash period 0.2 s
+// A recording around a command: the blink takes 0.3 s and a flash period 0.2 s, but the command can take more than a
+// second to reach the screen (once a 2 s clip missed the whole blink).
+const CLIP_SECONDS = 3;
 const CLIP_FRAMES_PER_SECOND = 30; // three frames in each 0.1 s phase
 const POLL_MS = 50;
 const JOIN_HOLD_MS = 3_000;
