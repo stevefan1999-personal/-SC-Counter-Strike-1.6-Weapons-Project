@@ -467,6 +467,8 @@ fixture-metrics shot before:
 
 # Counter-Life metamod plugin (metamod/counterlife, docs/metamod.md). The metamod-svencoop release is the one that
 # metamod-p-rs pins: plugins built with its headers (interface 5:16) need this release or a newer one.
+plugin_target := env('PLUGIN_TARGET', if os() == "windows" { "i686-pc-windows-msvc" } else { "i686-unknown-linux-gnu" })
+plugin_lib := if os() == "windows" { "counterlife.dll" } else { "libcounterlife.so" }
 metamod_release := 'v20261009a'
 metamod_archive := 'metamod-fallguys-ubuntu-i386.zip'
 metamod_sha256 := '552ae6d1faf184498f29d0c686515f56618eb55229970d7a687d8d5c74ed2d78'
@@ -475,17 +477,17 @@ metamod_url := 'https://github.com/metamod-svencoop/metamod-svencoop/releases/do
 metamod_dll := 'addons/metamod/dlls/metamod.so'
 metamod_plugin := 'addons/counterlife/counterlife.so'
 
-# Build the Counter-Life metamod plugin for i686 Linux: just metamod-build release
+# Build the Counter-Life metamod plugin: just metamod-build release
 [group('metamod')]
 [working-directory('metamod/counterlife')]
-metamod-build profile='release':
-  cargo build --profile {{profile}}
+metamod-build profile='release' target=plugin_target:
+  cargo build --profile {{profile}} --target {{target}}
 
 # Run the plugin's unit and fake-host tests (cargo nextest): just metamod-test
 [group('metamod')]
 [working-directory('metamod/counterlife')]
 metamod-test *args:
-  cargo nextest run {{args}}
+  cargo nextest run --target {{plugin_target}} {{args}}
 
 # Check the plugin's formatting and run clippy with warnings as errors: just metamod-lint
 [group('metamod')]
@@ -493,6 +495,22 @@ metamod-test *args:
 metamod-lint:
   cargo fmt --check
   cargo clippy --all-targets -- -D warnings
+
+# Boot a dedicated server with the plugin and join it with a fake client: just metamod-e2e
+[group('metamod')]
+metamod-e2e port='27016' map='hl_c01_a1': (metamod-build)
+  #!/usr/bin/env bash
+  set -euo pipefail
+  manifest='{{justfile_directory()}}/metamod/counterlife/Cargo.toml'
+  root=$(deno run -A '{{justfile_directory()}}/metamod/counterlife/e2e-root.ts' "$manifest")
+  lib='{{justfile_directory()}}/metamod/counterlife/target/{{plugin_target}}/release/{{plugin_lib}}'
+  test -f "$lib"
+  cargo run --manifest-path "$root/Cargo.toml" -p e2e -- \
+    --server-dir '{{server_dir}}' --port {{port}} --map {{map}} \
+    --plugin "$lib" --addon counterlife \
+    --expect "Loaded plugin 'Counter-Life'" \
+    --expect "cl_obituary_filter" \
+    --expect "RustFake"
 
 # Install metamod-svencoop (pinned, SHA-256 checked) and the plugin into an install's svencoop/addons: just metamod-install
 [group('metamod')]
@@ -512,7 +530,7 @@ metamod-install target=server_dir profile='release': (metamod-build profile)
   # --remove-destination replaces a sandbox symlink instead of writing through it into the shared install.
   cp --remove-destination "$download"/unpacked/build/addons/metamod/dlls/* "$game/{{parent_directory(metamod_dll)}}/"
   cp --remove-destination \
-    '{{justfile_directory()}}/metamod/counterlife/target/i686-unknown-linux-gnu/{{ if profile == "dev" { "debug" } else { profile } }}/libcounterlife.so' \
+    '{{justfile_directory()}}/metamod/counterlife/target/{{plugin_target}}/{{ if profile == "dev" { "debug" } else { profile } }}/{{plugin_lib}}' \
     "$game/{{metamod_plugin}}"
   # Keep the plugins that plugins.ini already loads; the plugins of the release stay off.
   ini="$game/addons/metamod/plugins.ini"
@@ -549,36 +567,11 @@ image_source := 'https://github.com/stevefan1999-personal/-SC-Counter-Strike-1.6
 metamod_context := justfile_directory() / '.image' / 'metamod'
 assets_context := justfile_directory() / '.image' / 'assets'
 
-# Check out the pinned metamod-p-rs next to this repository when it is not already there.
-# The plugin's path dependency is ../../../metamod-p-rs from metamod/counterlife.
+# metamod-p is a git dependency. Cargo downloads it and the crate fetches headers.
 [group('image')]
 [private]
 bindings:
-  #!/usr/bin/env bash
-  set -euo pipefail
-  dest='{{justfile_directory()}}/../metamod-p-rs'
-  if test -f "$dest/Cargo.toml"; then
-    echo "using $dest"
-    exit 0
-  fi
-  rev=$(tr -d '[:space:]' < '{{justfile_directory()}}/metamod/counterlife/metamod-p-rs.rev')
-  git clone --filter=blob:none https://github.com/stevefan1999-personal/metamod-p-rs.git "$dest"
-  git -C "$dest" fetch --depth 1 origin "$rev"
-  git -C "$dest" checkout --detach FETCH_HEAD
-  # metamod-fallguys records its headers as a nested gitlink, not as files.
-  probe=$(mktemp -d)
-  git -C "$probe" init -q
-  git -C "$probe" fetch --depth 1 https://github.com/hzqst/metamod-fallguys.git "$(git -C "$dest" rev-parse 'HEAD:metamod-fallguys')"
-  headers=$(git -C "$probe" rev-parse 'FETCH_HEAD:metamod')
-  rm -rf "$probe"
-  mkdir -p "$dest/metamod-fallguys"
-  rm -rf "$dest/metamod-fallguys/metamod"
-  git clone --filter=blob:none --sparse https://github.com/metamod-fallguys/metamod.git "$dest/metamod-fallguys/metamod"
-  git -C "$dest/metamod-fallguys/metamod" sparse-checkout set include
-  git -C "$dest/metamod-fallguys/metamod" fetch --depth 1 origin "$headers"
-  git -C "$dest/metamod-fallguys/metamod" checkout --detach FETCH_HEAD
-  test -f "$dest/metamod-fallguys/metamod/include/meta_api.h"
-  test -d "$dest/metamod-fallguys/metamod/include/HLSDK"
+  @echo "metamod-p comes from the git dependency in metamod/counterlife/Cargo.toml"
 
 # CS 1.6 sprites and hud.txt. A local install wins; otherwise keep the small tree under .image/half-life.
 # GitHub Actions has no Steam library, so the first run there installs the Half-Life dedicated server.
@@ -683,7 +676,7 @@ image-root: (fetch-cs-sprites)
 # Publish does not change the shitgamelab fleet pin: just image publish <tag>
 [group('image')]
 [arg('stage', pattern='dev|publish')]
-image stage='dev' tag='auto': (bindings) (metamod-build 'release') (image-root)
+image stage='dev' tag='auto': (metamod-build 'release') (image-root)
   #!/usr/bin/env bash
   set -euo pipefail
   stage='{{stage}}'

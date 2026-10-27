@@ -91,15 +91,19 @@ looks like `<killer> : <weapon> : <victim>`.
 just metamod-build     # metamod/counterlife/target/i686-unknown-linux-gnu/release/libcounterlife.so
 just metamod-test      # unit tests of the matcher and fake-host tests (cargo nextest)
 just metamod-lint      # rustfmt and clippy, warnings are errors
+just metamod-e2e       # dedicated server, this plugin, and a fake client
 ```
 
 Requirements:
 
-- metamod-p-rs next to this repository (`../metamod-p-rs`). The crate uses it as a path dependency. In a git worktree at
-  `.worktrees/<name>`, the same relative path is `.worktrees/metamod-p-rs`: make that a symbolic link to
-  `../metamod-p-rs`.
+- Cargo downloads `metamod-p` from
+  [metamod-p-rs](https://github.com/stevefan1999-personal/metamod-p-rs) at the `rev` in
+  `metamod/counterlife/Cargo.toml`. The crate fetches the header trees when the checkout does not contain them.
 - Rust nightly with the `i686-unknown-linux-gnu` target (`rust-toolchain.toml`), libclang, the 32-bit glibc and
-  `cargo-nextest`, as for metamod-p-rs.
+  `cargo-nextest`, as for metamod-p-rs. On Windows, `just` builds `i686-pc-windows-msvc`.
+
+`just metamod-e2e` boots the Sven Co-op dedicated server (`SVEN_SERVER_DIR`, or the Steam install), loads this plugin,
+and joins with a fake client. GitHub Actions runs `just metamod-test` and `just metamod-e2e` on Linux and Windows.
 
 The fake-host tests load the plugin through its C entry points, as metamod does. They send the game's message calls
 through the plugin's hooks; the fake engine runs a call unless the hook superseded it, and records the engine's fatal

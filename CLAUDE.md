@@ -7,8 +7,8 @@ Counter-Life makes KernCore's CS 1.6 weapons pack for Sven Co-op 5.26 (Linux, 32
 
 - `scripts/cs16/`: the "CS16 Weapons" AngelScript plugin (`cs16_register.as`); `scripts/cs16/hud/` is the server-side
   CS 1.6 HUD (`docs/hud.md`, `docs/hud-architecture.md`).
-- `metamod/counterlife/`: the Rust metamod plugin (obituary filter, `docs/metamod.md`). It builds against the
-  `metamod-p-rs` checkout next to this repository (path dependency).
+- `metamod/counterlife/`: the Rust metamod plugin (obituary filter, `docs/metamod.md`). `metamod-p` is a git
+  dependency of `metamod-p-rs`; Cargo downloads that revision and the crate fetches its headers.
 - `tools/`: Deno tools (`hudgen`, `hudfont`, `scopegen`, `mdlpatch`, `audit`), each with tests.
 - `tests/e2e/`: offscreen in-game scenarios; `tests/fixture/`: the CS 1.6 reference fixture (ReGameDLL_CS).
 - `docs/research/`: verified facts about the Sven and CS 1.6 binaries. Check a claim there before you reverse engineer

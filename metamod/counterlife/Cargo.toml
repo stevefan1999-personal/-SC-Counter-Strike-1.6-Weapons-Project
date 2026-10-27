@@ -11,6 +11,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 log = "0.4"
-# Sven Co-op runs metamod-svencoop: see metamod-p-rs
-# docs/adr/0001-metamod-flavour.md.
-metamod-p = { path = "../../../metamod-p-rs", features = ["fallguys"] }
+# Sven Co-op runs metamod-svencoop. Cargo clones this revision and the crate
+# fetches the header trees it binds against.
+metamod-p = { git = "https://github.com/stevefan1999-personal/metamod-p-rs", rev = "1776bbbbca8091974c1b88a8ab3e4847625ea07b", features = ["fallguys"] }
