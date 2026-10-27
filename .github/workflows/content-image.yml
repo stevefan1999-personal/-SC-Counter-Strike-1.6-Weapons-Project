@@ -60,7 +60,7 @@ jobs:
           path: .image/half-life
           key: cs16-sprite-inputs-v1
 
-      - name: Publish the content image
+      - name: Publish the metamod and asset image volumes
         env:
           IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
         run: just image publish "${{ github.sha }}"

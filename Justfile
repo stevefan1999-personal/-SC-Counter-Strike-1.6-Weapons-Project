@@ -540,7 +540,12 @@ fov-metrics +dirs:
   @deno run -A '{{justfile_directory()}}/tests/fixture/fov-metrics.ts' {{dirs}}
 
 image_registry := env('IMAGE_REGISTRY', 'ghcr.io/stevefan1999-personal')
-image_name := 'svencoop-counterlife'
+# Mounted at svencoop/addons. Root is that directory: metamod/ and counterlife/.
+metamod_image := 'svencoop-metamod'
+# Mounted at svencoop_addon. Root is that directory: scripts/, models/, sound/, sprites/, events/.
+assets_image := 'svencoop-assets'
+metamod_context := justfile_directory() / '.image' / 'metamod'
+assets_context := justfile_directory() / '.image' / 'assets'
 
 # Check out the pinned metamod-p-rs next to this repository when it is not already there.
 # The plugin's path dependency is ../../../metamod-p-rs from metamod/counterlife.
@@ -609,20 +614,22 @@ fetch-cs-sprites:
   cp -a "$pain" "$cache/valve/sprites/"
   ready "$cache/cstrike"
 
-# Assemble .image/root: git assets, CS sprites, generated HUD, metamod-svencoop and the Rust plugin.
+# Assemble two image roots. Each root is mounted whole, so every top-level entry is a directory.
+# .image/metamod is svencoop/addons. .image/assets is svencoop_addon.
 [group('image')]
 [private]
 image-root: (fetch-cs-sprites)
   #!/usr/bin/env bash
   set -euo pipefail
-  root='{{justfile_directory()}}/.image/root'
-  rm -rf "$root"
-  mkdir -p "$root/scripts" "$root/events" "$root/addons/metamod/dlls" "$root/addons/counterlife"
-  cp -a '{{justfile_directory()}}/models' '{{justfile_directory()}}/sound' '{{justfile_directory()}}/sprites' "$root/"
-  cp -a '{{justfile_directory()}}/scripts/cs16' "$root/scripts/cs16"
-  cp -a '{{justfile_directory()}}/scripts/store' "$root/scripts/store"
-  cp -a '{{justfile_directory()}}/scripts/counterlife.as' '{{justfile_directory()}}/scripts/DamageMoneyScore.as' "$root/scripts/"
-  cp -a '{{justfile_directory()}}/events/.' "$root/events/"
+  meta='{{justfile_directory()}}/.image/metamod'
+  assets='{{justfile_directory()}}/.image/assets'
+  rm -rf "$meta" "$assets"
+  mkdir -p "$meta/metamod/dlls" "$meta/counterlife" "$assets/scripts/plugins" "$assets/events"
+  cp -a '{{justfile_directory()}}/models' '{{justfile_directory()}}/sound' '{{justfile_directory()}}/sprites' "$assets/"
+  cp -a '{{justfile_directory()}}/scripts/cs16' "$assets/scripts/plugins/cs16"
+  cp -a '{{justfile_directory()}}/scripts/store' "$assets/scripts/plugins/store"
+  cp -a '{{justfile_directory()}}/scripts/counterlife.as' '{{justfile_directory()}}/scripts/DamageMoneyScore.as' "$assets/scripts/plugins/"
+  cp -a '{{justfile_directory()}}/events/.' "$assets/events/"
   command -v rg >/dev/null || { echo 'rg is required to read cstrike-assets.txt' >&2; exit 1; }
   local_cs='{{cstrike_dir}}'
   if test -f "$local_cs/sprites/640hud7.spr"; then cs="$local_cs"; else cs='{{justfile_directory()}}/.image/half-life/cstrike'; fi
@@ -630,10 +637,10 @@ image-root: (fetch-cs-sprites)
     test -n "$asset"
     test -f "$cs/$asset" || { echo "missing CS 1.6 asset: $cs/$asset" >&2; exit 1; }
     if test -z "${destination:-}"; then destination="$(dirname "$asset")/cs16/$(basename "$asset")"; fi
-    install -D -m 644 "$cs/$asset" "$root/$destination"
+    install -D -m 644 "$cs/$asset" "$assets/$destination"
   done < <(rg -v '^\s*(#|$)' '{{justfile_directory()}}/cstrike-assets.txt')
-  deno run -R="$cs" -W="$root/sprites/cs16/hud" '{{justfile_directory()}}/tools/hudgen.ts' \
-    "$cs" "$root/sprites/cs16/hud" >/dev/null
+  deno run -R="$cs" -W="$assets/sprites/cs16/hud" '{{justfile_directory()}}/tools/hudgen.ts' \
+    "$cs" "$assets/sprites/cs16/hud" >/dev/null
   download='{{state_root}}/metamod/{{metamod_release}}'
   archive="$download/{{metamod_archive}}"
   mkdir -p "$download"
@@ -642,31 +649,33 @@ image-root: (fetch-cs-sprites)
     echo '{{metamod_sha256}}  '"$archive" | sha256sum --check
   fi
   rm -rf "$download/unpacked" && unzip -q "$archive" -d "$download/unpacked"
-  cp -a "$download/unpacked/build/addons/metamod/dlls/." "$root/addons/metamod/dlls/"
+  cp -a "$download/unpacked/build/addons/metamod/dlls/." "$meta/metamod/dlls/"
   install -m 755 \
     '{{justfile_directory()}}/metamod/counterlife/target/i686-unknown-linux-gnu/release/libcounterlife.so' \
-    "$root/addons/counterlife/counterlife.so"
-  printf 'linux addons/counterlife/counterlife.so\n' > "$root/addons/metamod/plugins.ini"
-  find "$root/addons" -name '*.so' -exec chmod 755 {} +
-  for so in "$root/addons/counterlife/counterlife.so" "$root/addons/metamod/dlls/metamod.so"; do
+    "$meta/counterlife/counterlife.so"
+  printf 'linux addons/counterlife/counterlife.so\n' > "$meta/metamod/plugins.ini"
+  find "$meta" -name '*.so' -exec chmod 755 {} +
+  for so in "$meta/counterlife/counterlife.so" "$meta/metamod/dlls/metamod.so"; do
     file "$so" | grep -q 'ELF 32-bit' || { echo "$so is not an i686 shared object" >&2; exit 1; }
   done
-  find "$root" -mindepth 1 -maxdepth 1 ! -type d -print | grep -q . && { echo 'image root has a file; mounts need directories' >&2; exit 1; }
-  for required in \
-    addons/counterlife/counterlife.so \
-    addons/metamod/dlls/metamod.so \
-    addons/metamod/plugins.ini \
-    scripts/cs16/cs16_register.as \
-    scripts/counterlife.as \
-    scripts/DamageMoneyScore.as \
-    scripts/store/DamageMoneyScore.cfg \
-    sprites/cs16/icons/640hud1.spr \
-    sprites/cs16/hud \
-    events/cs16_muzzleflash2_s3_a0.txt
-  do
-    test -e "$root/$required" || { echo "image is missing $required" >&2; exit 1; }
+  for root in "$meta" "$assets"; do
+    find "$root" -mindepth 1 -maxdepth 1 ! -type d -print | grep -q . && { echo "$root has a file at its root" >&2; exit 1; }
   done
-  echo "image root: $root"
+  for required in \
+    "$meta/counterlife/counterlife.so" \
+    "$meta/metamod/dlls/metamod.so" \
+    "$meta/metamod/plugins.ini" \
+    "$assets/scripts/plugins/cs16/cs16_register.as" \
+    "$assets/scripts/plugins/counterlife.as" \
+    "$assets/scripts/plugins/DamageMoneyScore.as" \
+    "$assets/scripts/plugins/store/DamageMoneyScore.cfg" \
+    "$assets/sprites/cs16/icons/640hud1.spr" \
+    "$assets/sprites/cs16/hud" \
+    "$assets/events/cs16_muzzleflash2_s3_a0.txt"
+  do
+    test -e "$required" || { echo "image is missing $required" >&2; exit 1; }
+  done
+  echo "image roots: $meta $assets"
 
 # Build the content image. dev loads it locally. publish pushes an OCI image to GHCR.
 # Publish does not change the shitgamelab fleet pin: just image publish <tag>
@@ -683,8 +692,6 @@ image stage='dev' tag='auto': (bindings) (metamod-build 'release') (image-root)
   if test "$stage" = publish; then
     test -z "$(git -C '{{justfile_directory()}}' status --porcelain)" || { echo 'commit the tree before publishing' >&2; exit 1; }
   fi
-  ref='{{image_registry}}/{{image_name}}:'"$tag"
-  printf 'FROM scratch\nCOPY . /\n' > '{{justfile_directory()}}/.image/Dockerfile'
   builder=()
   output=(--load)
   if test "$stage" = publish; then
@@ -692,20 +699,29 @@ image stage='dev' tag='auto': (bindings) (metamod-build 'release') (image-root)
     builder=(--builder svencoop-oci)
     output=(--output type=registry,oci-mediatypes=true)
   fi
-  docker buildx build "${builder[@]}" \
-    --file '{{justfile_directory()}}/.image/Dockerfile' \
-    --platform linux/amd64 \
-    --provenance=false \
-    --sbom=false \
-    "${output[@]}" \
-    --tag "$ref" \
-    '{{justfile_directory()}}/.image/root'
-  if test "$stage" = publish; then
-    digest=$(docker buildx imagetools inspect "$ref" --format '{{"{{.Digest}}"}}')
-    echo "$ref@$digest"
-    if test -n "${GITHUB_STEP_SUMMARY:-}"; then
-      printf '### Sven Co-op content image\n\n`%s@%s`\n\nThe shitgamelab fleet stays on its pinned digest until that pin changes.\n' "$ref" "$digest" >> "$GITHUB_STEP_SUMMARY"
+  summary=''
+  # name|context. The context root is what Kubernetes mounts.
+  for spec in '{{metamod_image}}|{{metamod_context}}' '{{assets_image}}|{{assets_context}}'; do
+    name=${spec%%|*}
+    context=${spec#*|}
+    ref='{{image_registry}}/'"$name:$tag"
+    printf 'FROM scratch\nCOPY . /\n' > "$context.Dockerfile"
+    docker buildx build "${builder[@]}" \
+      --file "$context.Dockerfile" \
+      --platform linux/amd64 \
+      --provenance=false \
+      --sbom=false \
+      "${output[@]}" \
+      --tag "$ref" \
+      "$context"
+    if test "$stage" = publish; then
+      digest=$(docker buildx imagetools inspect "$ref" | awk '/^Digest:/ { print $2 }')
+      echo "$ref@$digest"
+      summary="$summary"$'\n'"\`$ref@$digest\`"
+    else
+      echo "loaded $ref"
     fi
-  else
-    echo "loaded $ref"
+  done
+  if test "$stage" = publish && test -n "${GITHUB_STEP_SUMMARY:-}"; then
+    printf '### Sven Co-op image volumes\n%s\n\nThe shitgamelab fleet stays on its pinned digests until those pins change.\n' "$summary" >> "$GITHUB_STEP_SUMMARY"
   fi
