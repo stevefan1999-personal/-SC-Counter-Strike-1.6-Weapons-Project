@@ -14,6 +14,9 @@ listen_port := env('CL_LISTEN_PORT', '27045')
 client_state := env('CL_CLIENT_STATE', home_directory() / '.local/state/counter-life')
 client_registry := client_state / 'clients'
 client_original := client_state / 'client-original'
+# Games start with only these variables: Steam's crash handler writes the whole environment into each minidump and
+# uploads it, so secrets in the caller's environment must never reach a game process.
+game_env := 'env -i HOME="$HOME" USER="$USER" PATH="$PATH" LANG="${LANG:-C.UTF-8}" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}"'
 
 default:
   @just --list
@@ -48,13 +51,15 @@ server port='27015' map='hl_c01_a1' *args: (stop port)
   cd '{{server_dir}}'
   export LD_LIBRARY_PATH="$PWD:$PWD/redist:${LD_LIBRARY_PATH:-}"
   # -nobreakpad does not reach Steam's crash handler: a steamclient assert (often at the first changelevel) still
-  # writes a minidump to /tmp/dumps and uploads it through the proxy of the environment. steamclient's -noassert stops
-  # the assert dumps, and a closed local proxy keeps any other dump on this machine (docs/development.md).
-  export http_proxy=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9
+  # writes a minidump to /tmp/dumps and uploads it. steamclient's -noassert stops the assert dumps, game_env keeps the
+  # caller's environment out of any other dump, and a closed local proxy keeps that dump on this machine
+  # (docs/development.md).
+  dead_proxy=http://127.0.0.1:9
   # The holder keeps the pipe open so the server never reads EOF between commands.
   sleep infinity > "$state/in" 2>/dev/null < /dev/null &
   echo $! > "$state/holder.pid"
-  ./svends_i686 -console -nobreakpad -noassert -port {{port}} +maxplayers 8 +sv_lan 1 +sv_cheats 1 +map {{map}} {{args}} < "$state/in" > "$state/server.log" 2>&1 &
+  {{game_env}} LD_LIBRARY_PATH="$LD_LIBRARY_PATH" http_proxy="$dead_proxy" HTTP_PROXY="$dead_proxy" \
+    ./svends_i686 -console -nobreakpad -noassert -port {{port}} +maxplayers 8 +sv_lan 1 +sv_cheats 1 +map {{map}} {{args}} < "$state/in" > "$state/server.log" 2>&1 &
   echo $! > "$state/server.pid"
   for _ in $(seq 1 60); do
     rg -q 'Started map' "$state/server.log" && { echo "server {{port}} up on {{map}}"; exit 0; }
@@ -142,8 +147,8 @@ client +args: display client-stop
   res='{{resolution}}'
   cd '{{client_dir}}'
   # -nosound crashes Sven's client in HUD_DrawTransparentTriangles, so mute with volume cvars instead.
-  DISPLAY='{{display}}' SDL_VIDEODRIVER=x11 SteamAppId=225840 SteamGameId=225840 \
-    setsid '{{steam_runtime}}' ./svencoop.sh -nosteamoverlay -nobreakpad -novid -windowed \
+  setsid {{game_env}} DISPLAY='{{display}}' SDL_VIDEODRIVER=x11 SteamAppId=225840 SteamGameId=225840 \
+    '{{steam_runtime}}' ./svencoop.sh -nosteamoverlay -nobreakpad -novid -windowed \
     -w "${res%x*}" -h "${res#*x}" -port {{listen_port}} +volume 0 +MP3Volume 0 +net_graph 0 +cl_showfps 0 {{args}} \
     > "$state/client.log" 2>&1 < /dev/null &
   echo $! > "$state/client.pgid"
@@ -310,7 +315,7 @@ fixture-start display=fixture_display resolution='1600x900' port='27049' clientp
   rm -f '{{root}}/qconsole.log'
   res='{{resolution}}'
   cd '{{root}}'
-  SDL_VIDEODRIVER=x11 SteamAppId=10 SteamGameId=10 setsid '{{steam_runtime}}' ./hl.sh -steam -game cstrike \
+  setsid {{game_env}} DISPLAY="$DISPLAY" SDL_VIDEODRIVER=x11 SteamAppId=10 SteamGameId=10 '{{steam_runtime}}' ./hl.sh -steam -game cstrike \
     -novid -nobreakpad -windowed -condebug -w "${res%x*}" -h "${res#*x}" -port {{port}} +clientport {{clientport}} \
     +lservercfgfile fixture.cfg +sv_lan 1 +maxplayers 12 +map {{map}} > "$state/game.log" 2>&1 &
   echo $! > "$state/game.pgid"
