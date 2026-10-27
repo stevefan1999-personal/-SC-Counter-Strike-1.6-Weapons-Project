@@ -135,7 +135,7 @@ Static check of the release asext against our `server.so` (no run):
 | Script directories | new roots of the script file system, with access flags                                             | `ASEXT_RegisterDirInitCallback` and `ASEXT_CreateDirectory`                                              | [`server_hook.cpp:200-223`][ax-dir]                            | none for the size: these are files of the server                                                       |
 | Runtime access     | the script engine, the current module and context, a type by name                                  | `ASEXT_GetServerManager`, `ASEXT_GetCurrentContext`, `ASEXT_CASBaseManager_GetTypeInfoByName`            | [`asext_api.h:114-134`][ax-api-rt]                             | none. Calls into `asIScriptEngine` from Rust need the C++ ABI of Sven's AngelScript                    |
 | Data helpers       | script strings (a 36-byte `CString`), arrays, `any` values and dictionaries                        | `ASEXT_CStringAssign`, `ASEXT_CStringdtor`, `ASEXT_CScriptDictionary_*`                                  | [`asext_api.h:311-381`][ax-api-data]                           | needed to give strings to a script                                                                     |
-| Client data        | none                                                                                               | the cvar-query slots of its engine and DLL tables are NULL                                               | [`engine_api.cpp:244-246`][ax-eng], [`dllapi.cpp:240`][ax-dll] | none                                                                                                   |
+| Client data        | none                                                                                               | it hooks no cvar query and no answer: both slots are NULL                                                | [`engine_api.cpp:244-246`][ax-eng], [`dllapi.cpp:240`][ax-dll] | none                                                                                                   |
 
 [axr-meta]: https://github.com/metamod-svencoop/asext/blob/df03faf88e7e547d3f4f84b75ed0385bec5a0678/src/meta_api.cpp#L218-L284
 [fg-asext]: https://github.com/metamod-svencoop/fallguys/blob/dac8db54db189346e2e0eb5beefbc8de6c53985f/src/meta_api.cpp#L296-L307
@@ -238,6 +238,7 @@ few methods and types, and the cvar `sv_fixgmr`. It has 42 releases, from `v2022
 
 [mm-ver]: https://github.com/metamod-svencoop/metamod/blob/e642d19ef74f50c8eeaac0ddfb43e20c7f79a2fe/include/meta_api.h#L70
 [aq-usage]: https://github.com/metamod-svencoop/asqcvar/blob/272309bf4d225cfae4128b6cd8fdb4bcd1e560fb/USAGE.md?plain=1#L19-L64
+[aq-send]: https://github.com/metamod-svencoop/asqcvar/blob/272309bf4d225cfae4128b6cd8fdb4bcd1e560fb/USAGE.md?plain=1#L19-L30
 [au-eng]: https://github.com/metamod-svencoop/asusermsg/blob/71c4188f0f25c4f53e14b2fa66db3e3dc32f18ab/src/engine_api.cpp#L43-L145
 [mhs-readme]: https://github.com/MetaHookSv/MetaHookSv/blob/6730950d308d902d349a04036b56505353d44e67/README.md?plain=1#L25
 
@@ -321,9 +322,11 @@ Result: no. Between 1600x900 and 2560x1440, 0 of the 410 client cvars change.
 - `client.so` has no `cl_crosshair_color`, `cl_crosshair_size`, `cl_crosshair_translucent` or `cl_dynamiccrosshair`.
 - The client answers each registered cvar, with no filter for protected cvars (`hw.so` 0x105390). Thus a server can read
   `rcon_password`, `password` and `sv_password` of a client. Query only fixed names, and never log the values.
-- asext and asexthook cannot query cvars: their engine tables leave both query functions NULL (section 1.3, section
-  2.2). Sven's AngelScript API has no query function. Only a metamod plugin can query. metamod-p-rs already gets the
-  answers (`metamod-p-rs/src/plugin.rs:305`).
+- asext and asexthook give scripts no cvar query. A NULL slot in a metamod hook table only means "no hook", but neither
+  plugin gets the answers: the `pfnCvarValue2` slot of asext is NULL, and asexthook has no `NEW_DLL_FUNCTIONS` table
+  (section 1.3, section 2.2). Sven's AngelScript API has no query function. A script can send `svc_sendcvarvalue2` as a
+  raw `NetworkMessage` ([asqcvar `USAGE.md:19-30`][aq-send]), but only a metamod plugin gets the answer. metamod-p-rs
+  already gets the answers (`metamod-p-rs/src/plugin.rs:305`).
 
 | Cvar                                | Value at both sizes |
 | ----------------------------------- | ------------------- |
