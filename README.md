@@ -6,6 +6,49 @@ This project is brought to you by the following super dedicated team members: D.
 
 # **DO NOT RUN THIS PLUGIN ALONG WITH ANOTHER WEAPON PLUGIN, NO SUPPORT IS GUARANTEED BETWEEN THEM**
 
+## Counter-Life
+
+Counter-Life makes this pack look like Counter-Strike 1.6 in Sven Co-op, measured against CS 1.6 screenshots at
+1600x900 and 2560x1440:
+
+- **CS 1.6 HUD**, drawn by the server: health, armour, ammo with the CS ammo icons, money with its change row and blink,
+  flashlight, the C4 status icon, pain arrows, the dynamic crosshair and the kill feed with weapon and headshot icons
+  ([docs/hud.md](docs/hud.md)).
+- **Field of view and scopes** as in CS 1.6, and the CS sniper scope at every zoom ([docs/fov.md](docs/fov.md)).
+- **Muzzle flashes, weapon-menu icons and world models** at the CS 1.6 size
+  ([docs/research/muzzle-flash.md](docs/research/muzzle-flash.md)).
+- **No Sven death lines**: a metamod plugin in Rust (`metamod/counterlife`) drops Sven's obituary lines from the notify
+  area, because CS 1.6 shows deaths only in the kill feed ([docs/metamod.md](docs/metamod.md)).
+
+Install on a server with [`just`](https://just.systems). The CS 1.6 sprites come from your own Half-Life install with
+Counter-Strike (`CSTRIKE_DIR`), so they are not in git:
+
+```sh
+export SVEN_SERVER_DIR="$HOME/.local/share/Steam/steamapps/common/Sven Co-op Dedicated Server"
+just install                          # plugins, assets, CS 1.6 imports and the generated HUD sprites
+just metamod-install                  # optional: metamod-svencoop and the obituary filter
+just server-metamod 27015 svencoop1   # or start svends_i686 with -dll addons/metamod/dlls/metamod.so
+```
+
+A first connection downloads about 8 MB of HUD sprites. Offer them on an HTTP download server (`sv_downloadurl`).
+
+Server cvars (with the repository's `default_plugins.txt`, prefix them with `as_command .`):
+
+| Cvar                                  | Default     | Effect                                                                     |
+| ------------------------------------- | ----------- | -------------------------------------------------------------------------- |
+| `cs16_hud`                            | `1`         | 1: CS 1.6 HUD, 0: Sven's own HUD                                           |
+| `cs16_hud_res`                        | `1920x1080` | screen size for players who did not send `.hudres`                         |
+| `cs16_killfeed_names`                 | `3`         | 3: CS names on maps without `game_text`, 2: always, 1: victims only, 0: no |
+| `cl_obituary_filter` (metamod plugin) | `1`         | 1: drop Sven's death lines, 0: keep them                                   |
+
+Players:
+
+- Type `.hudres <width>x<height>` once (in chat or the console) so the HUD knows your screen size.
+- Set `default_fov 74` in the console. The CS weapons show CS 1.6's view, which is 74 in Sven's vertical degrees; with
+  Sven's default 70 the client turns the mouse 1.27 times as fast with them.
+
+[docs/development.md](docs/development.md) describes the offscreen end-to-end tests and the CS 1.6 reference fixture.
+
 ## Download Links
 
 Total Size Compressed: 3.7 MB
