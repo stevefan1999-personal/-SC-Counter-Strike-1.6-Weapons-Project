@@ -80,7 +80,8 @@ namespace CS16HUD
     {
       const int slot = player.entindex();
       CBasePlayerWeapon@ weapon = null;
-      if( ShowsStatus( player ) )
+      // CS sends CurWeapon without a weapon at death (ReGameDLL CBasePlayer::Killed): a dead player has no counter.
+      if( ShowsStatus( player ) && player.IsAlive() )
         @weapon = cast<CBasePlayerWeapon@>( player.m_hActiveItem.GetEntity() );
       const int ammoType = weapon is null ? NO_AMMO_TYPE : weapon.PrimaryAmmoIndex();
       // CS draws no counter for a weapon without ammo, such as the knife.

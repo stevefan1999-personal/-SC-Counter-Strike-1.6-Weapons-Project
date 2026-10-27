@@ -189,7 +189,9 @@ and the damage money report each change (see [Money](#money)).
 - Health, armour, ammo and the flashlight need the HEV suit and are hidden for a spectator, as in CS (`cs16-hud-spec.md`
   2.5). The native Sven parts that they replace need the suit too.
 - Without the suit, the money moves up to H − 125 (CS `H - 5 fh`). A spectator sees no money.
-- The c4 icon shows while the player carries the C4.
+- A dead player has no ammo counter and no c4 icon: CS sends `CurWeapon` without a weapon at death and drops the C4
+  (ReGameDLL `CBasePlayer::Killed`). The health shows 0, and armour, money and flashlight stay, as in CS.
+- The c4 icon shows while a living player carries the C4.
 
 ### Ammo
 

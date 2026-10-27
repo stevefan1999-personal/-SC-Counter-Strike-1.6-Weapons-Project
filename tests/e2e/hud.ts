@@ -1,5 +1,6 @@
-// HUD scenario: walks through the CS HUD states on testcenter and saves full shots plus HUD-region crops. The last step
-// changes the level and checks that the health shows the settled CS colour on the new map. Exits 1 when it does not.
+// HUD scenario: walks through the CS HUD states on testcenter and saves full shots plus HUD-region crops. The last steps
+// change the level and check that the health shows the settled CS colour on the new map, then let the player die with
+// the C4 and check that the ammo counter and the c4 icon go. Exits 1 when a check fails.
 // Usage: deno run -A tests/e2e/hud.ts [port] [label]
 // The server install (SVEN_SERVER_DIR) must already contain the game content and the e2e plugin.
 import { Client, crop, PLAYER_NAME, Server, sleep } from "./driver.ts";
@@ -16,6 +17,13 @@ const SETTLED_ORANGE: Rgb = [100, 62, 0];
 // The dimmest settled glyph is the armour shield (87, 54); a fade from the old map shows 147-180 or 33-54 red.
 const SETTLED_TOLERANCE = 15;
 const HEALTH_GLYPHS = 4; // the cross and "100"
+const LETHAL_DAMAGE = 500; // kills a player without armour
+// A HUD part shows where its channel rises this much over the backdrop, on at least this many pixels: the settled ammo
+// digits add 100 red and the c4 icon 160 green, and any point of their fades adds more.
+const LIT_LEVELS = 40;
+const MIN_LIT_PIXELS = 20;
+const [RED, GREEN] = [0, 1];
+const CHANNELS = 3;
 const VICTIM = "monster_scientist";
 const VICTIM_DISTANCES = [160, 220, 280, 340];
 const WEAPONS = ["weapon_csknife", "weapon_usp", "weapon_ak47", "weapon_m3", "weapon_awp", "weapon_hegrenade"];
@@ -31,7 +39,11 @@ const REGIONS: Array<[string, string, string]> = [
 
 const [portArg = "27017", label = "hud"] = Deno.args;
 const port = Number(portArg);
-const height = Number((Deno.env.get("CL_RESOLUTION") ?? "1600x900").split("x")[1]);
+const [width, height] = (Deno.env.get("CL_RESOLUTION") ?? "1600x900").split("x").map(Number);
+// The ammo row at the bottom right (below the money), and the first CS status icon slot at the left (crossW / 2,
+// H / 2 - 37).
+const AMMO_ROW: Region = { x: width - 200, y: height - 40, width: 200, height: 40 };
+const STATUS_ICON: Region = { x: 0, y: Math.floor(height / 2) - 60, width: 60, height: 60 };
 const server = new Server(port);
 const client = new Client();
 const manifest: Array<{ step: string; full: string; crops: string[] }> = [];
@@ -94,6 +106,40 @@ async function changeLevel() {
   await e2e("backdrop", /\[e2e\] backdrop/);
 }
 
+// How many pixels of a region the HUD lit in one channel, on the backdrop.
+async function litPixels(image: string, region: Region, channel: number) {
+  const { data } = await Pixels.read(image, region);
+  return Array.from({ length: data.length / CHANNELS }, (_, pixel) => data[pixel * CHANNELS + channel])
+    .filter((value) => value - BACKDROP[channel] > LIT_LEVELS).length;
+}
+
+// The lit pixels of the ammo row (red) and of the c4 icon (green) in a step.
+async function statusParts(step: string) {
+  await capture(step);
+  const image = manifest.at(-1)!.full;
+  return { ammo: await litPixels(image, AMMO_ROW, RED), c4: await litPixels(image, STATUS_ICON, GREEN) };
+}
+
+// CS sends CurWeapon without a weapon at death and drops the C4 (ReGameDLL CBasePlayer::Killed), so a dead player has
+// no ammo counter and no c4 icon. Both must show first, or the check would pass without them.
+async function die() {
+  await e2e("give weapon_c4", /\[e2e\] gave/);
+  await e2e("give weapon_ak47", /\[e2e\] gave/);
+  await select("weapon_ak47");
+  await e2e("armor 0", /\[e2e\] armor/);
+  await e2e(`backdrop ${BACKDROP.join(" ")}`, /\[e2e\] backdrop/);
+  await sleep(SETTLE_MS);
+  const alive = await statusParts("alive-with-c4");
+  await e2e(`hurt ${LETHAL_DAMAGE}`, /\[e2e\] hurt/);
+  await sleep(SETTLE_MS);
+  const dead = await statusParts("dead");
+  report.death = { alive, dead };
+  if (alive.ammo < MIN_LIT_PIXELS || alive.c4 < MIN_LIT_PIXELS) {
+    failures.push(`alive with the C4, the check sees too little: ${JSON.stringify(alive)}`);
+  }
+  if (dead.ammo >= MIN_LIT_PIXELS || dead.c4 >= MIN_LIT_PIXELS) failures.push(`dead: ${JSON.stringify(dead)}`);
+}
+
 try {
   await server.start("testcenter");
   await client.join(server);
@@ -141,6 +187,7 @@ try {
   await capture("flashlight-on");
   await client.console("impulse 100");
   await changeLevel();
+  await die();
 
   console.log(JSON.stringify({ label, port, manifest, report, failures }, null, 2));
 } finally {

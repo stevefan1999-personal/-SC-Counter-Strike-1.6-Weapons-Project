@@ -29,7 +29,8 @@ namespace CS16HUD
     {
       const int slot = player.entindex();
       const bool inZone = player.GetCustomKeyvalues().GetKeyvalue( CS16_BOMBTARGET::INBOMB_KV ).GetInteger() == 1;
-      const int shown = CarriesC4( player ) ? ( inZone ? 1 : 0 ) : NO_VALUE;
+      // CS drops the C4 of a dying player (SetBombIcon(FALSE)), and a spectator sees no status icons.
+      const int shown = CarriesC4( player ) && player.IsAlive() ? ( inZone ? 1 : 0 ) : NO_VALUE;
       if( shown == m_drawn[slot] && !resend )
         return;
       m_drawn[slot] = shown;
