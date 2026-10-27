@@ -94,17 +94,20 @@ Known client problems:
 
 `just install-e2e` adds `tests/e2e/e2e.as` to the server. Use it from the server console with `as_command`:
 
-| Command                             | Effect                                                                   |
-| ----------------------------------- | ------------------------------------------------------------------------ |
-| `e2e.spawn <class> [distance]`      | spawn in front of player 1; a monster stops moving after 1 s             |
-| `e2e.aim [head\|body] [class]`      | turn player 1 to the nearest live monster; prints the number still alive |
-| `e2e.kill [head\|body] [n] [class]` | kill the nearest monsters with the held weapon as the inflictor          |
-| `e2e.give <class>`                  | give player 1 an item                                                    |
-| `e2e.health <n>`, `e2e.armor <n>`   | set health or armour                                                     |
-| `e2e.hurt <n>`                      | damage player 1 from the world; armour absorbs most of it                |
-| `e2e.respawn`                       | respawn player 1, also when dead                                         |
-| `e2e.notify <text>`                 | print a line in the top-left notify area of every player                 |
-| `e2e.stuff <command>`               | run a console command on the client (the client can refuse some of them) |
+| Command                             | Effect                                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------------------ |
+| `e2e.spawn <class> [distance]`      | spawn in front of player 1; a monster stops moving after 1 s                         |
+| `e2e.aim [head\|body] [class]`      | turn player 1 to the nearest live monster; prints the number still alive             |
+| `e2e.kill [head\|body] [n] [class]` | kill the nearest monsters with the held weapon as the inflictor                      |
+| `e2e.give <class>`                  | give player 1 an item                                                                |
+| `e2e.health <n>`, `e2e.armor <n>`   | set health or armour                                                                 |
+| `e2e.hurt <n>`                      | damage player 1 from the world; armour absorbs most of it                            |
+| `e2e.respawn`                       | respawn player 1, also when dead                                                     |
+| `e2e.notify <text>`                 | print a line in the top-left notify area of every player                             |
+| `e2e.stuff <command>`               | run a console command on the client (the client can refuse some of them)             |
+| `e2e.turn <degrees>`                | turn player 1's view by an exact yaw step (left is positive)                         |
+| `e2e.fov`                           | print player 1's `m_iFOV`, held weapon (script or native), life state and view model |
+| `e2e.camera <seconds>`              | view player 1 through a `trigger_camera`, as a map cutscene does                     |
 
 ## Scenarios
 
@@ -112,6 +115,10 @@ Known client problems:
 just e2e-killfeed 27017 weapon_m4a1 head   # shoot a scientist, save the kill feed
 just e2e-hud 27017 run1                    # 15 HUD states with crops of each HUD region
 just e2e-obituary 27017                    # metamod plugin: no Sven death lines, see docs/metamod.md
+```
+
+```sh
+just e2e-fov 27017 "$PWD/.e2e/fov/run1"    # view models, scopes and turned views of the CS weapons
 ```
 
 The scenarios start the server and the client themselves and print a JSON list of the screenshots.
@@ -152,3 +159,14 @@ just fixture-metrics .e2e/shots/run1-killfeed.png .e2e/shots/run1-killfeed-befor
 ```
 
 [CS 1.6 kill-feed reference](research/cs16-killfeed-reference.md) describes the fixture and the measured layout.
+
+### Field-of-view reference
+
+`just fixture-fov` captures the same states as `just e2e-fov` in CS 1.6. `just fov-metrics` measures both captures:
+
+```sh
+just fixture-fov :96 1600x900
+just fov-metrics .e2e/fov/cs16-1600x900 .e2e/fov/run1
+```
+
+[Field of view](fov.md) gives the method and the results.

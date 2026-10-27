@@ -203,6 +203,10 @@ class weapon_sg552 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
 
     void SecondaryAttack()
     {
+        // A camera only ends a zoom (base.as IsCameraCall); the zoomed case below does that
+        if( IsCameraCall() && WeaponZoomMode == CS16BASE::MODE_FOV_NORMAL )
+            return;
+
         self.m_flNextSecondaryAttack = WeaponTimeBase() + 0.3f;
 
         switch( WeaponZoomMode )

@@ -198,6 +198,14 @@ class weapon_g3sg1 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
 
     void SecondaryAttack()
     {
+        // A camera only ends a zoom (base.as IsCameraCall); the last step of the zoom cycle does that
+        if( IsCameraCall() )
+        {
+            if( WeaponZoomMode == CS16BASE::MODE_FOV_NORMAL )
+                return;
+            WeaponZoomMode = CS16BASE::MODE_FOV_2X_ZOOM;
+        }
+
         self.m_flNextSecondaryAttack = WeaponTimeBase() + 0.3f;
         g_SoundSystem.EmitSoundDyn( m_pPlayer.edict(), CHAN_ITEM, CS16BASE::ZOOM_SOUND, 0.9, ATTN_NORM, 0, PITCH_NORM );
 

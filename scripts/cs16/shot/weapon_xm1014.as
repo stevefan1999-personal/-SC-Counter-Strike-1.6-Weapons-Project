@@ -199,7 +199,7 @@ class weapon_xm1014 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
                 self.m_flTimeWeaponIdle = g_Engine.time + 1.5f;
             }
         }
-        BaseClass.ItemPostFrame();
+        WeaponFrame(); // base.as: marks the frame for IsCameraCall
     }
 
     void Reload()

@@ -112,15 +112,18 @@ enum SUPPRESSOR_OPTIONS
     MODE_SUP_ON
 };
 
+//One sequence per zoom: each puts the scope at the distance where it covers CS's circle at that zoom's FOV
 enum CS16_Scope_Animations
 {
     SCP_IDLE_DEFAULT = 0,
     SCP_IDLE_FOV40,
-    SCP_IDLE_FOV15
+    SCP_IDLE_FOV15,
+    SCP_IDLE_FOV10
 };
 
 //Model files
-string SCOPE_MODEL          = "models/cs16/wpn/scope.mdl";
+//The scope from tools/scopegen.ts; a new path, because a client never downloads a path it already has
+string SCOPE_MODEL          = "models/cs16/scope/cs_scope.mdl";
 string SHELL_PISTOL         = "models/cs16/shells/pshell.mdl";
 string SHELL_RIFLE          = "models/cs16/shells/rshell.mdl";
 string SHELL_SNIPER         = "models/cs16/shells/rshell_big.mdl";
@@ -145,11 +148,39 @@ const array<string> MUZZLE_FLASH_SPRITES = { "csflashx.spr", "muzzle/muzzleflash
 const array<string> MUZZLE_FLASH_EVENTS = { "cs16_muzzleflash2_s3_a0.txt", "cs16_muzzleflash2_s3_a1.txt",
     "cs16_muzzleflash2_s3_a2.txt", "cs16_muzzleflash2_s6_a0.txt", "cs16_muzzleflash2_s9_a0.txt",
     "cs16_muzzleflash3_s4_a0.txt", "cs16_muzzleflash3_s7_a0.txt" };
-//Zoom information
-int RESET_ZOOM_VALUE         = 0;
+//Zoom information, in CS 1.6 degrees; SetFOV converts them for Sven
+const int CS_DEFAULT_FOV    = 90;
+int RESET_ZOOM_VALUE         = CS_DEFAULT_FOV;
 int DEFAULT_AUG_SG_ZOOM     = 55;
 int DEFAULT_ZOOM_VALUE      = 40;
 int DEFAULT_2X_ZOOM_VALUE     = 15;
+int AWP_2X_ZOOM_VALUE       = 10; // ReGameDLL_CS wpn_awp.cpp: the AWP zooms to 10, the other scopes to 15
+
+// CS 1.6 reads a FOV as the horizontal angle of a 4:3 view and keeps that view's vertical angle on wide screens
+// (gl_widescreen_yfov). Sven's liblist.gam sets vertical_fov 1, so Sven reads the same number as the vertical angle.
+const float CS_VIEW_HEIGHT_PER_WIDTH = 0.75f;
+
+// Sven's engine clamps the view to 10-150 degrees (hw.so 0x136580), so the AWP's second zoom (7.5) stops at 10.
+const int SVEN_MIN_FOV = 10;
+
+// The Sven FOV that shows what CS shows at csFov. The SetFOV message carries whole degrees, so it is rounded.
+int SvenFov( int csFov )
+{
+    const float halfHeight = CS_VIEW_HEIGHT_PER_WIDTH * tan( Math.DegreesToRadians( csFov ) / 2 );
+    const int fov = int( floor( Math.RadiansToDegrees( 2 * atan( halfHeight ) ) + 0.5f ) );
+    return fov < SVEN_MIN_FOV ? SVEN_MIN_FOV : fov;
+}
+
+// A player's FOV in CS 1.6 degrees, for checks written against CS values (the crosshair hides at 54 or less).
+// m_iFOV holds Sven's whole vertical degrees and stops at 10, so zoom 40 reads 40.6 and the AWP's 10 reads 13.3;
+// 0 is the view of the player's own default_fov: Sven's weapons, and a CS weapon while a trigger_camera holds the view.
+float CsFov( CBasePlayer@ pPlayer )
+{
+    if( pPlayer.m_iFOV == 0 )
+        return CS_DEFAULT_FOV;
+    const float halfHeight = tan( Math.DegreesToRadians( pPlayer.m_iFOV ) / 2 );
+    return Math.RadiansToDegrees( 2 * atan( halfHeight / CS_VIEW_HEIGHT_PER_WIDTH ) );
+}
 
 // Fixed damage loss rate per unit of wall travel (TraceTexture unavailable in SC API).
 const float PEN_LOSS_RATE = 0.05f;
@@ -246,6 +277,36 @@ mixin class WeaponBase
         return self;
     }
 
+    // Sven's trigger_camera calls the held weapon's SecondaryAttack, from outside the weapon's frame, to take a zoom
+    // back whenever m_iFOV is not 0 or 90, at the camera's start and on every camera think (server.so 0x525481). CS
+    // weapons hold 74 unzoomed, so they get these calls too. The frame clears the attack2 button before its own call
+    // (server.so 0x55dedc), so the button cannot tell the two apart; this flag does.
+    private bool m_fInWeaponFrame = false;
+
+    void ItemPostFrame()
+    {
+        WeaponFrame();
+    }
+
+    // The engine's weapon frame (attacks, reload, idle); a weapon with its own ItemPostFrame calls this instead of
+    // BaseClass.ItemPostFrame()
+    void WeaponFrame()
+    {
+        m_fInWeaponFrame = true;
+        BaseClass.ItemPostFrame();
+        m_fInWeaponFrame = false;
+        // A camera leaves m_iFOV at 0 (the player's own view) and sets 0 again at each think, so CS's view comes back
+        // only once it lets the view go
+        if( m_pPlayer.m_iFOV == 0 && WeaponZoomMode == MODE_FOV_NORMAL && ( m_pPlayer.m_afPhysicsFlags & PFLAG_CAMERA ) == 0 )
+            SetFOV( CS_DEFAULT_FOV );
+    }
+
+    // A SecondaryAttack from a camera may only end a zoom: no stab, no silencer or burst toggle, no zoom in
+    bool IsCameraCall()
+    {
+        return !m_fInWeaponFrame;
+    }
+
     void CommonSpawn( const string worldModel, const int GiveDefaultAmmo ) // things that are commonly executed in spawn
     {
         m_iShotsFired = 0;
@@ -289,6 +350,8 @@ mixin class WeaponBase
         m_iShotsFired = 0;
         m_flAccuracy = m_flAccuracyStart;
         self.DefaultDeploy( self.GetV_Model( vModel ), self.GetP_Model( pModel ), iAnim, pAnim, 0, iBodygroup );
+        // CS weapons see CS's 90 degrees; Holster gives the view back to the player's own default_fov
+        SetFOV( CS_DEFAULT_FOV );
         self.m_flTimeWeaponIdle = self.m_flNextPrimaryAttack = self.m_flNextSecondaryAttack = self.m_flNextTertiaryAttack = WeaponTimeBase() + flDeployTime;
         return true;
     }
@@ -315,12 +378,13 @@ mixin class WeaponBase
 
         WeaponZoomMode = MODE_FOV_NORMAL;
         ResetFoV();
+        SetFOV( 0 ); // Sven's own weapons keep the player's default_fov
     }
 
-    //Sets the Player's FOV
+    //Sets the Player's FOV from a CS 1.6 value; 0 gives the view back to the player's own default_fov
     void SetFOV( int fov )
     {
-        m_pPlayer.pev.fov = m_pPlayer.m_iFOV = fov;
+        m_pPlayer.pev.fov = m_pPlayer.m_iFOV = fov == 0 ? 0 : SvenFov( fov );
     }
     
     //Toggles it
@@ -328,7 +392,7 @@ mixin class WeaponBase
     {
         if ( self.m_fInZoom == true )
         {
-            SetFOV( 0 ); // 0 means reset to default fov
+            SetFOV( RESET_ZOOM_VALUE ); // back to CS's normal view
         }
         else if ( self.m_fInZoom == false )
         {
