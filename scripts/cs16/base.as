@@ -173,7 +173,7 @@ int SvenFov( int csFov )
 
 // A player's FOV in CS 1.6 degrees, for checks written against CS values (the crosshair hides at 54 or less).
 // m_iFOV holds Sven's whole vertical degrees and stops at 10, so zoom 40 reads 40.6 and the AWP's 10 reads 13.3;
-// 0 is the view of the player's own default_fov, which only Sven's weapons use.
+// 0 is the view of the player's own default_fov: Sven's weapons, and a CS weapon while a trigger_camera holds the view.
 float CsFov( CBasePlayer@ pPlayer )
 {
     if( pPlayer.m_iFOV == 0 )
