@@ -16,9 +16,11 @@ namespace CS16KILLFEED
   const int RIGHT_MARGIN = 12;
   const int GAP = 5;
 
-  // Players stand in for the CT team and monsters for the T team (cs16-killfeed-reference.md 5.5).
-  const RGBA PLAYER_COLOUR = RGBA( 153, 204, 255, 255 );
-  const RGBA MONSTER_COLOUR = RGBA( 255, 63, 63, 255 );
+  // Players stand in for the CT team and monsters for the T team (cs16-killfeed-reference.md 5.5). The Sven client draws
+  // text one level darker than it gets (255,63,63 shows as 254,62,62), so each channel goes one level above the CS colours
+  // 153,204,255 and 255,63,63; a channel at 255 cannot.
+  const RGBA PLAYER_COLOUR = RGBA( 154, 205, 255, 255 );
+  const RGBA MONSTER_COLOUR = RGBA( 255, 64, 64, 255 );
   // The icons are added to the screen with this tint, as CS SPR_DrawAdditive does.
   const RGBA ICON_COLOUR = RGBA( 255, 80, 0, 255 );
   // x in pixels from the right edge and y as a fraction of the height. On the screen size of the player both are the CS
