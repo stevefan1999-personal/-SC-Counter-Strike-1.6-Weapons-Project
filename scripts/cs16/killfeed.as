@@ -91,6 +91,11 @@ namespace CS16KILLFEED
   uint g_LastSerial = NO_NOTICE;
   // Per player slot and row, the serial of the notice that the client shows, so that each text goes out once per change.
   array<array<uint>> g_DrawnSerials( CS16HUD::MAX_PLAYERS + 1, array<uint>( CS16HUD::KILLFEED_ROWS, NO_NOTICE ) );
+  // A full feed moves every row with each new notice, so a fight with 10 kills a second sent 3.4 KB/s of reliable
+  // messages to each player. Changes go out at most this often for each player: a notice that comes within this time
+  // of the last change waits, and the rows of all notices that came meanwhile go out together.
+  const float REDRAW_INTERVAL = 0.2f;
+  array<float> g_LastDrawTime( CS16HUD::MAX_PLAYERS + 1 ); // per player slot
 
   void PluginInit()
   {
@@ -308,6 +313,10 @@ namespace CS16KILLFEED
     void OnTick( CBasePlayer@ player, float dt )
     {
       ExpireNotices();
+      // A time of an earlier map lies in the future (g_Engine.time starts again with each map): that draw is long ago.
+      const float sinceDraw = g_Engine.time - g_LastDrawTime[player.entindex()];
+      if( sinceDraw >= 0.0f && sinceDraw < REDRAW_INTERVAL )
+        return;
       Draw( player );
     }
 
@@ -323,18 +332,15 @@ namespace CS16KILLFEED
       array<uint>@ drawn = g_DrawnSerials[player.entindex()];
       for( uint row = 0; row < CS16HUD::KILLFEED_ROWS; ++row )
       {
-        if( row < g_Notices.length() )
-        {
-          if( drawn[row] != g_Notices[row].serial )
-            DrawRow( player, row, g_Notices[row] );
-          drawn[row] = g_Notices[row].serial;
-        }
+        const uint serial = row < g_Notices.length() ? g_Notices[row].serial : NO_NOTICE;
+        if( drawn[row] == serial )
+          continue;
+        if( serial == NO_NOTICE )
+          ClearRow( player, row );
         else
-        {
-          if( drawn[row] != NO_NOTICE )
-            ClearRow( player, row );
-          drawn[row] = NO_NOTICE;
-        }
+          DrawRow( player, row, g_Notices[row] );
+        drawn[row] = serial;
+        g_LastDrawTime[player.entindex()] = g_Engine.time;
       }
     }
 

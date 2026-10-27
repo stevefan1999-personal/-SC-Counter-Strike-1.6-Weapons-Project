@@ -693,8 +693,12 @@ The data for one notice comes from the `PlayerKilled` and `MonsterKilled` hooks:
   old name is still on the screen, and only when the new notice draws no name there. It sends the empty text to the last
   position of that slot, because the client removes every other text at the position of a new text.
 - Every part goes out with the remaining time of its notice as the hold time. Thus the client removes an expired row by
-  itself. The server moves the other rows up at its next HUD tick (at most 50 ms later).
-- A new notice shows at the next HUD tick after the kill (at most 50 ms).
+  itself. The server moves the other rows up at its next HUD tick (at most 50 ms later, or at the end of the 0.2 s
+  below).
+- A new notice shows at the next HUD tick after the kill (at most 50 ms), unless the rows of that player changed in the
+  last 0.2 s: then it waits for the end of that time, and all changes of that time go out together. A full feed moves
+  every row with each new notice, so a fight with 10 kills a second sent 3.4 KB/s of reliable messages to each player
+  before; now the rows go out at most 5 times a second.
 
 ### Name position and width
 
