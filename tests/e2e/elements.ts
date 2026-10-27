@@ -40,6 +40,9 @@ const FLASHLIGHT_REFERENCES: Record<string, string> = {
   "2560x1440": "cs16-crosshair-2560x1440-ak47-rest.png",
 };
 const SETTLED_ORANGE: Rgb = [100, 62, 0]; // HUD orange at alpha 100, as ScaleColors gives it
+// The flashlight off: the casing and the energy bar both add HUD orange at alpha 100 where they overlap, so the
+// brightest pixels are near 185 red (docs/hud-sprites.md, "How the frames are built", step 2).
+const FLASHLIGHT_OFF_PEAK: Rgb = [185, 116, 0];
 const STATUS_GREEN: Rgb = [0, 160, 0];
 // A flat screen of the CS reference's floor colour under the HUD: our glyphs then read like CS's on its floor.
 const BACKDROP: Rgb = [39, 32, 22];
@@ -121,14 +124,22 @@ const check = (ok: boolean, message: string) => {
 };
 const near = (a: Rgb, b: Rgb, tolerance = COLOUR_TOLERANCE, channels = [0, 1, 2]) =>
   channels.every((channel) => Math.abs(a[channel] - b[channel]) <= tolerance);
-const hudGlyphs = (found: Glyph[]) =>
-  found.filter((glyph) => glyph.area >= MIN_GLYPH_AREA && near(glyph.added, SETTLED_ORANGE, HUD_COLOUR_RANGE));
+const hudGlyphs = (found: Glyph[], colour = SETTLED_ORANGE) =>
+  found.filter((glyph) => glyph.area >= MIN_GLYPH_AREA && near(glyph.added, colour, HUD_COLOUR_RANGE));
 const box = (glyph: Glyph | undefined) => glyph && `${glyph.x},${glyph.y} ${glyph.width}x${glyph.height}`;
 
 // Compares the glyphs of a region with the CS reference both ways: same boxes within 1 px, colours within a few levels.
-async function compareWithCs(ours: string, region: Region, name: string, csShot = REFERENCES[resolution]) {
+async function compareWithCs(
+  ours: string,
+  region: Region,
+  name: string,
+  csShot = REFERENCES[resolution],
+  colour = SETTLED_ORANGE,
+) {
   const reference = `${referenceDir}/${csShot}`;
-  const [csGlyphs, ourGlyphs] = (await Promise.all([glyphs(reference, region), glyphs(ours, region)])).map(hudGlyphs);
+  const [csGlyphs, ourGlyphs] = (await Promise.all([glyphs(reference, region), glyphs(ours, region)]))
+    .map((found) => hudGlyphs(found, colour));
+  check(csGlyphs.length > 0, `${name}: no CS glyph to compare with in ${csShot}`);
   const rows = matchBoxes(csGlyphs, ourGlyphs).map(({ cs, ours: match, offset }) => {
     const [csGlyph, ourGlyph] = [cs as Glyph, match as Glyph | undefined];
     check(offset <= BOX_TOLERANCE_PX, `${name}: CS glyph ${box(csGlyph)} is ${offset} px from ${box(ourGlyph)}`);
@@ -244,7 +255,7 @@ try {
   const reference = await shot("reference");
   await compareWithCs(reference, BOTTOM_LEFT, "health-armour");
   await compareWithCs(reference, BOTTOM_RIGHT, "money-ammo");
-  await compareWithCs(reference, TOP_RIGHT, "flashlight", FLASHLIGHT_REFERENCES[resolution]);
+  await compareWithCs(reference, TOP_RIGHT, "flashlight", FLASHLIGHT_REFERENCES[resolution], FLASHLIGHT_OFF_PEAK);
   // CS hides the flashlight while the server forbids flashlights, as with its default mp_flashlight 0.
   await server.command("mp_flashlight 0");
   await sleep(SETTLE_MS);
