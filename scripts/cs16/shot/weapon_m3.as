@@ -28,7 +28,7 @@ enum CS16_M3_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/m3/w_m3.mdl";
-string V_MODEL      = "models/cs16/wpn/m3/v_m3.mdl";
+string V_MODEL      = "models/cs16/wpn/m3/v_m3_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/m3/p_m3.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 1;
@@ -207,7 +207,7 @@ class weapon_m3 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
                 self.m_flTimeWeaponIdle = g_Engine.time + 1.5f;
             }
         }
-        BaseClass.ItemPostFrame();
+        WeaponFrame(); // base.as: marks the frame for IsCameraCall
     }
 
     void Reload()

@@ -15,6 +15,12 @@
 //   as_command e2e.suit <0|1>                     take away or give back player 1's HEV suit
 //   as_command e2e.backdrop [<r> <g> <b>]         hold a screen of one colour under the HUD; no colour removes it
 //   as_command e2e.gametext <channel> <text...>   show a map text (a game_text entity) to all players for 30 s
+//   as_command e2e.respawn                        respawn player 1, also when dead
+//   as_command e2e.notify <text...>               print a line in the top-left notify area of every player
+//   as_command e2e.turn <degrees>                 turn player 1's view by an exact yaw step (left is positive)
+//   as_command e2e.fov                            print player 1's FOV (m_iFOV), held weapon (script or native), life,
+//                                                 view model
+//   as_command e2e.camera <seconds>               view player 1 through a trigger_camera, as a map cutscene does
 
 const float DEFAULT_SPAWN_DISTANCE = 160.0f;
 const float LETHAL_DAMAGE = 10000.0f;
@@ -51,6 +57,11 @@ void PluginInit()
   g_Commands.insertLast( CConCommand( "suit", "<0|1> - take away or give back player 1 HEV suit", @SetSuit ) );
   g_Commands.insertLast( CConCommand( "backdrop", "[<r> <g> <b>] - one colour under player 1 HUD", @SetBackdrop ) );
   g_Commands.insertLast( CConCommand( "gametext", "<channel> <text...> - a game_text to all players", @ShowGameText ) );
+  g_Commands.insertLast( CConCommand( "respawn", "- respawn player 1, also when dead", @Respawn ) );
+  g_Commands.insertLast( CConCommand( "notify", "<text...> - print a line in the notify area of every player", @NotifyAll ) );
+  g_Commands.insertLast( CConCommand( "turn", "<degrees> - turn player 1's view by a yaw step", @TurnView ) );
+  g_Commands.insertLast( CConCommand( "fov", "- print player 1's FOV, weapon, life state and view model", @PrintFov ) );
+  g_Commands.insertLast( CConCommand( "camera", "<seconds> - view player 1 through a trigger_camera", @ViewThroughCamera ) );
 }
 
 // "Player 1" is the first connected player. A client that retries its connection can come back in a later slot while
@@ -188,14 +199,21 @@ void GiveItem( const CCommand@ args )
   g_EngineFuncs.ServerPrint( "[e2e] gave " + args.Arg( 1 ) + "\n" );
 }
 
+// The words after the command name, joined by spaces.
+string JoinedArguments( const CCommand@ args )
+{
+  string text = args.Arg( 1 );
+  for( int index = 2; index < args.ArgC(); ++index )
+    text += " " + args.Arg( index );
+  return text;
+}
+
 void StuffText( const CCommand@ args )
 {
   CBasePlayer@ player = FirstPlayer();
   if( player is null || args.ArgC() < 2 )
     return;
-  string command = args.Arg( 1 );
-  for( int index = 2; index < args.ArgC(); ++index )
-    command += " " + args.Arg( index );
+  const string command = JoinedArguments( args );
   NetworkMessage message( MSG_ONE, NetworkMessages::SVC_STUFFTEXT, player.edict() );
   message.WriteString( command + "\n" );
   message.End();
@@ -218,6 +236,55 @@ void SetArmor( const CCommand@ args )
     return;
   player.pev.armorvalue = atof( args.Arg( 1 ) );
   g_EngineFuncs.ServerPrint( "[e2e] armor " + player.pev.armorvalue + "\n" );
+}
+
+// A known yaw step moves a world point at the screen centre by focal length * tan(step) pixels, which measures the
+// field of view without any map geometry.
+void TurnView( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null || args.ArgC() < 2 )
+    return;
+  Vector viewAngles = player.pev.v_angle;
+  viewAngles.y += atof( args.Arg( 1 ) );
+  player.pev.angles = viewAngles;
+  player.pev.v_angle = viewAngles;
+  player.pev.fixangle = FAM_FORCEVIEWANGLES;
+  g_EngineFuncs.ServerPrint( "[e2e] turned to yaw " + viewAngles.y + "\n" );
+}
+
+void PrintFov( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null )
+    return;
+  CBaseEntity@ weapon = player.m_hActiveItem.GetEntity();
+  const string classname = weapon is null ? "none" : string( weapon.pev.classname );
+  // Script weapons are the CS weapons; native ones are Sven's own.
+  const string kind = g_CustomEntityFuncs.IsCustomEntity( classname ) ? "script" : "native";
+  g_EngineFuncs.ServerPrint( "[e2e] fov " + player.m_iFOV + " weapon " + classname + " " + kind
+    + ( player.IsAlive() ? " alive" : " dead" ) + " viewmodel " + player.pev.viewmodel + "\n" );
+}
+
+// trigger_camera spawnflags (sven-coop.fgd): start at the player and look at the player, so no map entity is needed.
+const int CAMERA_START_AT_PLAYER = 1;
+const int CAMERA_FOLLOW_PLAYER = 2;
+
+// Sven's trigger_camera unzooms the held weapon when it takes over the view (server.so 0x525481, docs/fov.md).
+void ViewThroughCamera( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null || args.ArgC() < 2 )
+    return;
+  dictionary keys = { { "wait", args.Arg( 1 ) }, { "spawnflags", "" + ( CAMERA_START_AT_PLAYER | CAMERA_FOLLOW_PLAYER ) } };
+  CBaseEntity@ camera = g_EntityFuncs.CreateEntity( "trigger_camera", keys );
+  if( camera is null )
+  {
+    g_EngineFuncs.ServerPrint( "[e2e] camera failed\n" );
+    return;
+  }
+  camera.Use( player, player, USE_ON );
+  g_EngineFuncs.ServerPrint( "[e2e] camera on for " + args.Arg( 1 ) + " s\n" );
 }
 
 // The inflictor gives the pain arrows their direction (its centre): the world, the player itself, or a point on one side
@@ -329,4 +396,23 @@ void ShowGameText( const CCommand@ args )
   entity.Use( null, null, USE_ON, 0 );
   g_EntityFuncs.Remove( entity );
   g_EngineFuncs.ServerPrint( "[e2e] gametext channel " + args.Arg( 1 ) + "\n" );
+}
+
+void Respawn( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null )
+    return;
+  g_PlayerFuncs.RespawnPlayer( player, true, true );
+  g_EngineFuncs.ServerPrint( "[e2e] respawned, health " + player.pev.health + "\n" );
+}
+
+// The game sends its own notices, such as vote results, to the same area as its obituaries.
+void NotifyAll( const CCommand@ args )
+{
+  if( args.ArgC() < 2 )
+    return;
+  const string text = JoinedArguments( args );
+  g_PlayerFuncs.ClientPrintAll( HUD_PRINTNOTIFY, text + "\n" );
+  g_EngineFuncs.ServerPrint( "[e2e] notify: " + text + "\n" );
 }

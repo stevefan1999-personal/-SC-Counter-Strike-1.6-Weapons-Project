@@ -41,6 +41,45 @@ install target=server_dir:
     '{{cstrike_dir}}' "$addon/sprites/cs16/hud" > /dev/null
   echo "installed into $addon"
 
+# Rebuild the *_r2 view models, whose muzzle events draw the CS 1.6 flash, from the originals in a git ref: just muzzle-models
+[group('deploy')]
+muzzle-models ref='435d391':
+  #!/usr/bin/env bash
+  set -euo pipefail
+  cd '{{justfile_directory()}}'
+  original=$(mktemp) && trap 'rm -f "$original"' EXIT
+  # model (under models/cs16/wpn) and its event rules; sizes and attachments: docs/research/muzzle-flash.md
+  while read -r model rules; do
+    git show '{{ref}}':"models/cs16/wpn/$model.mdl" > "$original"
+    deno run -R -W tools/mdlpatch.ts "$original" "models/cs16/wpn/${model}_r2.mdl" $rules > /dev/null
+    echo "models/cs16/wpn/${model}_r2.mdl"
+  done <<'EOF'
+  57/v_57 5001:11=5005:cs16_muzzleflash2_s3_a0.txt
+  awp/v_awp 5001:31=5005:cs16_muzzleflash2_s9_a0.txt
+  eagle/v_eagle 5001:21=5005:cs16_muzzleflash2_s6_a0.txt
+  elite/v_elite 5001:11=5005:cs16_muzzleflash2_s3_a0.txt 5011:11=5005:cs16_muzzleflash2_s3_a1.txt
+  g18/v_glock18 5001:21=5005:cs16_muzzleflash2_s6_a0.txt
+  m3/v_m3 5001:21=5005:cs16_muzzleflash2_s6_a0.txt
+  m4a1/v_m4a1 5021:11=5005:cs16_muzzleflash2_s3_a2.txt 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  mac10/v_mac10 5001:11=5005:cs16_muzzleflash2_s3_a0.txt
+  mp5/v_mp5 5001:11=5005:cs16_muzzleflash2_s3_a0.txt
+  p228/v_p228 5001:11=5005:cs16_muzzleflash2_s3_a0.txt
+  scout/v_scout 5001:21=5005:cs16_muzzleflash2_s6_a0.txt
+  tmp/v_tmp 5001:11=5005:cs16_muzzleflash2_s3_a0.txt
+  ump45/v_ump45 5001:11=5005:cs16_muzzleflash2_s3_a0.txt
+  usp/v_usp 5001:11=5005:cs16_muzzleflash2_s3_a0.txt 5021:11=5005:cs16_muzzleflash2_s3_a2.txt
+  xm1014/v_xm1014 5001:21=5005:cs16_muzzleflash2_s6_a0.txt
+  ak47/v_ak47 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  aug/v_aug 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  famas/v_famas 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  galil/v_galil 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  g3sg1/v_g3sg1 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  m249/v_m249 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  sg550/v_sg550 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  sg552/v_sg552 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s7_a0.txt
+  p90/v_p90 5005:cs16_flashx.txt=5005:cs16_muzzleflash3_s4_a0.txt
+  EOF
+
 # Start a dedicated server (no install; run just install first) with a command pipe: just server 27015 hl_c01_a1
 [group('server')]
 server port='27015' map='hl_c01_a1' *args: (stop port)
@@ -48,6 +87,7 @@ server port='27015' map='hl_c01_a1' *args: (stop port)
   set -euo pipefail
   state='{{state_root}}/server-{{port}}'
   mkdir -p "$state" && rm -f "$state/in" && mkfifo "$state/in"
+  printf '%s\n%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" '{{server_dir}}' > "$state/run"
   cd '{{server_dir}}'
   export LD_LIBRARY_PATH="$PWD:$PWD/redist:${LD_LIBRARY_PATH:-}"
   # -nobreakpad does not reach Steam's crash handler: a steamclient assert (often at the first changelevel) still
@@ -83,13 +123,23 @@ log port='27015' lines='60':
 stop port='27015':
   #!/usr/bin/env bash
   state='{{state_root}}/server-{{port}}'
+  server=$(cat "$state/server.pid" 2>/dev/null || true)
   for pidfile in "$state/server.pid" "$state/holder.pid"; do
     test -f "$pidfile" && kill "$(cat "$pidfile")" 2>/dev/null || true
     rm -f "$pidfile"
   done
   rm -f "$state/in"
+  # The server still writes files while it exits.
+  for _ in $(seq 1 50); do test -n "$server" && kill -0 "$server" 2>/dev/null || break; sleep 0.1; done
   # A dump that the server still wrote stays in /tmp (RAM), where Steam's crash handler may send it later.
   rg -o '/tmp/dumps/[A-Za-z0-9_]+\.dmp' "$state/server.log" 2>/dev/null | sort -u | xargs -r rm -f
+  test -f "$state/run" || exit 0
+  # A farm symlink whose target changed during the run means the server wrote into the shared install: that path
+  # needs a copy in the sandbox recipe.
+  { read -r started; read -r dir; } < "$state/run"
+  rm -f "$state/run"
+  escaped=$(fd -L -HI -t f --changed-within "$started" . "$dir" | while read -r path; do test -L "$path" && echo "$path"; done)
+  test -z "$escaped" || printf 'WARNING: the server wrote through sandbox symlinks into the shared install:\n%s\n' "$escaped" >&2
 
 # Show errors and warnings from the newest AngelScript log of an install: just aslog
 [group('server')]
@@ -214,11 +264,20 @@ install-e2e target=server_dir:
 sandbox dir:
   #!/usr/bin/env bash
   set -euo pipefail
-  test -d '{{dir}}/svencoop' && { echo 'sandbox already exists: {{dir}}'; exit 0; }
-  cp -as '{{server_base}}' '{{dir}}'
-  # Paths our install or the server writes must be real directories so a run never touches the shared install.
-  for writable in svencoop_addon svencoop/logs svencoop/scripts/plugins/store; do
-    rm -rf '{{dir}}'/"$writable" && mkdir -p '{{dir}}'/"$writable"
+  if ! test -d '{{dir}}/svencoop'; then
+    cp -as '{{server_base}}' '{{dir}}'
+    # Paths our install or the server writes must be real directories so a run never touches the shared install.
+    for writable in svencoop_addon svencoop/logs svencoop/scripts/plugins/store; do
+      rm -rf '{{dir}}'/"$writable" && mkdir -p '{{dir}}'/"$writable"
+    done
+  fi
+  # The server rewrites some files in place (node graphs, sound caches, spray decals and their log, the Steam app id),
+  # and it writes through a farm symlink into the shared install. Replace those links with copies; this also repairs
+  # old sandboxes.
+  cd '{{dir}}'
+  rewritten='svencoop/maps/graphs svencoop/maps/soundcache svencoop/custom.hpk svencoop/custom.hpk.log steam_appid.txt'
+  { find $rewritten -type l 2>/dev/null || true; } | while read -r link; do
+    cp --remove-destination "$(readlink -f "$link")" "$link"
   done
   echo 'sandbox ready; use it with: export SVEN_SERVER_DIR={{dir}}'
 
@@ -231,6 +290,11 @@ e2e-killfeed port='27017' weapon='weapon_csdeagle' aim='head':
 [group('e2e')]
 e2e-lag port='27017' delay='165':
   deno run -A '{{justfile_directory()}}/tests/e2e/lag.ts' {{port}} {{delay}}
+
+# Show that Sven's obituaries stay out of the notify area with the metamod plugin: just e2e-obituary 27017
+[group('e2e')]
+e2e-obituary port='27017':
+  deno run -A '{{justfile_directory()}}/tests/e2e/obituary.ts' {{port}}
 
 # Walk through every CS HUD state on testcenter and save shots plus HUD crops: just e2e-hud 27017 hud
 [group('e2e')]
@@ -247,10 +311,22 @@ e2e-hudproof port='27017' evidence=(state_root / 'proof'):
 e2e-elements port='27017' label='elements' cropdir='':
   deno run -A '{{justfile_directory()}}/tests/e2e/elements.ts' {{port}} {{label}} {{cropdir}}
 
+# Capture view models, scopes and turned views of the CS weapons on testcenter (docs/fov.md): just e2e-fov 27017 /abs/out
+[group('e2e')]
+e2e-fov port='27017' out=(state_root / 'fov' / 'counter-life'):
+  deno run -A '{{justfile_directory()}}/tests/e2e/fov.ts' {{port}} '{{out}}'
+
 # Measure HUD-coloured glyph boxes in a screen region (JSON): just hudboxes .e2e/reference/cs16-ref-hud.png 0 820 460 80
 [group('e2e')]
 hudboxes image x y w h:
   deno run -A '{{justfile_directory()}}/tests/e2e/hudboxes.ts' '{{image}}' {{x}} {{y}} {{w}} {{h}}
+
+# Fire weapons in a game that runs on a display and measure each muzzle flash (JSON): just e2e-muzzleflash :102 .e2e/muzzle/sven 1000x660+500+240 deagle=weapon_csdeagle
+[group('e2e')]
+[no-cd]
+[positional-arguments]
+e2e-muzzleflash +args:
+  deno run -A '{{justfile_directory()}}/tests/e2e/muzzleflash.ts' "$@"
 
 # Render the HUD sprite contact sheet and check it against a CS 1.6 screenshot: just hud-sheet /abs/cs16-ref-hud.png
 [group('tools')]
@@ -264,6 +340,11 @@ hud-font out=(justfile_directory() / 'scripts/cs16/hud/textfont.as'):
   # back to "Tahoma", which Sven's hw.so asks for as "Bitstream Vera Sans" (docs/hud.md, "Kill feed").
   deno run -R -W '{{justfile_directory()}}/tools/hudfont.ts' '{{out}}' \
     "$(fc-match -f '%{file}' 'Ariel:weight=600')" "$(fc-match -f '%{file}' 'Bitstream Vera Sans:weight=600')"
+
+# Build the sniper-scope view model from CS 1.6's reticle sprite (docs/fov.md); a changed model needs a new path: just scope-model /abs/out.mdl
+[group('tools')]
+scope-model out=(justfile_directory() / 'models/cs16/scope/cs_scope.mdl'):
+  deno run -R='{{cstrike_dir}}' -W='{{out}}' '{{justfile_directory()}}/tools/scopegen.ts' '{{cstrike_dir}}' '{{out}}'
 
 # CS 1.6 kill-feed reference fixture: Valve's CS 1.6 client against a ReGameDLL_CS listen server (bots and "give").
 hl_dir := env('HL_DIR', steam_common / 'Half-Life')
@@ -383,3 +464,77 @@ fixture-crosshair display=fixture_display resolution='1600x900' port='27049' cli
 [no-cd]
 fixture-metrics shot before:
   @deno run -A '{{justfile_directory()}}/tests/fixture/feed-metrics.ts' '{{shot}}' '{{before}}'
+
+# Counter-Life metamod plugin (metamod/counterlife, docs/metamod.md). The metamod-svencoop release is the one that
+# metamod-p-rs pins: plugins built with its headers (interface 5:16) need this release or a newer one.
+metamod_release := 'v20261009a'
+metamod_archive := 'metamod-fallguys-ubuntu-i386.zip'
+metamod_sha256 := '552ae6d1faf184498f29d0c686515f56618eb55229970d7a687d8d5c74ed2d78'
+metamod_url := 'https://github.com/metamod-svencoop/metamod-svencoop/releases/download/' + metamod_release + '/' + metamod_archive
+# The library that "-dll" loads instead of the game DLL, and the plugin; both relative to the game directory (svencoop).
+metamod_dll := 'addons/metamod/dlls/metamod.so'
+metamod_plugin := 'addons/counterlife/counterlife.so'
+
+# Build the Counter-Life metamod plugin for i686 Linux: just metamod-build release
+[group('metamod')]
+[working-directory('metamod/counterlife')]
+metamod-build profile='release':
+  cargo build --profile {{profile}}
+
+# Run the plugin's unit and fake-host tests (cargo nextest): just metamod-test
+[group('metamod')]
+[working-directory('metamod/counterlife')]
+metamod-test *args:
+  cargo nextest run {{args}}
+
+# Check the plugin's formatting and run clippy with warnings as errors: just metamod-lint
+[group('metamod')]
+[working-directory('metamod/counterlife')]
+metamod-lint:
+  cargo fmt --check
+  cargo clippy --all-targets -- -D warnings
+
+# Install metamod-svencoop (pinned, SHA-256 checked) and the plugin into an install's svencoop/addons: just metamod-install
+[group('metamod')]
+metamod-install target=server_dir profile='release': (metamod-build profile)
+  #!/usr/bin/env bash
+  set -euo pipefail
+  # plugins.ini and -dll take paths relative to the game directory.
+  game='{{target}}/svencoop'
+  download='{{state_root}}/metamod/{{metamod_release}}'
+  archive="$download/{{metamod_archive}}"
+  mkdir -p "$download" "$game/{{parent_directory(metamod_dll)}}" "$game/{{parent_directory(metamod_plugin)}}"
+  if ! echo '{{metamod_sha256}}  '"$archive" | sha256sum --check --status 2>/dev/null; then
+    curl -fsSL -o "$archive" '{{metamod_url}}'
+    echo '{{metamod_sha256}}  '"$archive" | sha256sum --check
+  fi
+  rm -rf "$download/unpacked" && unzip -q "$archive" -d "$download/unpacked"
+  # --remove-destination replaces a sandbox symlink instead of writing through it into the shared install.
+  cp --remove-destination "$download"/unpacked/build/addons/metamod/dlls/* "$game/{{parent_directory(metamod_dll)}}/"
+  cp --remove-destination \
+    '{{justfile_directory()}}/metamod/counterlife/target/i686-unknown-linux-gnu/{{ if profile == "dev" { "debug" } else { profile } }}/libcounterlife.so' \
+    "$game/{{metamod_plugin}}"
+  # Keep the plugins that plugins.ini already loads; the plugins of the release stay off.
+  ini="$game/addons/metamod/plugins.ini"
+  if test -L "$ini"; then cp --remove-destination "$(readlink -f "$ini")" "$ini"; fi
+  touch "$ini" && sed -i -e '$a\' "$ini"
+  rg -qxF 'linux {{metamod_plugin}}' "$ini" || echo 'linux {{metamod_plugin}}' >> "$ini"
+  echo "metamod {{metamod_release}} and the Counter-Life plugin are in $game/addons"
+
+# Start a dedicated server with metamod (install it first with metamod-install): just server-metamod 27015 testcenter
+[group('metamod')]
+server-metamod port='27015' map='hl_c01_a1' *args: (server port map '-dll' metamod_dll args)
+
+# Capture CS 1.6's view models, scopes and turned views on de_dust2 into <out>-<WxH> (docs/fov.md): just fixture-fov :96 2560x1440
+[group('fixture')]
+fixture-fov display=fixture_display resolution='1600x900' port='27049' clientport='27007' root=fixture_root out=(state_root / 'fov' / 'cs16'): (fixture-root root regamedll_dir 'de_dust2') (fixture-start display resolution port clientport 'de_dust2' root)
+  #!/usr/bin/env bash
+  set -euo pipefail
+  trap "just fixture-stop '{{display}}' '{{root}}'" EXIT
+  deno run -A '{{justfile_directory()}}/tests/fixture/fov.ts' '{{display}}' '{{resolution}}' '{{out}}-{{resolution}}'
+
+# Measure FOV captures as JSON (view-model boxes, scope geometry, focal length): just fov-metrics .e2e/fov/cs16-1600x900
+[group('fixture')]
+[no-cd]
+fov-metrics +dirs:
+  @deno run -A '{{justfile_directory()}}/tests/fixture/fov-metrics.ts' {{dirs}}

@@ -19,11 +19,11 @@ from how the Sven client draws them and (**Added:**) from how Sven reads FOV val
 | Rank | Defect                                                                                                                                                                                  | Where it shows                                                                               | Status                                     |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | 1    | The kill feed drew a 64×176 slice of `640hud1.spr` (a column of 13 icons) instead of one kill icon                                                                                      | Top right, on every player or monster kill (`cs16_register.as:52-53`)                        | Fixed, `95ae240`                           |
-| 2    | 15 view models fire Sven's Half-Life muzzle flash sprite, not the CS 1.6 one                                                                                                            | Every shot of all pistols, M3, XM1014, MAC-10, MP5, TMP, UMP45, AWP, Scout and silenced M4A1 | Not fixed: needs a model event edit        |
+| 2    | 15 view models fire Sven's Half-Life muzzle flash sprite, not the CS 1.6 one                                                                                                            | Every shot of all pistols, M3, XM1014, MAC-10, MP5, TMP, UMP45, AWP, Scout and silenced M4A1 | Fixed, [muzzle-flash.md](muzzle-flash.md)  |
 | 3    | The crosshair is a static red cross, not the dynamic green CS crosshair; its rect lay outside the sprite                                                                                | Screen centre, always                                                                        | Rect fixed, `584b15d`; look needs HUD work |
 | 4    | The selection icons of seven weapons are restyled and do not match CS 1.6                                                                                                               | Weapon selection                                                                             | Not fixed: design choice                   |
 | 5    | Dropped weapons are drawn 1.0–1.6× larger than in CS 1.6                                                                                                                                | World models                                                                                 | Not fixed: design choice                   |
-| 6    | **Corrected:** Sven reads every FOV as a vertical angle. Its default 70° is below CS's 73.7° vertical, so view models look about 7% larger; every scope zoom shows 4/3 as much as in CS | View models, scoped views                                                                    | Not fixed: the server can send `pev.fov`   |
+| 6    | **Corrected:** Sven reads every FOV as a vertical angle. Its default 70° is below CS's 73.7° vertical, so view models look about 7% larger; every scope zoom shows 4/3 as much as in CS | View models, scoped views                                                                    | Fixed, [fov.md](../fov.md)                 |
 | 7    | **Added:** `HudNumDisplay` draws Sven's own 20×20 digits; CS uses 20×25 digits from its own `640hud7.spr`                                                                               | Money display (`BuyMenu.as:100-128`) and any numeric or time display                         | Not fixed: needs HUD work                  |
 | 8    | **Added:** the kill feed still shows at most one name per row, uses a 640×480 layout, and shares sprite channel 4 with the C4 icon                                                      | Top right; C4 icon                                                                           | Not fixed                                  |
 
@@ -74,7 +74,10 @@ output of `tools/audit.ts`.
   when a new message arrives on that channel (client.so 0xd893a). With four kill notices on screen, the two icons
   replace each other.
 
-## 2. Muzzle flashes use Sven's Half-Life sprite (not fixed)
+## 2. Muzzle flashes use Sven's Half-Life sprite (fixed)
+
+Fixed on `feat/cs-muzzle-flash`: all 24 firearms now fire event 5005 with the CS 1.6 sprite and size. Method, sizes and
+the in-game comparison: [muzzle-flash.md](muzzle-flash.md). The audit text below is the state before the fix.
 
 - Sven's `HUD_StudioEvent` (client.so 0xb62a4) sends events 5001/5011/5021/5031 to the engine's `R_MuzzleFlash` (efx API
   slot 19, `cs16-client/common/r_efx.h:143`) with attachment 0/1/2/3. Events 5005/5006 instead read a muzzle flash
@@ -191,6 +194,12 @@ Recommended fix (needs a binary edit of 15 view models, so this audit did not ap
   them.
 
 ## 6. Field of view: view models and zoom
+
+**Added:** Status: fixed on branch `feat/cs-fov`; [Field of view](../fov.md) has the method and the measurements. The
+measurements confirm this section: before the fix Sven's normal view had a 7.1 % larger focal length than CS and every
+zoom 25 % less (AWP second zoom 50 % less). The fix sends the vertical equivalents (74, 43, 31, 11). Two findings change
+the proposal below: the AWP's 8 is not possible, because Sven's engine clamps the view to 10°–150° (`hw.so` 0x136580),
+and the scope view model needed new sequences, because its size depends on the FOV.
 
 - Sven's `liblist.gam:17` sets `vertical_fov "1"` (**Corrected:** the renderer's flag is stored by hw.so 0x8d350 at
   0x8db71; 0x8ccb0, named before, also reads the key but nothing calls it) and its client registers `default_fov "70"`

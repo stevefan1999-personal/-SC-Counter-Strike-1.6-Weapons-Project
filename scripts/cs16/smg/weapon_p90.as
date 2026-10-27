@@ -27,7 +27,7 @@ enum CS16_P90_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/p90/w_p90.mdl";
-string V_MODEL      = "models/cs16/wpn/p90/v_p90.mdl";
+string V_MODEL      = "models/cs16/wpn/p90/v_p90_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/p90/p_p90.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 19;

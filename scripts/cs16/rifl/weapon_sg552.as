@@ -25,7 +25,7 @@ enum CS16_Sg552_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/sg552/w_sg552.mdl";
-string V_MODEL      = "models/cs16/wpn/sg552/v_sg552.mdl";
+string V_MODEL      = "models/cs16/wpn/sg552/v_sg552_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/sg552/p_sg552.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 22;
@@ -203,6 +203,10 @@ class weapon_sg552 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
 
     void SecondaryAttack()
     {
+        // A camera only ends a zoom (base.as IsCameraCall); the zoomed case below does that
+        if( IsCameraCall() && WeaponZoomMode == CS16BASE::MODE_FOV_NORMAL )
+            return;
+
         self.m_flNextSecondaryAttack = WeaponTimeBase() + 0.3f;
 
         switch( WeaponZoomMode )

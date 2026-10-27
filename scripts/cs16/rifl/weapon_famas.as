@@ -25,7 +25,7 @@ enum CS16_Famas_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/famas/w_famas.mdl";
-string V_MODEL      = "models/cs16/wpn/famas/v_famas.mdl";
+string V_MODEL      = "models/cs16/wpn/famas/v_famas_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/famas/p_famas.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 3;
@@ -251,11 +251,15 @@ class weapon_famas : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
             }
         }
 
-        BaseClass.ItemPostFrame();
+        WeaponFrame(); // base.as: marks the frame for IsCameraCall
     }
 
     void SecondaryAttack()
     {
+        // A camera only ends a zoom, and this weapon has none (base.as IsCameraCall)
+        if( IsCameraCall() )
+            return;
+
         switch( WeaponFireMode )
         {
             case CS16BASE::MODE_NORMAL:

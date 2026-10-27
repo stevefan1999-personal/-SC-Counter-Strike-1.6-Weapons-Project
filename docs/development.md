@@ -31,8 +31,10 @@ The recipes find the installs with these environment variables. The defaults are
 
 ## Install on a server
 
-1. Make an isolated server root. It contains symbolic links to the real server and its own `svencoop_addon`, logs and
-   plugin store, so parallel runs do not change the shared install:
+1. Make an isolated server root. It contains symbolic links to the real server, its own `svencoop_addon`, logs and
+   plugin store, and copies of the files that the server rewrites (node graphs, sound caches, spray decals, the Steam
+   app id), so parallel runs do not change the shared install. Run the recipe again to repair an older sandbox.
+   `just stop` prints a warning when a run wrote through a link into the shared install:
 
    ```sh
    just sandbox "$PWD/../.svends-dev"
@@ -55,6 +57,10 @@ The recipes find the installs with these environment variables. The defaults are
    ```sh
    just check 27015
    ```
+
+Sven Co-op prints its own death lines in the top-left notify area. CS 1.6 does not. To remove them, also install metamod
+and the Counter-Life metamod plugin (`just metamod-install`, then `just server-metamod`), see
+[Metamod plugin](metamod.md).
 
 ## Run a server
 
@@ -99,21 +105,26 @@ Known client problems:
 `just install-e2e` adds `tests/e2e/e2e.as` to the server. Use it from the server console with `as_command`. "Player 1"
 is the first connected player:
 
-| Command                             | Effect                                                                   |
-| ----------------------------------- | ------------------------------------------------------------------------ |
-| `e2e.spawn <class> [distance]`      | spawn in front of player 1; a monster stops moving after 1 s             |
-| `e2e.aim [head\|body] [class]`      | turn player 1 to the nearest live monster; prints the number still alive |
-| `e2e.kill [head\|body] [n] [class]` | kill the nearest monsters with the held weapon as the inflictor          |
-| `e2e.give <class>`                  | give player 1 an item                                                    |
-| `e2e.health <n>`, `e2e.armor <n>`   | set health or armour                                                     |
-| `e2e.hurt <n>`                      | damage player 1 from the world                                           |
-| `e2e.stuff <command>`               | run a console command on the client (the client can refuse some of them) |
-| `e2e.ammo <clip> <reserve>`         | set the clip and the reserve of the held weapon; prints the weapon       |
-| `e2e.frags <n>`                     | set the score; the CS16 buy menu pays $10 for each point of score        |
-| `e2e.battery <percent>`             | set the flashlight battery                                               |
-| `e2e.suit <0\|1>`                   | take away or give back the HEV suit                                      |
-| `e2e.backdrop [<r> <g> <b>]`        | one colour under the HUD (a screen fade); without a colour, remove it    |
-| `e2e.gametext <channel> <text>`     | a white map text from a `game_text` entity, centred at y 0.3, for 30 s   |
+| Command                             | Effect                                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------------------ |
+| `e2e.spawn <class> [distance]`      | spawn in front of player 1; a monster stops moving after 1 s                         |
+| `e2e.aim [head\|body] [class]`      | turn player 1 to the nearest live monster; prints the number still alive             |
+| `e2e.kill [head\|body] [n] [class]` | kill the nearest monsters with the held weapon as the inflictor                      |
+| `e2e.give <class>`                  | give player 1 an item                                                                |
+| `e2e.health <n>`, `e2e.armor <n>`   | set health or armour                                                                 |
+| `e2e.hurt <n>`                      | damage player 1 from the world; armour absorbs most of it                            |
+| `e2e.stuff <command>`               | run a console command on the client (the client can refuse some of them)             |
+| `e2e.ammo <clip> <reserve>`         | set the clip and the reserve of the held weapon; prints the weapon                   |
+| `e2e.frags <n>`                     | set the score; the CS16 buy menu pays $10 for each point of score                    |
+| `e2e.battery <percent>`             | set the flashlight battery                                                           |
+| `e2e.suit <0\|1>`                   | take away or give back the HEV suit                                                  |
+| `e2e.backdrop [<r> <g> <b>]`        | one colour under the HUD (a screen fade); without a colour, remove it                |
+| `e2e.gametext <channel> <text>`     | a white map text from a `game_text` entity, centred at y 0.3, for 30 s               |
+| `e2e.respawn`                       | respawn player 1, also when dead                                                     |
+| `e2e.notify <text>`                 | print a line in the top-left notify area of every player                             |
+| `e2e.turn <degrees>`                | turn player 1's view by an exact yaw step (left is positive)                         |
+| `e2e.fov`                           | print player 1's `m_iFOV`, held weapon (script or native), life state and view model |
+| `e2e.camera <seconds>`              | view player 1 through a `trigger_camera`, as a map cutscene does                     |
 
 ## Scenarios
 
@@ -123,6 +134,11 @@ just e2e-hud 27017 run1                    # 15 HUD states with crops of each HU
 just e2e-hudproof 27017                    # prove the CS HUD foundation (needs a sandbox, see below)
 just e2e-elements 27017 run1 /abs/crops    # status elements against CS 1.6, with checks (docs/hud.md)
 just e2e-lag 27017 165                     # HUD delay behind a 330 ms round trip after a busy burst
+just e2e-obituary 27017                    # metamod plugin: no Sven death lines, see docs/metamod.md
+```
+
+```sh
+just e2e-fov 27017 "$PWD/.e2e/fov/run1"    # view models, scopes and turned views of the CS weapons
 ```
 
 The scenarios start the server and the client themselves and print a JSON list of the screenshots. The kill-feed
@@ -151,6 +167,18 @@ just hudboxes .e2e/shots/run1-spawn.png 0 820 460 80
 Each line is the box of one HUD-coloured glyph in screen pixels. CS 1.6 draws its HUD sprites 1:1 at every resolution
 and anchors them to the screen edges, so the boxes must match.
 
+### Muzzle flash
+
+`just e2e-muzzleflash` fires weapons in a game that already runs on a display (the Sven client or stock CS 1.6). It
+prints the size of each flash and the number of frames that show it. First give both games the same scene size (Sven
+`default_fov 74`, CS 1.6 FOV 90) and look up at a dark sky. The steps for CS 1.6 and the results are in
+[research/muzzle-flash.md](research/muzzle-flash.md).
+
+```sh
+just e2e-muzzleflash :102 .e2e/muzzle/sven 1000x660+500+240 deagle=weapon_csdeagle awp=weapon_awp
+just e2e-muzzleflash measure .e2e/muzzle/sven/deagle-1.png   # measure a saved shot again
+```
+
 ### Kill-feed reference
 
 `just fixture-killfeed` runs Valve's CS 1.6 client offscreen against a ReGameDLL_CS listen server, kills bots with an
@@ -176,3 +204,14 @@ just fixture-crosshair :96 1600x900
 deno run -A tests/e2e/crosshair-lines.ts .e2e/reference/cs16-crosshair-1600x900-ak47-firing.png
 deno run -A tests/e2e/comparesheet.ts 1600x900 <shots dir> <hud label> <elements label> .e2e/reference docs/hud/compare
 ```
+
+### Field-of-view reference
+
+`just fixture-fov` captures the same states as `just e2e-fov` in CS 1.6. `just fov-metrics` measures both captures:
+
+```sh
+just fixture-fov :96 1600x900
+just fov-metrics .e2e/fov/cs16-1600x900 .e2e/fov/run1
+```
+
+[Field of view](fov.md) gives the method and the results.

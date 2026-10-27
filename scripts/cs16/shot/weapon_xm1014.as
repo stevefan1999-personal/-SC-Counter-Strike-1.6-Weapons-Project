@@ -28,7 +28,7 @@ enum CS16_Xm1014_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/xm1014/w_xm1014.mdl";
-string V_MODEL      = "models/cs16/wpn/xm1014/v_xm1014.mdl";
+string V_MODEL      = "models/cs16/wpn/xm1014/v_xm1014_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/xm1014/p_xm1014.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 1;
@@ -199,7 +199,7 @@ class weapon_xm1014 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
                 self.m_flTimeWeaponIdle = g_Engine.time + 1.5f;
             }
         }
-        BaseClass.ItemPostFrame();
+        WeaponFrame(); // base.as: marks the frame for IsCameraCall
     }
 
     void Reload()

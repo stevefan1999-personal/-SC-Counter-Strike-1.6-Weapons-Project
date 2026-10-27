@@ -34,7 +34,7 @@ enum CS16_Glock18_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/g18/w_glock18.mdl";
-string V_MODEL      = "models/cs16/wpn/g18/v_glock18.mdl";
+string V_MODEL      = "models/cs16/wpn/g18/v_glock18_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/g18/p_glock18.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 0;
@@ -224,6 +224,10 @@ class weapon_csglock18 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
 
     void SecondaryAttack()
     {
+        // A camera only ends a zoom, and this weapon has none (base.as IsCameraCall)
+        if( IsCameraCall() )
+            return;
+
         switch( WeaponFireMode )
         {
             case CS16BASE::MODE_NORMAL:
@@ -271,7 +275,7 @@ class weapon_csglock18 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
             }
         }
 
-        BaseClass.ItemPostFrame();
+        WeaponFrame(); // base.as: marks the frame for IsCameraCall
     }
 
     void Reload()

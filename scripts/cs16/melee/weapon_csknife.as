@@ -145,6 +145,10 @@ class weapon_csknife : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase, CS16B
 
     void SecondaryAttack()
     {
+        // A camera only ends a zoom, and this weapon has none (base.as IsCameraCall)
+        if( IsCameraCall() )
+            return;
+
         Stab( DAMAGE_STAB, KnifeSlashSounds[Math.RandomLong( 0, KnifeSlashSounds.length() - 1)], STAB_S, HITWALL_S, STABMISS, STAB, GetBodygroup(), STAB_DIST );
     }
 

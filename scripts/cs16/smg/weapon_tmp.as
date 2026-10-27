@@ -27,7 +27,7 @@ enum CS16_Tmp_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/tmp/w_tmp.mdl";
-string V_MODEL      = "models/cs16/wpn/tmp/v_tmp.mdl";
+string V_MODEL      = "models/cs16/wpn/tmp/v_tmp_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/tmp/p_tmp.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 7;

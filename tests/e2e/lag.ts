@@ -83,7 +83,7 @@ async function burstAndMarker(hud: string, proxy: LagProxy) {
 const proxy = await LagProxy.open(port, delayMs);
 let caughtUp = false;
 try {
-  await server.start("testcenter", "+motdfile", NO_MOTD_FILE);
+  await server.start("testcenter", "server", "+motdfile", NO_MOTD_FILE);
   await client.join(server, proxy.port);
   await client.console(`cl_showfps 0; net_graph 0; name ${PLAYER_NAME}`);
   await e2e("give weapon_p90", /\[e2e\] gave/);

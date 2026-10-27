@@ -1,0 +1,4 @@
+# Sven Co-op ships a 32-bit Linux server (svends_i686, dlls/server.so), so
+# the plugin and its tests default to i686.
+[build]
+target = "i686-unknown-linux-gnu"

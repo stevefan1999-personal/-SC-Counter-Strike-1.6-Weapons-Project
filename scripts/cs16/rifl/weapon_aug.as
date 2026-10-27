@@ -25,7 +25,7 @@ enum CS16_Aug_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/aug/w_aug.mdl";
-string V_MODEL      = "models/cs16/wpn/aug/v_aug.mdl";
+string V_MODEL      = "models/cs16/wpn/aug/v_aug_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/aug/p_aug.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 20;
@@ -208,6 +208,10 @@ class weapon_aug : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
 
     void SecondaryAttack()
     {
+        // A camera only ends a zoom (base.as IsCameraCall); the zoomed case below does that
+        if( IsCameraCall() && WeaponZoomMode == CS16BASE::MODE_FOV_NORMAL )
+            return;
+
         self.m_flNextSecondaryAttack = WeaponTimeBase() + 0.3f;
 
         switch( WeaponZoomMode )

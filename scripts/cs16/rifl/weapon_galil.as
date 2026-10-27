@@ -25,7 +25,7 @@ enum CS16_Galil_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/galil/w_galil.mdl";
-string V_MODEL      = "models/cs16/wpn/galil/v_galil.mdl";
+string V_MODEL      = "models/cs16/wpn/galil/v_galil_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/galil/p_galil.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 9;

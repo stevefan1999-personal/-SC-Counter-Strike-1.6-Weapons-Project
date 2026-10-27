@@ -1,0 +1,9 @@
+// CS 1.6 R_MuzzleFlash type 22: muzzleflash3.spr (shipped as csflashx.spr) is 72 units wide at scale 1, so 14.4 units. Sven draws 2 x scale units.
+attachment 0
+spritename sprites/cs16/csflashx.spr
+scale 7
+colorR 255
+colorG 255
+colorB 255
+rendermode 5
+transparency 255

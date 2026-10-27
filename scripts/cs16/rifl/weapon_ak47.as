@@ -25,7 +25,7 @@ enum CS16_Ak47_Animations
 
 // Models
 string W_MODEL      = "models/cs16/wpn/ak47/w_ak47.mdl";
-string V_MODEL      = "models/cs16/wpn/ak47/v_ak47.mdl";
+string V_MODEL      = "models/cs16/wpn/ak47/v_ak47_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/ak47/p_ak47.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 12;

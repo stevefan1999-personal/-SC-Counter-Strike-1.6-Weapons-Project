@@ -231,7 +231,7 @@ async function waitForClientInGame() {
 
 try {
   // No MOTD: its window would take the keys, and Enter, which closes it, fires the weapon in game.
-  await server.start("testcenter", "+motdfile", "e2e_no_motd.txt");
+  await server.start("testcenter", "server", "+motdfile", "e2e_no_motd.txt");
   await client.connect(port);
   await waitForClientInGame();
   await sleep(SETTLE_MS);

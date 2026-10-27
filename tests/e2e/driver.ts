@@ -41,10 +41,11 @@ export class Server {
     return `${stateRoot}/server-${this.port}/server.log`;
   }
 
-  // The CS HUD cannot read the client's size, so it gets the size of the e2e client (see hudRes). Extra arguments go to the
-  // server command line, for example "+motdfile" and a file.
-  async start(map: string, ...args: string[]) {
-    await just("server", String(this.port), map, ...args);
+  // The CS HUD cannot read the client's size, so it gets the size of the e2e client (see hudRes). `recipe` is a Justfile
+  // recipe with the parameters of `server`, such as `server-metamod`; `args` go to the server command line, for
+  // example "+motdfile" and a file.
+  async start(map: string, recipe = "server", ...args: string[]) {
+    await just(recipe, String(this.port), map, ...args);
     if (hudRes !== DEFAULT_HUD_RES) await this.command(`as_command .cs16_hud_res ${hudRes}`);
   }
 
@@ -81,8 +82,14 @@ export class Server {
 }
 
 export class Client {
-  async connect(port: number) {
-    await just("client", `+connect 127.0.0.1:${port}`);
+  // `args` go to the game after `+connect`, such as `+developer 0`.
+  async connect(port: number, ...args: string[]) {
+    await just("client", `+connect 127.0.0.1:${port}`, ...args);
+  }
+
+  // The game's console output, which also holds the console copy of every printed message.
+  async log(): Promise<string> {
+    return await Deno.readTextFile(`${stateRoot}/client/client.log`).catch(() => "");
   }
 
   // Connects and returns once the player stays in the game. The client reconnects at once when it downloads a

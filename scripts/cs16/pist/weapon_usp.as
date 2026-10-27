@@ -37,7 +37,7 @@ enum CS16_Usp_Animation
 
 // Models
 string W_MODEL      = "models/cs16/wpn/usp/w_usp.mdl";
-string V_MODEL      = "models/cs16/wpn/usp/v_usp.mdl";
+string V_MODEL      = "models/cs16/wpn/usp/v_usp_r2.mdl";
 string P_MODEL      = "models/cs16/wpn/usp/p_usp.mdl";
 string A_MODEL      = "models/cs16/ammo/mags.mdl";
 int MAG_BDYGRP      = 6;
@@ -219,6 +219,10 @@ class weapon_usp : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
 
     void SecondaryAttack()
     {
+        // A camera only ends a zoom, and this weapon has none (base.as IsCameraCall)
+        if( IsCameraCall() )
+            return;
+
         self.m_flTimeWeaponIdle = self.m_flNextSecondaryAttack = self.m_flNextPrimaryAttack = WeaponTimeBase() + (115.0/37.0);
         switch( WeaponSilMode )
         {
