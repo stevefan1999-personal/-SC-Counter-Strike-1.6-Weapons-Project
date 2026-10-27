@@ -393,7 +393,9 @@ and the money fades in from green, as CS does after a connection.
 
 `g_Engine.time` starts again at each map. A time that an element stored on an earlier map (the start of a fade or a
 blink) is then later than the new time. `Fading` treats such a start as a fade that is over, and the money blink ends,
-so a value that did not change over a `changelevel` shows the settled colour.
+so a value that did not change over a `changelevel` shows the settled colour. The last step of `e2e-hud` checks this: on
+the new map the health glyphs read (91–98, 56–61) at both sizes; with the old `Fading` the same step showed "100" so
+dark that no glyph reached the settled colour, and the check failed.
 
 ## Precache
 
