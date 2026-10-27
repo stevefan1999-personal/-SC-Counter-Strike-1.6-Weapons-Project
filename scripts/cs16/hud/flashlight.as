@@ -6,6 +6,9 @@ namespace CS16HUD
   const int FLASHLIGHT_LOW_PERCENT = 20; // alert red below this battery
   const int FULL_PERCENT = 100;
   const float FLASHLIGHT_X = 1.0f; // as a fraction: the client clamps the element flush with the right edge
+  // CS shows the flashlight only where the server allows flashlights: CBasePlayer::PreThink sets HIDEHUD_FLASHLIGHT
+  // while mp_flashlight is 0 (ReGameDLL player.cpp; CS defaults to 0). Sven has the same cvar, 1 in its map defaults.
+  const string FLASHLIGHT_CVAR = "mp_flashlight";
 
   // The casing (with the beam when on) and the energy bar, in the same box. They are two sprites because CS adds
   // them after the colour multiply (docs/hud-sprites.md).
@@ -34,7 +37,8 @@ namespace CS16HUD
       const int slot = player.entindex();
       const int battery = Math.clamp( 0, FULL_PERCENT, player.m_iFlashBattery );
       const bool on = player.FlashlightIsOn();
-      const int shown = ShowsStatus( player ) ? battery * 2 + ( on ? 1 : 0 ) : NO_VALUE;
+      const bool allowed = g_EngineFuncs.CVarGetFloat( FLASHLIGHT_CVAR ) != 0.0f;
+      const int shown = ShowsStatus( player ) && allowed ? battery * 2 + ( on ? 1 : 0 ) : NO_VALUE;
       if( shown == m_drawn[slot] && !resend )
         return;
       m_drawn[slot] = shown;

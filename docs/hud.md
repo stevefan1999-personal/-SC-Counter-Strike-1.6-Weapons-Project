@@ -198,6 +198,11 @@ and the damage money report each change (see [Money](#money)).
 - A dead player has no ammo counter and no c4 icon: CS sends `CurWeapon` without a weapon at death and drops the C4
   (ReGameDLL `CBasePlayer::Killed`). The health shows 0, and armour, money and flashlight stay, as in CS.
 - The c4 icon shows while a living player carries the C4.
+- The flashlight shows only while the server allows flashlights (`mp_flashlight` not 0). CS sets `HIDEHUD_FLASHLIGHT` in
+  `CBasePlayer::PreThink` while `mp_flashlight` is 0, its default (ReGameDLL `player.cpp`, `game.cpp`), so the CS
+  reference state `cs16-ref-hud.png` has no flashlight. Sven has the same cvar, and its map defaults set it to 1
+  (`default_map_settings.cfg`), so the icon shows as on a CS server with `mp_flashlight 1`. The CS crosshair fixture
+  runs with `mp_flashlight 1`, and `e2e-elements` compares the top right with it.
 
 ### Ammo
 

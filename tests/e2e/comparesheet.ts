@@ -51,6 +51,13 @@ export function sheets(width: number, height: number, hudLabel: string, elements
       cs: reference,
       region: { x: width - 200, y: height - 100, width: 200, height: 100 },
     },
+    // The CS reference state has mp_flashlight 0 and no flashlight; the crosshair fixture runs with mp_flashlight 1.
+    {
+      name: "top-right-flashlight",
+      ours: elements,
+      cs: `cs16-crosshair-${size}-ak47-rest.png`,
+      region: { x: width - 100, y: 0, width: 100, height: 70 },
+    },
     { name: "crosshair-usp-rest", ours: elements, cs: reference, region: centre },
     {
       name: "crosshair-ak47-rest",

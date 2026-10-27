@@ -34,6 +34,12 @@ const MIN_GLYPH_AREA = 40; // smaller boxes are bits of the small print on the a
 // docs/hud-architecture.md). One pixel off, the c4 rect differs by more than 100 levels.
 const ICON_ERROR_LEVELS = 24;
 const REFERENCES: Record<string, string> = { "1600x900": "cs16-ref-hud.png", "2560x1440": "cs16-1440-hud.png" };
+// The CS reference state runs with mp_flashlight 0 (the CS default), which hides the flashlight; the crosshair fixture
+// (tests/fixture/fixture.cfg: mp_flashlight 1) shows it off, as Sven's default mp_flashlight 1 does.
+const FLASHLIGHT_REFERENCES: Record<string, string> = {
+  "1600x900": "cs16-crosshair-1600x900-ak47-rest.png",
+  "2560x1440": "cs16-crosshair-2560x1440-ak47-rest.png",
+};
 const SETTLED_ORANGE: Rgb = [100, 62, 0]; // HUD orange at alpha 100, as ScaleColors gives it
 const STATUS_GREEN: Rgb = [0, 160, 0];
 // A flat screen of the CS reference's floor colour under the HUD: our glyphs then read like CS's on its floor.
@@ -122,8 +128,8 @@ const hudGlyphs = (found: Glyph[]) =>
 const box = (glyph: Glyph | undefined) => glyph && `${glyph.x},${glyph.y} ${glyph.width}x${glyph.height}`;
 
 // Compares the glyphs of a region with the CS reference both ways: same boxes within 1 px, colours within a few levels.
-async function compareWithCs(ours: string, region: Region, name: string) {
-  const reference = `${referenceDir}/${REFERENCES[resolution]}`;
+async function compareWithCs(ours: string, region: Region, name: string, csShot = REFERENCES[resolution]) {
+  const reference = `${referenceDir}/${csShot}`;
   const [csGlyphs, ourGlyphs] = (await Promise.all([glyphs(reference, region), glyphs(ours, region)])).map(hudGlyphs);
   const rows = matchBoxes(csGlyphs, ourGlyphs).map(({ cs, ours: match, offset }) => {
     const [csGlyph, ourGlyph] = [cs as Glyph, match as Glyph | undefined];
@@ -258,7 +264,14 @@ try {
   const reference = await shot("reference");
   await compareWithCs(reference, BOTTOM_LEFT, "health-armour");
   await compareWithCs(reference, BOTTOM_RIGHT, "money-ammo");
-  report.flashlightOff = await glyphs(reference, TOP_RIGHT, onBackdrop(SETTLED_ORANGE));
+  await compareWithCs(reference, TOP_RIGHT, "flashlight", FLASHLIGHT_REFERENCES[resolution]);
+  // CS hides the flashlight while the server forbids flashlights, as with its default mp_flashlight 0.
+  await server.command("mp_flashlight 0");
+  await sleep(SETTLE_MS);
+  const forbidden = await glyphs(await shot("flashlight-forbidden"), TOP_RIGHT);
+  report.flashlightForbidden = forbidden;
+  check(forbidden.length === 0, `mp_flashlight 0 must hide the flashlight: ${forbidden.map(box)}`);
+  await server.command("mp_flashlight 1");
   await keep(reference, "c4", STATUS_ICON);
   await keep(reference, "flashlight-off", TOP_RIGHT);
   await backdrop(BLACK);
