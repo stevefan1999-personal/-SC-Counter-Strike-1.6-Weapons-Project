@@ -385,8 +385,10 @@ Path of a key such as `_cs16res`, in `hw.so` unless the item names another file:
    0x85C80). Thus in a full userinfo, a longer name can remove `_cs16res` when it is the largest other key.
 3. **Save.** `Info_WriteVars` (0x792C0) writes `setinfo "<key>" "<value>"` for each userinfo key that is not a cvar and
    does not start with `*`. `Host_WriteConfiguration` (0x79410) calls it, and `Host_Shutdown` (0x7BDB0, call at 0x7BF60)
-   calls that at a clean exit. The command `writecfg` (0x796C0) also writes the keys. The client runs `config.cfg` at
-   the next start, so the key comes back. ReHLDS has the same code ([`host.cpp:178-227`][rh-writevars]).
+   calls that at a clean exit, when more than one key is bound (0x7BF57). The command `writecfg <name>` (0x796C0) also
+   writes the keys, but never into `config.cfg`: it refuses the names `config`, `autoexec`, `listenserver`, `server` and
+   `userconfig`, and the stufftext filter always blocks it (list at 0x2EE660, item 8). At the next start the client runs
+   `exec config.cfg` (0x79550), so the key comes back. ReHLDS has the same code ([`host.cpp:178-227`][rh-writevars]).
 4. **Connect.** `CL_SendConnectPacket` (0x114260) sends `connect %i %i "<protinfo>" "<userinfo>"` with all of
    `cls.userinfo`. The client removes no key. The only callers of `Info_RemovePrefixedKeys` (0x85A50) are server
    functions.
