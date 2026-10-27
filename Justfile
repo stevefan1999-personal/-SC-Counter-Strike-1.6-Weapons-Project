@@ -544,6 +544,8 @@ image_registry := env('IMAGE_REGISTRY', 'ghcr.io/stevefan1999-personal')
 metamod_image := 'svencoop-metamod'
 # Mounted at svencoop_addon. Root is that directory: scripts/, models/, sound/, sprites/, events/.
 assets_image := 'svencoop-assets'
+# GitHub shows a package on the repository only when the image carries this source.
+image_source := 'https://github.com/stevefan1999-personal/-SC-Counter-Strike-1.6-Weapons-Project'
 metamod_context := justfile_directory() / '.image' / 'metamod'
 assets_context := justfile_directory() / '.image' / 'assets'
 
@@ -705,7 +707,7 @@ image stage='dev' tag='auto': (bindings) (metamod-build 'release') (image-root)
     name=${spec%%|*}
     context=${spec#*|}
     ref='{{image_registry}}/'"$name:$tag"
-    printf 'FROM scratch\nCOPY . /\n' > "$context.Dockerfile"
+    printf 'FROM scratch\nLABEL org.opencontainers.image.source=%s\nCOPY . /\n' '{{image_source}}' > "$context.Dockerfile"
     docker buildx build "${builder[@]}" \
       --file "$context.Dockerfile" \
       --platform linux/amd64 \
