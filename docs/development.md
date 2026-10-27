@@ -69,7 +69,8 @@ Crash dumps: `-nobreakpad` does not stop Steam's crash handler. The server's `st
 `Assert( !BLoggedOn() )`, often at the first `changelevel` of a server process), writes a minidump to `/tmp/dumps` and
 sends it to Valve through the proxy of the environment. Thus the `server` recipe also passes steamclient's `-noassert`
 (no assert dumps in 12 `changelevel`s, against 2 dumps in 11 without it) and sets `http_proxy` and `HTTP_PROXY` to a
-closed local port, so that any other dump stays on the machine (its log then says `upload no: 'Could not connect to
+closed local port, so that any other dump stays on the machine (its log then says
+`upload no: 'Could not connect to
 server'`). `just stop` deletes the dumps that the server log names.
 
 ## Drive the game client without a monitor
@@ -123,7 +124,8 @@ just e2e-elements 27017 run1 /abs/crops    # status elements against CS 1.6, wit
 
 The scenarios start the server and the client themselves and print a JSON list of the screenshots. The kill-feed
 scenario also saves the same view once the notice is gone (`-clear`). The server gets the client size (`CL_RESOLUTION`)
-as `cs16_hud_res`, because the CS HUD places its icons in screen pixels.
+as `cs16_hud_res`, because the CS HUD places its icons in screen pixels. `E2E_HUD_RES=<W>x<H>` gives the server another
+size, and `E2E_HUD_RES=default` leaves the plugin default (1920x1080), as for a player who never typed `.hudres`.
 
 `e2e-hudproof` adds a proof element to the sandbox copy of the plugin, so set `SVEN_SERVER_DIR` to a sandbox. It fails
 on any failed check and writes `report.json` and evidence crops to `.e2e/proof`. See `docs/hud-architecture.md`.

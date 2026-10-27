@@ -21,7 +21,9 @@ namespace CS16KILLFEED
   const RGBA MONSTER_COLOUR = RGBA( 255, 63, 63, 255 );
   // The icons are added to the screen with this tint, as CS SPR_DrawAdditive does.
   const RGBA ICON_COLOUR = RGBA( 255, 80, 0, 255 );
-  const int ICON_FLAGS = HUD_ELEM_ABSOLUTE_X | HUD_ELEM_ABSOLUTE_Y | HUD_ELEM_NO_BORDER; // x and y in screen pixels
+  // x in pixels from the right edge and y as a fraction of the height. On the screen size of the player both are the CS
+  // pixel. On another size the icons still end the row at the right edge, as the names do, and the rows scale with H.
+  const int ICON_FLAGS = HUD_ELEM_ABSOLUTE_X | HUD_ELEM_NO_BORDER;
   const int16 ICON_HEIGHT = 16;
 
   // HudMessage text (sven-client-hudtext.md 2, 3): positions are fractions of the screen inside the HUD border, and the
@@ -305,13 +307,13 @@ namespace CS16KILLFEED
       {
         DeathIcon@ headshot = FindIcon( HEADSHOT );
         left -= headshot.width;
-        SendIcon( player, headshotChannel, headshot, left, top, hold );
+        SendIcon( player, headshotChannel, headshot, left, top, screen, hold );
         left -= gap;
       }
       else
         CS16HUD::HideElement( player, headshotChannel );
       left -= notice.icon.width;
-      SendIcon( player, CS16HUD::KillfeedIconChannel( row ), notice.icon, left, top, hold );
+      SendIcon( player, CS16HUD::KillfeedIconChannel( row ), notice.icon, left, top, screen, hold );
       const uint killerSlot = CS16HUD::KILLFEED_KILLER_SLOT_FIRST + row;
       if( notice.killer.IsEmpty() )
         CS16HUD::ClearText( player, killerSlot );
@@ -333,7 +335,8 @@ namespace CS16KILLFEED
     return units * screen.height / SCALE_BASE_HEIGHT;
   }
 
-  void SendIcon( CBasePlayer@ player, uint channel, DeathIcon@ icon, int left, int top, float hold )
+  void SendIcon( CBasePlayer@ player, uint channel, DeathIcon@ icon, int left, int top,
+    const CS16HUD::ScreenSize& in screen, float hold )
   {
     HUDSpriteParams params;
     params.flags = ICON_FLAGS;
@@ -342,8 +345,8 @@ namespace CS16KILLFEED
     params.top = icon.top;
     params.width = icon.width;
     params.height = ICON_HEIGHT;
-    params.x = left;
-    params.y = top;
+    params.x = left + icon.width - screen.width; // below 0: the right edge of the icon, this far from the screen edge
+    params.y = ( top + HALF ) / float( screen.height ); // the middle of the pixel row, so that int(y * H) is top
     params.color1 = ICON_COLOUR;
     params.effect = HUD_EFFECT_NONE;
     params.fadeinTime = 0.0f;

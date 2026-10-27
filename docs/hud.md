@@ -672,8 +672,9 @@ The data for one notice comes from the `PlayerKilled` and `MonsterKilled` hooks:
 | Victim names  | engine text slots 0–3 (`KILLFEED_VICTIM_SLOT_FIRST + row`)                              |
 | Killer names  | engine text slots 4–7 (`KILLFEED_KILLER_SLOT_FIRST + row`)                              |
 
-- The icons use `HUD_ELEM_ABSOLUTE_X | HUD_ELEM_ABSOLUTE_Y | HUD_ELEM_NO_BORDER`, so x and y are screen pixels. Their
-  width and height are never 0 (0 means "to the edge of the sheet").
+- The icons use `HUD_ELEM_ABSOLUTE_X | HUD_ELEM_NO_BORDER`: x is a negative pixel count, so the right edge of the icon
+  is that far from the right screen edge, and y is a fraction of the height, `(top + 0.5) / H`. On the screen size of
+  the player both give the CS pixel. Their width and height are never 0 (0 means "to the edge of the sheet").
 - A row goes out only when it shows another notice: a new notice, rows that move up, or a resend (connection, map
   change, a spawn, `cs16_hud 1`, a new screen size). For each player the server keeps the serial number of the notice in
   each row, so each text goes out once for each change.
@@ -722,11 +723,13 @@ the client cannot use that face.
 
 ### Screen size
 
-The icons are in screen pixels, and the name widths depend on `H`. Thus each player needs his real screen size: the
-player types `.hudres <W>x<H>`, or the server sets `cs16_hud_res` (default 1920x1080) for players who did not
-(`scripts/cs16/hud/screen.as`). With a wrong size the names stay near the corner (they are fractions), but the icons do
-not. For example, with 1920x1080 on a 1600x900 client the icons are off the screen. A new size sends the rows again. The
-e2e driver sets `cs16_hud_res` to `CL_RESOLUTION` when it starts the server.
+The layout uses the screen size of the player: the player types `.hudres <W>x<H>`, or the server sets `cs16_hud_res`
+(default 1920x1080) for players who did not (`scripts/cs16/hud/screen.as`). A new size sends the rows again. The names
+are fractions of the screen and the icons are anchored to the right edge with a fractional y, so with a wrong size the
+icons stay next to the names and the rows scale with the real height. What stays wrong is what the server computes in
+pixels from the assumed size: the gaps and the right margin (`s(n)` of the assumed H) and the widths of the names, which
+the client draws at the font size of its real height. The e2e driver sets `cs16_hud_res` to `CL_RESOLUTION` when it
+starts the server; `E2E_HUD_RES=default` keeps the plugin default.
 
 ### Measured against CS 1.6
 
@@ -933,7 +936,7 @@ could remove them.
 | Icon edges                     | sheet rects drawn 1:1, so a kill-feed icon is 1 px narrower and shorter (`d_m4a1` 47 × 14)                                                                             | bilinear filter half a texel off (48 × 15)                           | The client draws custom sprites 1:1. The generated number sprites copy the CS filter into their frames; the CS icon sheets are used as they are.                                                                              |
 | `hud_bordersize`               | the server assumes 16                                                                                                                                                  | –                                                                    | A client cvar. With another value the names move against the icons ([Name position and width](#name-position-and-width)).                                                                                                     |
 | Client crosshair cvars         | the CS defaults: (50, 250, 50), size `auto`, not translucent, dynamic                                                                                                  | `cl_crosshair_color`, `_size`, `_translucent`, `cl_dynamiccrosshair` | The server cannot read client cvars.                                                                                                                                                                                          |
-| Screen size                    | the player's `.hudres`, else `cs16_hud_res`                                                                                                                            | the real size                                                        | The server cannot read the video mode of the client. A wrong size scales the crosshair wrongly and puts the kill-feed icons in the wrong place.                                                                               |
+| Screen size                    | the player's `.hudres`, else `cs16_hud_res`                                                                                                                            | the real size                                                        | The server cannot read the video mode of the client. A wrong size gives the crosshair the scale of the assumed width, and kill-feed gaps and name widths of the assumed height (see [Screen size](#screen-size-1)).           |
 | Crosshair timing               | the lines follow a shot one network round trip later, at most 10 times per second                                                                                      | each client frame                                                    | Each update is four reliable messages (280 bytes); the server cannot run code on the client.                                                                                                                                  |
 | Sven's own death notices       | the Sven server prints each player death as a notify line at the top left                                                                                              | none                                                                 | No AngelScript API stops it. The Counter-Life metamod plugin on `main` drops these lines.                                                                                                                                     |
 | Console prints at the top left | with `developer 1` the client shows each console print at the top left, also the kill-feed console line                                                                | only in the console                                                  | A client setting. The test client has `developer 1` in `autoexec.cfg`, so the e2e screenshots show these lines.                                                                                                               |

@@ -5,6 +5,10 @@ const repoRoot = new URL("../../", import.meta.url).pathname;
 const stateRoot = Deno.env.get("CL_STATE_DIR") ?? `${repoRoot}.e2e`;
 const display = Deno.env.get("CL_DISPLAY") ?? ":99";
 const resolution = Deno.env.get("CL_RESOLUTION") ?? "1600x900";
+// The screen size that the server assumes for players without .hudres: the client size, or with E2E_HUD_RES=default
+// the plugin default of cs16_hud_res (a player who never typed .hudres).
+const hudRes = Deno.env.get("E2E_HUD_RES") ?? resolution;
+const DEFAULT_HUD_RES = "default";
 const LOG_POLL_MS = 250;
 const JOIN_TIMEOUT_MS = 120_000;
 // The client still loads for a moment after the server logs the join; console keys typed then get lost.
@@ -37,11 +41,11 @@ export class Server {
     return `${stateRoot}/server-${this.port}/server.log`;
   }
 
-  // The CS HUD lays out icons in screen pixels and cannot read the client's size, so it gets the size of the e2e client.
-  // Extra arguments go to the server command line, for example "+motdfile" and a file.
+  // The CS HUD cannot read the client's size, so it gets the size of the e2e client (see hudRes). Extra arguments go to the
+  // server command line, for example "+motdfile" and a file.
   async start(map: string, ...args: string[]) {
     await just("server", String(this.port), map, ...args);
-    await this.command(`as_command .cs16_hud_res ${resolution}`);
+    if (hudRes !== DEFAULT_HUD_RES) await this.command(`as_command .cs16_hud_res ${hudRes}`);
   }
 
   async command(command: string) {
