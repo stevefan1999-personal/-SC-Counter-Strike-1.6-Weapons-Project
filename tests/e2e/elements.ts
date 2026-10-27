@@ -10,6 +10,7 @@ import { Client, crop, Server, sleep } from "./driver.ts";
 import { measure } from "./hudboxes.ts";
 import { addedColour, matchBoxes, Pixels, rectError, type Region, type Rgb } from "./hudcompare.ts";
 import { parseSpr } from "../../tools/spr.ts";
+import { encodeIconSheet, loadIconSheets } from "../../tools/hudgen.ts";
 
 const LOAD_TIMEOUT_MS = 600_000; // a first connection downloads about 8 MB of HUD sprites
 const SETTLE_MS = 1_200;
@@ -151,7 +152,9 @@ async function compareWithCs(ours: string, region: Region, name: string) {
 // The c4 icon on black must be the sheet rect drawn 1:1 in CS green at the first CS status slot, and match worse one
 // pixel off in any direction.
 async function checkC4Icon(image: string) {
-  const sheet = parseSpr(await Deno.readFile(`${cstrikeDir}/sprites/640hud7.spr`)).frames[0];
+  // The plugin draws the icon from the hudgen copy of 640hud7, in which the rect is drawn as Valve's engine shows it.
+  const icons = (await loadIconSheets(cstrikeDir)).find(({ name }) => name === "640hud7")!;
+  const sheet = parseSpr(encodeIconSheet(icons)).frames[0];
   const pixels = await Pixels.read(image, STATUS_ICON);
   const slot = { x: STATUS_ICON_X, y: Math.floor(height / 2) - STATUS_ICON_RISE };
   const error = (dx: number, dy: number) =>

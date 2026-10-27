@@ -30,6 +30,13 @@ namespace CS16HUD
   // Sprites that tools/hudgen.ts writes at install time (docs/hud-sprites.md), relative to sprites/.
   const string GENERATED_SPRITE_DIR = "cs16/hud/";
 
+  // The hudgen copy of a CS icon sheet ("640hud7"): each icon rect that the HUD draws is drawn there the way Valve's
+  // engine shows it, at its place in the CS sheet, so the same rect drawn 1:1 by Sven looks like CS's icon.
+  string IconSheet( const string& in sheet )
+  {
+    return GENERATED_SPRITE_DIR + sheet + "_icons.spr";
+  }
+
   // After a spawn the server sends ResetHUD from the player's next PreThink, and ResetHUD makes the client clear
   // every HUD text (CHudMessage::Reset, client.so 0xE99B2) but no custom element. Two PostThinks after the spawn that
   // message is out, so a resend from then on arrives after it, whether the spawn ran inside or before a PreThink.

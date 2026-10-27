@@ -8,7 +8,7 @@ namespace CS16HUD
   // It is the first CS status icon: x crossW / 2, top H / 2 - (32 + 5), drawn centre-relative so it follows H.
   final class StatusIconElement : IHudElement
   {
-    private Part@ m_c4 = Part( ICON_SHEET_DIR + "640hud7.spr", 32, 32, 12, -21, AT_PIXELS | HUD_ELEM_SCR_CENTER_Y, 0,
+    private Part@ m_c4 = Part( IconSheet( "640hud7" ), 32, 32, 12, -21, AT_PIXELS | HUD_ELEM_SCR_CENTER_Y, 0,
       148 );
     private array<int> m_drawn = array<int>( MAX_PLAYERS + 1, NO_VALUE );
 

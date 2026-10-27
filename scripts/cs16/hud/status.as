@@ -20,7 +20,7 @@ namespace CS16HUD
   {
     for( uint index = 0; index < STATUS_SPRITES.length(); ++index )
       PrecacheSprite( GENERATED_SPRITE_DIR + STATUS_SPRITES[index] );
-    PrecacheSprite( ICON_SHEET_DIR + "640hud7.spr" ); // ammo and status icons
+    PrecacheSprite( IconSheet( "640hud7" ) ); // ammo and status icons
     PrecacheSprite( PAIN_SPRITE );
     @g_Money = MoneyElement();
     @g_Pain = PainElement();

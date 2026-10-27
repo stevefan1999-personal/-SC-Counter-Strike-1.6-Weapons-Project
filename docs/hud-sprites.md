@@ -1,8 +1,9 @@
 # CS 1.6 HUD sprites (`sprites/cs16/hud/`)
 
 `just install` runs `tools/hudgen.ts`. The tool reads `sprites/640hud7.spr` and `sprites/hud.txt` from `CSTRIKE_DIR` and
-writes 14 sprites to `<addon>/sprites/cs16/hud/`. Git does not contain these sprites. The same input always gives the
-same bytes.
+writes 14 sprites to `<addon>/sprites/cs16/hud/`. It also writes 4 [icon sheets](#icon-sheets) from `640hud1.spr`,
+`640hud2.spr`, `640hud7.spr`, `640hud16.spr` and the weapon lists. Git does not contain these sprites. The same input
+always gives the same bytes.
 
 Each sprite holds one HUD element (or one part of it) for every value, so a plugin shows a CS number with one
 `HudCustomSprite` and one frame number. Armour and the flashlight are two elements each: their bright part overlaps the
@@ -35,9 +36,9 @@ the content).
 `two_cells.spr` serves three elements: the first two cells of the reserve and the last two cells of money and of the
 delta row. They show the same frames, so separate files would be byte-identical downloads and textures.
 
-Totals: 8,056,252 bytes raw, 179,413 bytes with `bzip2 -9`. The server can compress in-game downloads with bzip2
-(`sv_filetransfercompression`, `engine_i686.so` "Creating compressed version of file %s"). An HTTP download
-(`sv_downloadurl`) sends the raw files.
+Totals with the icon sheets: 8,321,716 bytes raw, 198,089 bytes with `bzip2 -9`. The server can compress in-game
+downloads with bzip2 (`sv_filetransfercompression`, `engine_i686.so` "Creating compressed version of file %s"). An HTTP
+download (`sv_downloadurl`) sends the raw files.
 
 ## Frame numbers
 
@@ -136,6 +137,32 @@ Digit rects (x, 0, 20, 25): x = 0, 23, 47, 70, 95, 119, 144, 169, 192, 216 for 0
    frame of a frame group: Sven `hw.so` 0x120390), origin (0, 0). The HUD draw does not use the origin (Sven `hw.so`
    0x127B70 reads only the width, height and texture), so the frame's top-left is the element's top-left.
 
+## Icon sheets
+
+The ammo icons, the c4 status icon and the kill-feed death icons are rects of CS sheets. Valve's engine draws a sheet
+rect with the same half-texel inset and bilinear filter as the numbers (step 1 above), and Sven draws it 1:1, so the
+plain sheets made each icon about 0.5 px too far left and up, harder, and 1 px smaller than in CS. `hudgen` therefore
+writes a copy of each sheet in which every icon rect is drawn the way Valve's engine shows it, within its own bounds and
+at its own place. The plugin sends the same rects (`left`, `top`, `width`, `height`) as before, from the copy
+(`CS16HUD::IconSheet`).
+
+| File                 | Source         | Rects                                                                                           | Raw bytes | bzip2 |
+| -------------------- | -------------- | ----------------------------------------------------------------------------------------------- | --------- | ----- |
+| `640hud1_icons.spr`  | `640hud1.spr`  | the `d_` rows of `hud.txt` on the sheet (25)                                                    | 66,366    | 9,363 |
+| `640hud2_icons.spr`  | `640hud2.spr`  | `d_famas`, `d_galil`                                                                            | 66,366    | 1,597 |
+| `640hud7_icons.spr`  | `640hud7.spr`  | the `ammo` rows of all `cstrike/sprites/weapon_*.txt`, `cross` (the medkit) and `c4` (15 rects) | 66,366    | 6,019 |
+| `640hud16_icons.spr` | `640hud16.spr` | `d_fiveseven`, `d_sg550`, `d_ump45`                                                             | 66,366    | 1,697 |
+
+- Each copy is one 256×256 additive frame with the grey-ramp palette. The sheets have grey palettes, but `640hud2.spr`
+  has a reversed one (index 0 is white), so the tool turns each texel into its brightness first.
+- Outside the rects the copies are black, which adds nothing.
+- `d_flashbang` (48 wide) reaches into `d_grenade` in the CS `hud.txt`, so CS draws half a grenade after the flashbang.
+  Where two rects overlap, the later rect (the one that starts there) keeps its pixels: the grenade icon is exact, and
+  the half grenade of `d_flashbang` is drawn with the grenade rect. The port has no flashbang.
+- `tools/hudgen_test.ts` checks every pixel of each copy against an independent statement of the filter, checks that
+  every rect that `killfeed.as`, `ammo.as` and the c4 status icon draw is a filtered rect, and pins the SHA-1 of each
+  copy.
+
 ## Evidence
 
 `just hud-sheet <CS screenshot>` writes [`hud-sprites/contact-sheet.png`](hud-sprites/contact-sheet.png). Its first two
@@ -170,7 +197,7 @@ by 0.5. Every 1 px shift of step 1 gives 14.6 or more.
 
 ## Limits and costs
 
-- HUD sprite paths: 14 of the 256 that the engine allows (`SPR_Load`).
+- HUD sprite paths: 18 of the 256 that the engine allows (`SPR_Load`).
 - Textures: each frame is one GL texture, 2,220 in total. Sven keeps its textures in a growing list (`hw.so` 0x12B8C0)
   and has no fixed count. When all files are loaded, they use 30.5 MiB of texture memory (RGBA8).
 - `left` and `top` are bytes and `frame` is a byte. All values in this document fit.

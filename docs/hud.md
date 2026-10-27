@@ -120,10 +120,10 @@ them. `cs16_register.as` calls it in `PluginInit`, after `CS16HUD::PluginInit()`
 | ----------- | --------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------- |
 | Health      | `health.as`     | 20 `HEALTH`                                                                                        | `health.spr`                                                                           | `cs16-hud-spec.md` 3.1 |
 | Armour      | `armour.as`     | 21 `ARMOUR`, 22 `ARMOUR_FULL`                                                                      | `armor.spr` + `armor_full.spr`, or `armor_helmet.spr` + `armor_helmet_full.spr`        | 3.2                    |
-| Ammo        | `ammo.as`       | 23 `CLIP`, 24 `RESERVE_HIGH`, 25 `RESERVE_LOW`, 26 `AMMO_ICON`                                     | `clip.spr`, `two_cells.spr`, `reserve_lo.spr`, a rect of `cs16/icons/640hud7.spr`      | 3.3                    |
+| Ammo        | `ammo.as`       | 23 `CLIP`, 24 `RESERVE_HIGH`, 25 `RESERVE_LOW`, 26 `AMMO_ICON`                                     | `clip.spr`, `two_cells.spr`, `reserve_lo.spr`, a rect of `cs16/hud/640hud7_icons.spr`  | 3.3                    |
 | Money       | `money.as`      | 27 `MONEY_HIGH`, 28 `MONEY_LOW`; change row: 5 `MONEY_DELTA_HIGH`, 6 `MONEY_DELTA_LOW` (map group) | `money_hi.spr`, `two_cells.spr`, `money_delta_plus_hi.spr`, `money_delta_minus_hi.spr` | 3.5                    |
 | Flashlight  | `flashlight.as` | 7 `FLASHLIGHT`, 8 `FLASHLIGHT_ENERGY` (map group)                                                  | `flashlight.spr` + `flashlight_energy.spr`                                             | 3.13                   |
-| c4 icon     | `statusicon.as` | 9 `STATUS_ICON` (map group)                                                                        | the rect (0, 148, 32, 32) of `cs16/icons/640hud7.spr`                                  | 3.10                   |
+| c4 icon     | `statusicon.as` | 9 `STATUS_ICON` (map group)                                                                        | the rect (0, 148, 32, 32) of `cs16/hud/640hud7_icons.spr`                              | 3.10                   |
 | Pain arrows | `pain.as`       | 10–13 `PAIN_ARROW_FIRST` + n (map group): front, right, rear, left                                 | frames 0–3 of `cs16/icons/640_pain.spr` (Half-Life `valve/sprites/640_pain.spr`)       | 3.14                   |
 
 `draw.as` has the shared parts: the CS colours, the fades, the part of a sprite at its CS position, and the gate
@@ -208,20 +208,20 @@ the icon 2 px further left, as CS does.
 
 The icon comes from the ammo type of the weapon (`AMMO_ICONS` in `ammo.as`):
 
-| Ammo type                                  | Icon (rect on `640hud7.spr`) |
-| ------------------------------------------ | ---------------------------- |
-| `cs16_12gauge`, Sven `buckshot`            | buckshot (0, 72)             |
-| `cs16_.50ae`                               | .50 AE (24, 72)              |
-| `cs16_9mm`, Sven `9mm`                     | 9 mm (48, 72)                |
-| `cs16_7.62nato`, Sven `m40a1`              | 7.62 mm (72, 72)             |
-| `cs16_45acp`                               | .45 ACP (96, 72)             |
-| `cs16_.357sig`, Sven `357`                 | .357 (120, 72)               |
-| `cs16_5.56nato`, `cs16_5.56ap`, Sven `556` | 5.56 mm (0, 96)              |
-| `cs16_.338lapua`                           | .338 (24, 96)                |
-| `weapon_hegrenade`, Sven `Hand Grenade`    | HE grenade (72, 96)          |
-| `weapon_c4`                                | C4 (96, 96)                  |
-| `cs16_5.7mm`                               | 5.7 mm (120, 96)             |
-| Sven `health` (the medkit)                 | the CS health cross (48, 25) |
+| Ammo type                                  | Icon (rect on `640hud7.spr`, drawn from `640hud7_icons.spr`) |
+| ------------------------------------------ | ------------------------------------------------------------ |
+| `cs16_12gauge`, Sven `buckshot`            | buckshot (0, 72)                                             |
+| `cs16_.50ae`                               | .50 AE (24, 72)                                              |
+| `cs16_9mm`, Sven `9mm`                     | 9 mm (48, 72)                                                |
+| `cs16_7.62nato`, Sven `m40a1`              | 7.62 mm (72, 72)                                             |
+| `cs16_45acp`                               | .45 ACP (96, 72)                                             |
+| `cs16_.357sig`, Sven `357`                 | .357 (120, 72)                                               |
+| `cs16_5.56nato`, `cs16_5.56ap`, Sven `556` | 5.56 mm (0, 96)                                              |
+| `cs16_.338lapua`                           | .338 (24, 96)                                                |
+| `weapon_hegrenade`, Sven `Hand Grenade`    | HE grenade (72, 96)                                          |
+| `weapon_c4`                                | C4 (96, 96)                                                  |
+| `cs16_5.7mm`                               | 5.7 mm (120, 96)                                             |
+| Sven `health` (the medkit)                 | the CS health cross (48, 25)                                 |
 
 Decisions for weapons that CS does not have:
 
@@ -685,16 +685,16 @@ is [cs16-killfeed-reference.md](research/cs16-killfeed-reference.md), which meas
 
 `W` and `H` are the screen width and height of the player. `s(n) = ⌊n × H / 480⌋`.
 
-| Item      | Value                                                                                                                                                                                                                                         |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rows      | 4 at most. A new notice goes to the bottom. A fifth notice removes the oldest.                                                                                                                                                                |
-| Lifetime  | 6.0 s. The oldest notice expires first, and the rows below it move up together.                                                                                                                                                               |
-| Row top   | `s(32) + i × s(16)` for row `i` (0 is the top row). The icons and the names use the same top.                                                                                                                                                 |
-| Parts     | Right to left: the victim name ends at `W − s(12)`, then `s(5)`, the headshot icon and `s(5)` (headshots only), the weapon icon, `s(5)`, and the killer name. `cs16_killfeed_names` 1 (the default) leaves the killer name out, 0 both names. |
-| Names     | Players in the CT colour (153,204,255), monsters in the T colour (255,63,63). The server sends one level more (154,205,255 and 255,64,64), because the client draws text one level darker.                                                    |
-| Icons     | `d_<weapon>` rects of `cs16/icons/640hud1.spr`, `640hud2.spr` and `640hud16.spr` (the `hud.txt` 640 rows), 16 px high, 1:1, added to the screen with the tint (255,80,0). The headshot icon has the same tint.                                |
-| No killer | A death from the world or from the victim itself shows `d_skull` and no killer name, as a CS suicide.                                                                                                                                         |
-| Console   | Each notice also prints the `death.cpp` line to the console of every player, for example `*** Player killed Scientist with a headshot from m4a1 ***`.                                                                                         |
+| Item      | Value                                                                                                                                                                                                                                                                                                               |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rows      | 4 at most. A new notice goes to the bottom. A fifth notice removes the oldest.                                                                                                                                                                                                                                      |
+| Lifetime  | 6.0 s. The oldest notice expires first, and the rows below it move up together.                                                                                                                                                                                                                                     |
+| Row top   | `s(32) + i × s(16)` for row `i` (0 is the top row). The icons and the names use the same top.                                                                                                                                                                                                                       |
+| Parts     | Right to left: the victim name ends at `W − s(12)`, then `s(5)`, the headshot icon and `s(5)` (headshots only), the weapon icon, `s(5)`, and the killer name. `cs16_killfeed_names` 1 (the default) leaves the killer name out, 0 both names.                                                                       |
+| Names     | Players in the CT colour (153,204,255), monsters in the T colour (255,63,63). The server sends one level more (154,205,255 and 255,64,64), because the client draws text one level darker.                                                                                                                          |
+| Icons     | `d_<weapon>` rects of `640hud1.spr`, `640hud2.spr` and `640hud16.spr` (the `hud.txt` 640 rows), 16 px high, drawn from the `hudgen` copies `cs16/hud/640hud*_icons.spr` (see [`hud-sprites.md`](hud-sprites.md#icon-sheets)) and added to the screen with the tint (255,80,0). The headshot icon has the same tint. |
+| No killer | A death from the world or from the victim itself shows `d_skull` and no killer name, as a CS suicide.                                                                                                                                                                                                               |
+| Console   | Each notice also prints the `death.cpp` line to the console of every player, for example `*** Player killed Scientist with a headshot from m4a1 ***`.                                                                                                                                                               |
 
 The data for one notice comes from the `PlayerKilled` and `MonsterKilled` hooks:
 
@@ -847,9 +847,6 @@ The CS world-death crop shows the `max4` capture (`bot_kill` deaths), because th
 - The name colour. The Sven client draws the text one level darker than the colour that it gets (254,62,62 for
   255,63,63). The server sends each channel one level brighter (154,205,255 and 255,64,64), so only the channels at 255
   stay one level below CS: 153,204,254 and 254,63,63.
-- The icon edges. CS draws the HUD sprites with bilinear filtering half a pixel off the texel grid, so each CS icon
-  spreads 1 px to the right and down. Sven draws the sheet rects 1:1, so the lit box of each icon is 1 px narrower and
-  shorter. The positions of the rects are the same.
 - `hud_bordersize`. The server assumes 16 (see [Name position and width](#name-position-and-width)).
 - The console line. CS prints it to the console only. The Sven client also shows console prints for some seconds in the
   top-left corner of the screen. At 2560x1440 that corner showed unreadable characters for every console print, also for
@@ -994,7 +991,6 @@ could remove them.
 | Kill-feed name shadow          | none                                                                                                                                                                   | a black copy 1 px right and 1 px down                                | HudMessage has no shadow. A black copy of each name needs a second text slot, and the 8 slots are shared with maps and plugins.                                                                                               |
 | Kill-feed name colour          | one level darker where CS has 255: 153, 204, 254 and 254, 63, 63                                                                                                       | 153, 204, 255 and 255, 63, 63                                        | The client draws text one level darker than the colour that it gets. The server sends one level more, but 255 cannot go higher.                                                                                               |
 | Kill-feed name widths          | right for a Linux client with this host's default fontconfig                                                                                                           | –                                                                    | The server cannot know the face of a client. A Windows client picks the face through GDI, so its names can be some pixels away from the icons.                                                                                |
-| Icon edges                     | sheet rects drawn 1:1, so a kill-feed icon is 1 px narrower and shorter (`d_m4a1` 47 × 14)                                                                             | bilinear filter half a texel off (48 × 15)                           | The client draws custom sprites 1:1. The generated number sprites copy the CS filter into their frames; the CS icon sheets are used as they are.                                                                              |
 | `hud_bordersize`               | the server assumes 16                                                                                                                                                  | –                                                                    | A client cvar. With another value the names move against the icons ([Name position and width](#name-position-and-width)).                                                                                                     |
 | Client crosshair cvars         | the CS defaults: (50, 250, 50), size `auto`, not translucent, dynamic                                                                                                  | `cl_crosshair_color`, `_size`, `_translucent`, `cl_dynamiccrosshair` | The server cannot read client cvars.                                                                                                                                                                                          |
 | Screen size                    | the player's `.hudres`, else `cs16_hud_res`                                                                                                                            | the real size                                                        | The server cannot read the video mode of the client. A wrong size gives the crosshair the scale of the assumed width, and kill-feed gaps and name widths of the assumed height (see [Screen size](#screen-size-1)).           |

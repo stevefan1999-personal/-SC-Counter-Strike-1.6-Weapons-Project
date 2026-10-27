@@ -284,6 +284,68 @@ export function renderFrames({ frames, content, draw }: HudSprite): SpriteFrame[
   });
 }
 
+// Copies of the CS sheets whose icon rects the AngelScript HUD draws, with every such rect drawn the way Valve's engine
+// shows it (Canvas.add) at its own place, so the plugin sends the same rects (docs/hud-sprites.md, "Icon sheets"). The
+// rects: the d_ death icons of hud.txt (kill feed), the ammo icons of the CS weapon lists (ammo counter) and, on
+// 640hud7, the health cross (the medkit's ammo icon) and the c4 (status icon).
+export const ICON_SHEETS = ["640hud1", "640hud2", "640hud7", "640hud16"];
+const HUD_TXT_ICON = /^(d_.+|cross|c4)$/;
+const WEAPON_AMMO_ROW = "ammo";
+const WEAPON_LIST = /^weapon_.+\.txt$/;
+const GREY_RAMP = Uint8Array.from({ length: 256 * RGB_SIZE }, (_, at) => Math.floor(at / RGB_SIZE));
+export const iconSheetFile = (sheet: string) => `${sheet}_icons.spr`;
+
+export type IconSheet = { name: string; sprite: Sprite; rects: Rect[] };
+
+// Every icon rect of the 640 rows, by sheet, without repeats.
+export async function loadIconSheets(cstrikeDir: string): Promise<IconSheet[]> {
+  const hudRows = [...parseHudTxt(await Deno.readTextFile(`${cstrikeDir}/${HUD_TXT_FILE}`))]
+    .filter(([name]) => HUD_TXT_ICON.test(name)).map(([, row]) => row);
+  const weaponRows: Array<Rect & { sheet: string }> = [];
+  for await (const entry of Deno.readDir(`${cstrikeDir}/sprites`)) {
+    if (!WEAPON_LIST.test(entry.name)) continue;
+    const ammo = parseHudTxt(await Deno.readTextFile(`${cstrikeDir}/sprites/${entry.name}`)).get(WEAPON_AMMO_ROW);
+    if (ammo) weaponRows.push(ammo);
+  }
+  return await Promise.all(ICON_SHEETS.map(async (name) => {
+    const keys = new Set<string>();
+    const rects = [...hudRows, ...weaponRows]
+      .filter((row) => row.sheet === name)
+      .map(({ x, y, width, height }) => ({ x, y, width, height }))
+      .filter((rect) => !keys.has(JSON.stringify(rect)) && keys.add(JSON.stringify(rect)))
+      .sort((a, b) => a.y - b.y || a.x - b.x);
+    return { name, sprite: parseSpr(await Deno.readFile(`${cstrikeDir}/sprites/${name}.spr`)), rects };
+  }));
+}
+
+// The sheet with each icon rect resampled in place and black elsewhere. Every CS sheet has a grey palette, some of them
+// reversed (640hud2), so the texels become brightness first and the copy gets the grey ramp, where index = brightness.
+// One pair of CS rects overlaps: d_flashbang (48 wide) reaches into d_grenade, so CS draws half a grenade after the
+// flashbang. Where rects overlap, the rect that comes later (the one that starts there) keeps its own pixels.
+export function encodeIconSheet({ name, sprite, rects }: IconSheet): Uint8Array {
+  const { header, palette, frames: [frame] } = sprite;
+  const grey = Array.from({ length: palette.length / RGB_SIZE }, (_, index) => palette[index * RGB_SIZE]);
+  if (grey.some((value, index) => palette[index * RGB_SIZE + 1] !== value || palette[index * RGB_SIZE + 2] !== value)) {
+    throw new Error(`${name}.spr has a palette that is not grey`);
+  }
+  const brightness = { ...frame, pixels: frame.pixels.map((index) => grey[index]) };
+  const canvas = new Canvas(frame.width, frame.height);
+  rects.forEach((rect) => {
+    const icon = new Canvas(rect.width, rect.height).add(brightness, rect, 0, 0);
+    for (let row = 0; row < rect.height; row++) {
+      canvas.pixels.set(
+        icon.pixels.subarray(row * rect.width, (row + 1) * rect.width),
+        (rect.y + row) * frame.width + rect.x,
+      );
+    }
+  });
+  return encodeSpr({
+    header: { ...header, textureFormat: "additive", beamLength: 0 },
+    palette: GREY_RAMP,
+    frames: [{ origin: [0, 0], width: frame.width, height: frame.height, interval: 0, pixels: canvas.pixels }],
+  });
+}
+
 export function encodeHudSprite(sheet: Sheet, hudSprite: HudSprite): Uint8Array {
   const frames = renderFrames(hudSprite);
   const [{ width, height }] = frames;
@@ -305,5 +367,10 @@ if (import.meta.main) {
     const bytes = encodeHudSprite(sheet, hudSprite);
     await Deno.writeFile(`${outDir}/${hudSprite.file}`, bytes);
     console.log(`${hudSprite.file}: ${hudSprite.frames} frames, ${bytes.length} bytes`);
+  }
+  for (const iconSheet of await loadIconSheets(cstrikeDir)) {
+    const bytes = encodeIconSheet(iconSheet);
+    await Deno.writeFile(`${outDir}/${iconSheetFile(iconSheet.name)}`, bytes);
+    console.log(`${iconSheetFile(iconSheet.name)}: ${iconSheet.rects.length} icons, ${bytes.length} bytes`);
   }
 }

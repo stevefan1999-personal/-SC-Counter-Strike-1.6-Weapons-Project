@@ -58,7 +58,7 @@ namespace CS16KILLFEED
 
     DeathIcon( const string& in sheet, uint8 left, uint8 top, int16 width )
     {
-      sprite = CS16HUD::ICON_SHEET_DIR + sheet + ".spr";
+      sprite = CS16HUD::IconSheet( sheet );
       this.left = left;
       this.top = top;
       this.width = width;
@@ -103,7 +103,7 @@ namespace CS16KILLFEED
       + "text slots, so a kill replaces texts of game_text and map scripts), 1: victims only (text slots 0-3), 0: none",
       ConCommandFlag::AdminOnly, @OnNamesChanged );
     for( uint index = 0; index < ICON_SHEETS.length(); ++index )
-      CS16HUD::PrecacheSprite( CS16HUD::ICON_SHEET_DIR + ICON_SHEETS[index] + ".spr" );
+      CS16HUD::PrecacheSprite( CS16HUD::IconSheet( ICON_SHEETS[index] ) );
     CS16HUD::Register( KillFeed() );
     g_Hooks.RegisterHook( Hooks::Player::PlayerKilled, @OnPlayerKilled );
     g_Hooks.RegisterHook( Hooks::Monster::MonsterKilled, @OnMonsterKilled );

@@ -59,7 +59,7 @@ namespace CS16HUD
       for( uint row = 0; row < AMMO_ICONS.length(); ++row )
       {
         const array<string>@ fields = AMMO_ICONS[row].Split( "," );
-        Part@ icon = Part( ICON_SHEET_DIR + "640hud7.spr", AMMO_ICON_SIZE, AMMO_ICON_SIZE, -18, -16, AT_PIXELS,
+        Part@ icon = Part( IconSheet( "640hud7" ), AMMO_ICON_SIZE, AMMO_ICON_SIZE, -18, -16, AT_PIXELS,
           atoi( fields[0] ), atoi( fields[1] ) );
         for( uint field = firstType; field < fields.length(); ++field )
           m_icons.set( fields[field], @icon );

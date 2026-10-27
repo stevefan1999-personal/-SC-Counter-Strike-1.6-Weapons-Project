@@ -3,6 +3,7 @@
 // Run: deno test -R -E tests/weapon-lists.test.ts   (reads the CS 1.6 install at CSTRIKE_DIR, as "just install" does)
 import { assert, assertEquals } from "@std/assert";
 import { parseSpr } from "../tools/spr.ts";
+import { ICON_SHEETS } from "../tools/hudgen.ts";
 
 const repo = new URL("../", import.meta.url).pathname;
 const cstrike = Deno.env.get("CSTRIKE_DIR") ??
@@ -124,16 +125,14 @@ Deno.test("every sprite the lists use is shipped and precached", async () => {
   assertEquals(new Set(precached), used);
 });
 
-Deno.test("the kill feed draws its death icons from the shipped CS sheets in the icons folder", async () => {
+Deno.test("the kill feed draws its death icons from the icon sheets that hudgen writes", async () => {
   const killfeed = await Deno.readTextFile(`${repo}scripts/cs16/killfeed.as`);
-  const shipped = (await Deno.readTextFile(`${repo}scripts/cs16/base.as`)).match(/WEAPON_LIST_SPRITES = \{([^}]*)\}/)
-    ?.[1] ?? "";
   // Player caches can hold other packs' files at sprites/cs16/640hud*.spr, so no path may point there.
   assert(!/"(sprites\/)?cs16\/640hud/.test(killfeed), "killfeed.as names a sheet outside the icons folder");
-  const channels = await Deno.readTextFile(`${repo}scripts/cs16/hud/channels.as`);
-  assert(channels.includes(`ICON_SHEET_DIR = "cs16/icons/"`), "CS16HUD::ICON_SHEET_DIR is not cs16/icons/");
-  assert(killfeed.includes("CS16HUD::ICON_SHEET_DIR + sheet"), "the death icons do not use CS16HUD::ICON_SHEET_DIR");
+  const hud = await Deno.readTextFile(`${repo}scripts/cs16/hud/hud.as`);
+  assert(hud.includes(`return GENERATED_SPRITE_DIR + sheet + "_icons.spr";`), "CS16HUD::IconSheet moved");
+  assert(killfeed.includes("CS16HUD::IconSheet( sheet )"), "the death icons do not use CS16HUD::IconSheet");
   const sheets = [...killfeed.matchAll(/const string HUD\d+ = "(640hud\d+)";/g)].map(([, sheet]) => sheet);
   assert(sheets.length > 0, "no death-icon sheets found");
-  for (const sheet of sheets) assert(shipped.includes(`"${sheet}"`), `${sheet} is not a shipped list sheet`);
+  for (const sheet of sheets) assert(ICON_SHEETS.includes(sheet), `hudgen writes no icon sheet for ${sheet}`);
 });
