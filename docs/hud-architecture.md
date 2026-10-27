@@ -214,7 +214,10 @@ still draw on client channels 16–31 and text slots 0–3.
 ## Raw senders
 
 `rawhud.as` writes the client messages with `NetworkMessage( MSG_ONE, …, player.edict() )`, as the stock API does for
-one player. All messages are reliable.
+one player. All messages are reliable, except a sprite that the caller sends with `reliable = false`
+(`MSG_ONE_UNRELIABLE`): such a message does not wait behind the reliable stream, but it can get lost or arrive before an
+older reliable message. Use it only for a state that a later reliable message corrects, as the crosshair does on its way
+to rest.
 
 `SendSprite` writes `CustSpr` (ID 140) in the layout of `sven-client-hud.md` 1.2:
 
@@ -263,9 +266,12 @@ bytes, which fits the line buffer and always sends. An element that needs more t
 The senders record each client channel and text slot that they used for each player, and the last position of each text.
 `ClearText( player, slot )` empties one slot that the plugin drew: it sends an empty text with no hold to the recorded
 position, because the client clears every other text at the position of a new text (`sven-client-hudtext.md` 1.4); an
-empty text at the default position would clear a map or plugin text that sits there. `cs16_hud 0` (`ClearSent`) hides
-the recorded channels and calls `ClearText` for each recorded slot; the kill feed uses `ClearText` for rows that go
-empty. Thus turning the CS HUD off does not touch the elements or texts of maps or other plugins.
+empty text at the default position would clear a map or plugin text that sits there. The senders also record when the
+client removes each text by itself (fade-in, hold and fade-out), and `ClearText` sends nothing for a text that is over:
+the slot may hold the text of a map or a plugin by then (see [Text slots](#text-slots)). `cs16_hud 0` (`ClearSent`)
+hides the recorded channels and calls `ClearText` for each recorded slot; the kill feed uses `ClearText` only when a
+notice takes over a slot pair whose old name is still on the screen. Thus turning the CS HUD off does not touch the
+elements or texts of maps or other plugins.
 
 ## Screen size
 
@@ -557,5 +563,6 @@ The chat on the screen shows only the newest line:
 - On a LAN server all players share one stored `.hudres` value.
 - The `m_iHideHUD` ownership cannot see a map that sets the same bit later (see
   [Native HUD hiding](#native-hud-hiding)).
-- Each element message is reliable. A crosshair that sends in each frame can overflow the reliable channel. Send only
-  changes.
+- Element messages are reliable unless an element asks otherwise. A crosshair that sends in each frame can overflow the
+  reliable channel, and on a lagged connection every reliable message waits behind the ones before it. Send only
+  changes, coalesce bursts (the kill feed sends rows at most every 0.2 s), and send transient states unreliable.
