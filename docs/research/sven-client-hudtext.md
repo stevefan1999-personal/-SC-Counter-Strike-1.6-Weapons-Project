@@ -95,6 +95,13 @@ Engine (`hw.so`):
   `__NETMESSAGE__1` … `__NETMESSAGE__8` (table 0x2F06E0, strings 0x266D8F–0x266DFF). Stock GoldSrc has 4.
 - All plugins share engine slots 0–3. All map scripts share 4–7. Other server code that writes `TE_TEXTMESSAGE` with a
   raw channel (for example map entities) uses the same 8 slots.
+- Review addendum (server.so, IDA): `UTIL_HudMessage (0x544214)` writes the channel byte as it is. `game_text` maps its
+  `channel` key in `KeyValue (0x3FB230)`: n = 1…8 → `4 + ((n − 1) & 3)`, 0 or less → 4, above 8 → 7, so `game_text`
+  draws on slots 4–7 like a map script (channel 1, the Hammer default, is slot 4). Sven's target info ("Friend: … /
+  Health / Armor / Frags", 0x4AA064) sends channel 3 as it is (slot 3), 8 times a second with a hold of 1.75 s while the
+  player aims at a monster or a player, when `mp_allowmonsterinfo` or `mp_allowplayerinfo` allows it. The vehicle line
+  (0x37AA26) uses channel 0. `env_message` sends a `titles.txt` name in `HudText` (`UTIL_ShowMessage 0x5471F2`) and uses
+  no slot.
 
 Text and sprites do not collide. Custom sprites, numbers and time displays use user messages 139–144 and the 32 element
 pointers of `CHudCustom` (`sven-client-hud.md` 1.3). Text uses `TE_TEXTMESSAGE`, the 8 engine slots and the 16 display
@@ -211,6 +218,11 @@ The face:
 - "Ariel" is a typing error for "Arial" and is not a real family. The operating system chooses a substitute. On Linux,
   `hw.so` uses fontconfig and FreeType (it imports `FcFontMatch`, `FcConfigSubstitute`, `FT_New_Face`). On this machine
   `fc-match Ariel` gives Noto Sans. On Windows the GDI font mapper chooses. Thus glyph widths differ between players.
+- Correction (kill feed, [hud.md](../hud.md)): `hw.so` passes the weight 600 to fontconfig as it is and then selects the
+  Apple Roman cmap of the face (`FT_Select_Charmap(face, 'armn')`, 0x1CA27B). Noto Sans has no Apple Roman cmap, so the
+  client logs `Unable to create font 'Ariel': Can't select charmap` and uses the fallback "Tahoma", which `hw.so` asks
+  for as "Bitstream Vera Sans" (`VeraBd.ttf` on this machine). A byte is an Apple Roman code, not a Latin-1 one. The
+  `hud_debug 2` line widths that the client draws agree with that face.
 - Each **byte** is one glyph (`wint_t` = byte value, 0xDA4B0). UTF-8 names show as Latin-1 characters, one for each
   byte. A byte that `iswprint` refuses is not drawn but still moves x by its width (`hw.so 0x1BCC8E`, 0x1BCD9E).
 - The width of a name in pixels is the sum of the advances of its bytes in the substitute face at the tall above. The

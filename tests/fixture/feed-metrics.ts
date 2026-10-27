@@ -35,6 +35,8 @@ const shadowed = (point: Point) => added(point).every((value) => value <= -SHADO
 
 const describe = (points: Point[]) => {
   const ink = points.filter(lit);
+  // Only darker pixels: the world changed there (a blood decal, a gib), which is no part of the feed.
+  if (ink.length === 0) return undefined;
   const box = {
     left: Math.min(...ink.map(({ x }) => x)),
     right: Math.max(...ink.map(({ x }) => x)),
@@ -55,10 +57,10 @@ const describe = (points: Point[]) => {
 
 const lines = runs(changed.map(({ y }) => y), LINE_GAP).map(([top, bottom]) => {
   const inLine = changed.filter(({ y }) => y >= top && y <= bottom);
-  const parts = runs(inLine.map(({ x }) => x), PART_GAP).map(([left, right]) =>
-    describe(inLine.filter(({ x }) => x >= left && x <= right))
+  const parts = runs(inLine.map(({ x }) => x), PART_GAP).flatMap(([left, right]) =>
+    describe(inLine.filter(({ x }) => x >= left && x <= right)) ?? []
   );
   const gaps = parts.slice(1).map((part, index) => part.left - parts[index].right - 1);
-  return { rightMargin: shot.width - 1 - parts.at(-1)!.right, gaps, parts };
+  return { rightMargin: shot.width - 1 - (parts.at(-1)?.right ?? shot.width - 1), gaps, parts };
 });
-lines.forEach((line) => console.log(JSON.stringify(line)));
+lines.filter((line) => line.parts.length > 0).forEach((line) => console.log(JSON.stringify(line)));

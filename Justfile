@@ -90,10 +90,16 @@ server port='27015' map='hl_c01_a1' *args: (stop port)
   printf '%s\n%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" '{{server_dir}}' > "$state/run"
   cd '{{server_dir}}'
   export LD_LIBRARY_PATH="$PWD:$PWD/redist:${LD_LIBRARY_PATH:-}"
+  # -nobreakpad does not reach Steam's crash handler: a steamclient assert (often at the first changelevel) still
+  # writes a minidump to /tmp/dumps and uploads it. steamclient's -noassert stops the assert dumps, game_env keeps the
+  # caller's environment out of any other dump, and a closed local proxy keeps that dump on this machine
+  # (docs/development.md).
+  dead_proxy=http://127.0.0.1:9
   # The holder keeps the pipe open so the server never reads EOF between commands.
   sleep infinity > "$state/in" 2>/dev/null < /dev/null &
   echo $! > "$state/holder.pid"
-  {{game_env}} LD_LIBRARY_PATH="$LD_LIBRARY_PATH" ./svends_i686 -console -nobreakpad -port {{port}} +maxplayers 8 +sv_lan 1 +sv_cheats 1 +map {{map}} {{args}} < "$state/in" > "$state/server.log" 2>&1 &
+  {{game_env}} LD_LIBRARY_PATH="$LD_LIBRARY_PATH" http_proxy="$dead_proxy" HTTP_PROXY="$dead_proxy" \
+    ./svends_i686 -console -nobreakpad -noassert -port {{port}} +maxplayers 8 +sv_lan 1 +sv_cheats 1 +map {{map}} {{args}} < "$state/in" > "$state/server.log" 2>&1 &
   echo $! > "$state/server.pid"
   for _ in $(seq 1 60); do
     rg -q 'Started map' "$state/server.log" && { echo "server {{port}} up on {{map}}"; exit 0; }
@@ -123,10 +129,13 @@ stop port='27015':
     rm -f "$pidfile"
   done
   rm -f "$state/in"
-  test -f "$state/run" || exit 0
-  # After the exit, a farm symlink whose target changed during the run means the server wrote into the shared
-  # install: that path needs a copy in the sandbox recipe.
+  # The server still writes files while it exits.
   for _ in $(seq 1 50); do test -n "$server" && kill -0 "$server" 2>/dev/null || break; sleep 0.1; done
+  # A dump that the server still wrote stays in /tmp (RAM), where Steam's crash handler may send it later.
+  rg -o '/tmp/dumps/[A-Za-z0-9_]+\.dmp' "$state/server.log" 2>/dev/null | sort -u | xargs -r rm -f
+  test -f "$state/run" || exit 0
+  # A farm symlink whose target changed during the run means the server wrote into the shared install: that path
+  # needs a copy in the sandbox recipe.
   { read -r started; read -r dir; } < "$state/run"
   rm -f "$state/run"
   escaped=$(fd -L -HI -t f --changed-within "$started" . "$dir" | while read -r path; do test -L "$path" && echo "$path"; done)
@@ -272,10 +281,15 @@ sandbox dir:
   done
   echo 'sandbox ready; use it with: export SVEN_SERVER_DIR={{dir}}'
 
-# Shoot a pinned scientist with a CS weapon and capture the kill feed: just e2e-killfeed 27017 weapon_csdeagle head
+# Kill a pinned scientist with a CS weapon (head|body), or die from the world (world), and capture the kill feed: just e2e-killfeed 27017 weapon_m4a1 head
 [group('e2e')]
 e2e-killfeed port='27017' weapon='weapon_csdeagle' aim='head':
   deno run -A '{{justfile_directory()}}/tests/e2e/killfeed.ts' {{port}} {{weapon}} {{aim}}
+
+# Play behind a UDP proxy that delays each datagram, fire a P90 burst with kills, and time how long the HUD needs to show a health change made after it (CS HUD, then native HUD): just e2e-lag 27017 165
+[group('e2e')]
+e2e-lag port='27017' delay='165':
+  deno run -A '{{justfile_directory()}}/tests/e2e/lag.ts' {{port}} {{delay}}
 
 # Show that Sven's obituaries stay out of the notify area with the metamod plugin: just e2e-obituary 27017
 [group('e2e')]
@@ -286,6 +300,16 @@ e2e-obituary port='27017':
 [group('e2e')]
 e2e-hud port='27017' label='hud':
   deno run -A '{{justfile_directory()}}/tests/e2e/hud.ts' {{port}} {{label}}
+
+# Prove the CS HUD foundation in game on a sandbox (SVEN_SERVER_DIR): just e2e-hudproof 27017 .e2e/proof
+[group('e2e')]
+e2e-hudproof port='27017' evidence=(state_root / 'proof'):
+  deno run -A '{{justfile_directory()}}/tests/e2e/hudproof.ts' {{port}} '{{evidence}}'
+
+# Put the player into the CS 1.6 reference HUD state, compare it with the CS screenshot and capture the other element states: just e2e-elements 27017 run1 docs/hud/elements
+[group('e2e')]
+e2e-elements port='27017' label='elements' cropdir='':
+  deno run -A '{{justfile_directory()}}/tests/e2e/elements.ts' {{port}} {{label}} {{cropdir}}
 
 # Capture view models, scopes and turned views of the CS weapons on testcenter (docs/fov.md): just e2e-fov 27017 /abs/out
 [group('e2e')]
@@ -308,6 +332,14 @@ e2e-muzzleflash +args:
 [group('tools')]
 hud-sheet screenshot out=(justfile_directory() / 'docs/hud-sprites/contact-sheet.png'):
   deno run -R -W --allow-run=magick '{{justfile_directory()}}/tools/hudsheet.ts' '{{cstrike_dir}}' '{{screenshot}}' '{{out}}'
+
+# Regenerate the kill feed's HudMessage glyph advances from the face that the Sven client picks: just hud-font
+[group('tools')]
+hud-font out=(justfile_directory() / 'scripts/cs16/hud/textfont.as'):
+  # The client asks fontconfig for CreditsFont "Ariel" at weight 600; when that face has no Apple Roman cmap it falls
+  # back to "Tahoma", which Sven's hw.so asks for as "Bitstream Vera Sans" (docs/hud.md, "Kill feed").
+  deno run -R -W '{{justfile_directory()}}/tools/hudfont.ts' '{{out}}' \
+    "$(fc-match -f '%{file}' 'Ariel:weight=600')" "$(fc-match -f '%{file}' 'Bitstream Vera Sans:weight=600')"
 
 # Build the sniper-scope view model from CS 1.6's reticle sprite (docs/fov.md); a changed model needs a new path: just scope-model /abs/out.mdl
 [group('tools')]
@@ -417,6 +449,15 @@ fixture-killfeed display=fixture_display resolution='1600x900' port='27049' clie
   mkdir -p '{{state_root}}/reference'
   deno run -A '{{justfile_directory()}}/tests/fixture/killfeed.ts' '{{display}}' '{{resolution}}' \
     '{{root}}/qconsole.log' '{{state_root}}/reference' '{{resolution}}'
+
+# Capture the CS 1.6 AK-47 crosshair at rest and 600 ms into a burst into .e2e/reference: just fixture-crosshair :96 2560x1440
+[group('fixture')]
+fixture-crosshair display=fixture_display resolution='1600x900' port='27049' clientport='27007' root=fixture_root: (fixture-root root regamedll_dir 'de_dust2') (fixture-start display resolution port clientport 'de_dust2' root)
+  #!/usr/bin/env bash
+  set -euo pipefail
+  trap "just fixture-stop '{{display}}' '{{root}}'" EXIT
+  deno run -A '{{justfile_directory()}}/tests/fixture/crosshair.ts' '{{display}}' '{{resolution}}' \
+    '{{state_root}}/reference' '{{resolution}}'
 
 # Measure the kill feed of a screenshot against a frame of the same view without notices: just fixture-metrics a.png a-before.png
 [group('fixture')]

@@ -1,0 +1,1127 @@
+# CS 1.6 HUD
+
+The CS16 Weapons plugin draws the Counter-Strike 1.6 HUD in Sven Co-op 5.26. The Sven client is closed source, so the
+server draws each HUD part with Sven custom HUD elements (`CustSpr`) and HUD texts (`TE_TEXTMESSAGE`). This page gives
+the architecture, the channel map, the behaviour of each element, the measured comparison with CS 1.6 at 1600×900 and
+2560×1440, and the limits that a server cannot remove.
+
+Related pages:
+
+- [`hud-architecture.md`](hud-architecture.md): the foundation in detail (API, raw senders, resends, precache, proof).
+- [`hud-sprites.md`](hud-sprites.md): the generated HUD sprites in `sprites/cs16/hud/`.
+- [`research/cs16-hud-spec.md`](research/cs16-hud-spec.md): the CS 1.6 HUD, from Valve's `client.so`.
+- [`research/sven-client-hud.md`](research/sven-client-hud.md) and
+  [`research/sven-client-hudtext.md`](research/sven-client-hudtext.md): how the Sven client draws elements and texts.
+- [`research/cs16-killfeed-reference.md`](research/cs16-killfeed-reference.md): the measured CS 1.6 kill feed.
+
+## Architecture
+
+### Files
+
+| File                                                                              | Content                                                                                    |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `scripts/cs16/hud/hud.as`                                                         | foundation: element registry, 20 Hz tick, per-frame tick, resends, precache, `cs16_hud`    |
+| `scripts/cs16/hud/channels.as`                                                    | the channel map and the text slot map                                                      |
+| `scripts/cs16/hud/rawhud.as`                                                      | raw `CustSpr`, `ToggleElem` and `TE_TEXTMESSAGE` senders, `ClearText`, `ClearSent`         |
+| `scripts/cs16/hud/screen.as`                                                      | screen size of each player: `.hudres`, the plugin store, `cs16_hud_res`                    |
+| `scripts/cs16/hud/hidenative.as`                                                  | hides the native Sven health, armour, ammo, flashlight and crosshair                       |
+| `scripts/cs16/hud/draw.as`                                                        | shared drawing of the status elements: CS colours, fades, a sprite part at its CS position |
+| `scripts/cs16/hud/status.as`                                                      | precaches and registers the status elements                                                |
+| `health.as`, `armour.as`, `ammo.as`, `money.as`, `flashlight.as`, `statusicon.as` | one status element each                                                                    |
+| `scripts/cs16/hud/crosshair.as`                                                   | the dynamic crosshair (namespace `CS16CROSSHAIR`)                                          |
+| `scripts/cs16/killfeed.as`, `scripts/cs16/hud/textfont.as`                        | the kill feed (namespace `CS16KILLFEED`) and the glyph widths of the HudMessage font       |
+| `scripts/cs16/base.as`                                                            | weapon hooks: the shot counter, the silencer and burst state, the real hit group           |
+| `scripts/cs16/BuyMenu.as`, `scripts/DamageMoneyScore.as`                          | report each money change and each failed purchase to the money element                     |
+| `scripts/cs16/cs16_register.as`                                                   | calls the foundation and registers the elements                                            |
+
+### Lifecycle
+
+`cs16_register.as` starts the HUD in this order in `PluginInit`:
+
+1. `CS16HUD::PluginInit()`: the foundation. It registers the player hooks, the cvars `cs16_hud` and `cs16_hud_res`, the
+   `.hudres` command and the 20 Hz tick.
+2. `CS16HUD::RegisterStatus()`: health, armour, ammo, money, flashlight and the C4 status icon, and their sprites.
+3. `CS16CROSSHAIR::Register()`: the crosshair, as an element with `everyFrame`.
+4. `CS16KILLFEED::PluginInit()`: the kill feed, its icon sheets and its `PlayerKilled` and `MonsterKilled` hooks.
+
+`MapInit` calls `CS16KILLFEED::MapInit()` (old notices go) and then `CS16HUD::MapInit()`, which precaches every sprite
+of every element as a generic resource.
+
+Each element implements `CS16HUD::IHudElement`:
+
+| Callback   | When                                                                                                                                                           | What the elements do                                                            |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `OnTick`   | every 0.05 s; the crosshair in every `PlayerPostThink` of its player                                                                                           | read the player state and send only what changed                                |
+| `OnResend` | after a connection and a map change, two `PlayerPostThink`s after each spawn (after the client's `ResetHUD`), after `cs16_hud 1`, `.hudres` and `cs16_hud_res` | send the whole element again; a running fade continues, it does not start again |
+| `OnSpawn`  | after a spawn, a revive, a connection or a map change, before the client resets its HUD                                                                        | update state only: the ammo fade restarts, the money fades in from green        |
+| `OnDeath`  | when the player dies                                                                                                                                           | the crosshair hides its lines                                                   |
+
+All callbacks run only while `cs16_hud` is 1 and the player is in the server on this map. With `cs16_hud 0` the
+foundation removes every element and text that it drew (`ClearSent`) and gives the native Sven HUD back. With
+`cs16_hud 1` it hides the native parts again and resends all elements.
+
+The data goes one way: game state (player fields, weapon scripts, the buy menu wallet, kill hooks) → elements → raw
+senders → client. No element reads another element. The weapon scripts only count shots (`g_PlayerShotsFired`) and give
+their silencer and burst state (`IWeaponState`). The buy menu and the damage money only call `CS16HUD::ShowMoney` and
+`CS16HUD::BlinkMoney`.
+
+### Screen size
+
+Sven draws HUD sprites 1:1 in screen pixels and scales the HudMessage font with the screen height. The server cannot
+read the client's screen size. Thus each player has a size: the player's own `.hudres <W>x<H>` (kept in the plugin
+store), else the server cvar `cs16_hud_res` (default `1920x1080`). The crosshair scale, the kill-feed layout and the
+name widths use this size. The status elements are placed from the screen edges or as screen fractions, so they do not
+need it.
+
+## Channel map
+
+The Sven client keeps 32 custom elements: client channels 0–15 (the map-script group) and 16–31 (the plugin group). The
+raw senders write the client channel directly, so this plugin uses both groups. The engine keeps 8 text slots. The map
+is in `scripts/cs16/hud/channels.as`; [`hud-architecture.md`](hud-architecture.md#channel-map) explains the choice and
+the conflicts with five stock maps.
+
+| Client channel | Group  | Element                                                  | File            |
+| -------------- | ------ | -------------------------------------------------------- | --------------- |
+| 0              | map    | kill feed weapon icon, row 4                             | `killfeed.as`   |
+| 1–4            | map    | kill feed headshot icons, rows 1–4                       | `killfeed.as`   |
+| 5, 6           | map    | money change row: sign and hundreds, the last two digits | `money.as`      |
+| 7, 8           | map    | flashlight: casing and beam, energy bar                  | `flashlight.as` |
+| 9              | map    | status icon (the carried C4)                             | `statusicon.as` |
+| 10–13          | map    | pain arrows: front, right, rear, left                    | `pain.as`       |
+| 14–15          | map    | free (CS draws the radar there; it is not drawn)         | none            |
+| 16–19          | plugin | crosshair lines: west, east, north, south                | `crosshair.as`  |
+| 20             | plugin | health                                                   | `health.as`     |
+| 21, 22         | plugin | armour: icon and digits, full part                       | `armour.as`     |
+| 23             | plugin | clip and bar                                             | `ammo.as`       |
+| 24, 25         | plugin | reserve: first two cells, last cell                      | `ammo.as`       |
+| 26             | plugin | ammo icon                                                | `ammo.as`       |
+| 27, 28         | plugin | money: dollar and three cells, last two cells            | `money.as`      |
+| 29–31          | plugin | kill feed weapon icons, rows 1–3                         | `killfeed.as`   |
+
+| Engine text slot | Text                                                                                              | File          |
+| ---------------- | ------------------------------------------------------------------------------------------------- | ------------- |
+| 0–3              | kill feed victim names (`cs16_killfeed_names` 1, 2 and 3, the default)                            | `killfeed.as` |
+| 4–7              | kill feed killer names, slot 7 first (`cs16_killfeed_names` 2, and 3 on maps without `game_text`) | `killfeed.as` |
+
+Maps (`game_text`, map scripts), other plugins and Sven's target info use the same text slots, so a name can replace
+their texts and the reverse. [`hud-architecture.md`](hud-architecture.md#text-slots) lists them; `cs16_killfeed_names`
+chooses how many slots the kill feed takes.
+
+No other code of this repository draws custom elements or HUD texts. `HUD_PRINTCENTER` messages of the C4 use the
+centre-print path, not the text slots.
+
+## Status elements
+
+The status elements are the CS 1.6 HUD parts that are always on the screen: health, armour, ammo, money, flashlight and
+the c4 status icon. `CS16HUD::RegisterStatus()` (`scripts/cs16/hud/status.as`) precaches their sprites and registers
+them. `cs16_register.as` calls it in `PluginInit`, after `CS16HUD::PluginInit()`.
+
+| Element     | File            | Client channels                                                                                    | Sprites                                                                                | CS 1.6 reference       |
+| ----------- | --------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------- |
+| Health      | `health.as`     | 20 `HEALTH`                                                                                        | `health.spr`                                                                           | `cs16-hud-spec.md` 3.1 |
+| Armour      | `armour.as`     | 21 `ARMOUR`, 22 `ARMOUR_FULL`                                                                      | `armor.spr` + `armor_full.spr`, or `armor_helmet.spr` + `armor_helmet_full.spr`        | 3.2                    |
+| Ammo        | `ammo.as`       | 23 `CLIP`, 24 `RESERVE_HIGH`, 25 `RESERVE_LOW`, 26 `AMMO_ICON`                                     | `clip.spr`, `two_cells.spr`, `reserve_lo.spr`, a rect of `cs16/hud/640hud7_icons.spr`  | 3.3                    |
+| Money       | `money.as`      | 27 `MONEY_HIGH`, 28 `MONEY_LOW`; change row: 5 `MONEY_DELTA_HIGH`, 6 `MONEY_DELTA_LOW` (map group) | `money_hi.spr`, `two_cells.spr`, `money_delta_plus_hi.spr`, `money_delta_minus_hi.spr` | 3.5                    |
+| Flashlight  | `flashlight.as` | 7 `FLASHLIGHT`, 8 `FLASHLIGHT_ENERGY` (map group)                                                  | `flashlight.spr` + `flashlight_energy.spr`                                             | 3.13                   |
+| c4 icon     | `statusicon.as` | 9 `STATUS_ICON` (map group)                                                                        | the rect (0, 148, 32, 32) of `cs16/hud/640hud7_icons.spr`                              | 3.10                   |
+| Pain arrows | `pain.as`       | 10–13 `PAIN_ARROW_FIRST` + n (map group): front, right, rear, left                                 | frames 0–3 of `cs16/icons/640_pain.spr` (Half-Life `valve/sprites/640_pain.spr`)       | 3.14                   |
+
+`draw.as` has the shared parts: the CS colours, the fades, the part of a sprite at its CS position, and the gate
+`ShowsStatus`.
+
+### Positions
+
+Each part has the content size of its sprite as `width` and `height`, and the x and y of the contract in
+[`hud-sprites.md`](hud-sprites.md). `tests/hud-elements.test.ts` compares each size with the generated sprite.
+
+| Part                          | x, y                                | Flags                                                   | CS box at 1600×900   |
+| ----------------------------- | ----------------------------------- | ------------------------------------------------------- | -------------------- |
+| Health                        | 12, −12                             | `ABSOLUTE_X`, `ABSOLUTE_Y`, `NO_BORDER`                 | (12, 863)            |
+| Armour, both parts            | 0.2 (fraction), −12                 | `ABSOLUTE_Y`, `NO_BORDER`                               | (320, 863) = W/5     |
+| Clip and bar                  | −112, −12                           | `ABSOLUTE_X`, `ABSOLUTE_Y`, `NO_BORDER`                 | (1416, 863)          |
+| Reserve, first two cells      | −62, −12 (no clip: −64)             | as the clip                                             | (1498, 863)          |
+| Reserve, last cell            | −42, −12 (no clip: −44)             | as the clip                                             | (1538, 863)          |
+| Ammo icon                     | −18, −16 (no clip: −20)             | as the clip                                             | (1558, 860)          |
+| Money, dollar and three cells | −56, −50 (no suit: −100)            | as the clip                                             | (1466, 825)          |
+| Money, last two cells         | −16, −50 (no suit: −100)            | as the clip                                             | (1544, 825)          |
+| Change row                    | as the money, y −87 (no suit: −137) | as the clip                                             | `+` at (1467, 788)   |
+| Flashlight, both parts        | 1.0 (fraction), 16                  | `ABSOLUTE_Y`, `NO_BORDER`                               | (1552, 16)           |
+| c4 icon                       | 12, −21                             | `ABSOLUTE_X`, `ABSOLUTE_Y`, `SCR_CENTER_Y`, `NO_BORDER` | (12, 413) = H/2 − 37 |
+
+The fraction 0.2 gives W/5 at every screen width. The fraction 1.0 puts the flashlight flush with the right edge, which
+pixels cannot do (`sven-client-hud.md` 1.5). The c4 icon y is relative to the screen centre, so it follows H.
+
+### Colours and fades
+
+Each element sends the raw CS colour with the CS alpha in A. Sven multiplies RGB by A with the truncation of CS
+`ScaleColors` (`sven-client-hud.md` 1.9), so the pixels are the CS pixels. No element sets `HUD_ELEM_DYNAMIC_ALPHA` or
+`HUD_ELEM_DEFAULT_ALPHA`, and every element has `holdTime` −1.
+
+A CS fade is Sven effect 2 (`HUD_EFFECT_RAMP_DOWN`) from the start colour (`color2`) to the end colour (`color1`) with
+`HUD_ELEM_EFFECT_ONCE`. Sven ramps all four bytes and then multiplies, as CS does, so the fade is exact. An element that
+is sent again during its fade (a resend after `.hudres`, a reserve change, a new armour type) starts its ramp at the
+colour that the fade reached and keeps the time that is left. Thus the fade continues and does not start again.
+
+| Element    | Colour                                                                                 | Fade                                                       |
+| ---------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Health     | HUD orange (255, 160, 0); 25 or less: low red (250, 0, 0)                              | alpha 228 to 100 in 5 s after each new value               |
+| Health     | 15 or less: low red at alpha 255                                                       | none                                                       |
+| Armour     | HUD orange                                                                             | 228 to 100 in 5 s after each new value                     |
+| Ammo       | HUD orange                                                                             | 200 to 100 in 5 s after a new weapon, clip, FOV or a spawn |
+| Money      | gain: green (0, 255, 0) to HUD orange; loss: red (255, 0, 0) to HUD orange             | 228 to 100 in 5 s after each change                        |
+| Change row | the money colour, faded out in 2.5 s                                                   | see [Money](#money)                                        |
+| Flashlight | HUD orange; battery below 20 %: alert red (255, 16, 16)                                | none: alpha 225 when on, 100 when off                      |
+| c4 icon    | status green (0, 160, 0) at alpha 255; in a bomb target it flashes low red every 0.1 s | none                                                       |
+
+### Values and frames
+
+| Element    | Source                                                                           | Frame                                                                                    |
+| ---------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Health     | `pev.health`: an int, 1 for a living player below 1                              | 0–255                                                                                    |
+| Armour     | `pev.armorvalue`                                                                 | 0–255; the full part 0–100                                                               |
+| Ammo       | the active weapon: `m_iClip`, `m_rgAmmo(PrimaryAmmoIndex())`                     | clip 0–255; reserve 0–999                                                                |
+| Money      | the CS16 buy menu wallet (`BuyMenu::BuyPoints`)                                  | 0–25599: `money_hi.spr` frame = money / 100, `two_cells.spr` frame of the last two cells |
+| Flashlight | `FlashlightIsOn()`, `m_iFlashBattery`                                            | on 1 / off 0; energy 0–100                                                               |
+| c4 icon    | `weapon_c4` in the inventory with ammo; the bomb target keyvalue `$i_inBombZone` | –                                                                                        |
+
+CS sends the reserve ammo as a byte, but the weapons of this port carry up to 1000 rounds. The two cell groups of the
+reserve can show 0–999, so the reserve shows its real value up to 999.
+
+The elements read their values at each tick (20 Hz) and send only what changed. The money is the exception: the buy menu
+and the damage money report each change (see [Money](#money)).
+
+### Gates
+
+- Health, armour, ammo and the flashlight need the HEV suit and are hidden for a spectator, as in CS (`cs16-hud-spec.md`
+  2.5). The native Sven parts that they replace need the suit too.
+- Without the suit, the money moves up to H − 125 (CS `H - 5 fh`). A spectator sees no money.
+- A dead player has no ammo counter and no c4 icon: CS sends `CurWeapon` without a weapon at death and drops the C4
+  (ReGameDLL `CBasePlayer::Killed`). The health shows 0, and armour, money and flashlight stay, as in CS.
+- The c4 icon shows while a living player carries the C4.
+- The flashlight shows only while the server allows flashlights (`mp_flashlight` not 0). CS sets `HIDEHUD_FLASHLIGHT` in
+  `CBasePlayer::PreThink` while `mp_flashlight` is 0, its default (ReGameDLL `player.cpp`, `game.cpp`), so the CS
+  reference state `cs16-ref-hud.png` has no flashlight. Sven has the same cvar, and its map defaults set it to 1
+  (`default_map_settings.cfg`), so the icon shows as on a CS server with `mp_flashlight 1`. The CS crosshair fixture
+  runs with `mp_flashlight 1`, and `e2e-elements` compares the top right with it.
+
+### Ammo
+
+CS draws the ammo counter only for a weapon with a primary ammo type. Thus the knife shows nothing, as in CS.
+
+A weapon with a clip shows clip, bar, reserve and icon. A weapon without a clip (HE grenade, C4) shows the reserve and
+the icon 2 px further left, as CS does.
+
+The icon comes from the ammo type of the weapon (`AMMO_ICONS` in `ammo.as`):
+
+| Ammo type                                  | Icon (rect on `640hud7.spr`, drawn from `640hud7_icons.spr`) |
+| ------------------------------------------ | ------------------------------------------------------------ |
+| `cs16_12gauge`, Sven `buckshot`            | buckshot (0, 72)                                             |
+| `cs16_.50ae`                               | .50 AE (24, 72)                                              |
+| `cs16_9mm`, Sven `9mm`                     | 9 mm (48, 72)                                                |
+| `cs16_7.62nato`, Sven `m40a1`              | 7.62 mm (72, 72)                                             |
+| `cs16_45acp`                               | .45 ACP (96, 72)                                             |
+| `cs16_.357sig`, Sven `357`                 | .357 (120, 72)                                               |
+| `cs16_5.56nato`, `cs16_5.56ap`, Sven `556` | 5.56 mm (0, 96)                                              |
+| `cs16_.338lapua`                           | .338 (24, 96)                                                |
+| `weapon_hegrenade`, Sven `Hand Grenade`    | HE grenade (72, 96)                                          |
+| `weapon_c4`                                | C4 (96, 96)                                                  |
+| `cs16_5.7mm`                               | 5.7 mm (120, 96)                                             |
+| Sven `health` (the medkit)                 | the CS health cross (48, 25)                                 |
+
+Decisions for weapons that CS does not have:
+
+- A Half-Life or Sven weapon that a map gives out shows its ammo with the CS digits at the CS place. Its icon is the CS
+  icon of the same calibre. An ammo type without a CS calibre (rockets, uranium, bolts, hornets, snarks, satchels, trip
+  mines, spores, shock charges) shows the digits without an icon.
+- The medkit shows its charge as the reserve of a weapon without a clip, with the CS health cross as its icon.
+- CS has a second ammo row for a second ammo type, but no CS weapon uses it. The channel map has no channel for it, so
+  the second ammo of a Half-Life weapon (the grenades of the 9mmAR) does not show.
+
+`tests/hud-elements.test.ts` checks that the icon of each CS weapon is the `ammo` row of its weapon list, which is the
+row of `cstrike/sprites/weapon_*.txt`.
+
+### Money
+
+The buy menu calls `BuyMenuCVARS::ShowPointsSprite( player, tracked )` after each change of `BuyPoints`. This calls
+`CS16HUD::ShowMoney( player, amount, tracked )`. The damage money (`scripts/DamageMoneyScore.as`) uses the same call.
+Each "Not enough money" answer of the buy menu calls `CS16HUD::BlinkMoney( player )`.
+
+| Call                                 | When                                                             | What the element shows                                       |
+| ------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------ |
+| `ShowMoney( player, amount, true )`  | a change in play: a purchase, the pay for score, a damage reward | the colour fade and the change row, as the CS tracked change |
+| `ShowMoney( player, amount, false )` | the wallet was loaded: connect, map change, spawn                | the colour fade from 0 (green), no change row                |
+| `BlinkMoney( player )`               | a purchase failed                                                | two bright blinks                                            |
+
+CS resets its money display to 0 at each spawn and then receives the amount without tracking (CS client.so
+`CHudAccountBalance::Reset` 0x9c490; ReGameDLL `dlls/player.cpp:7653`). So the money fades in from green at each spawn.
+The element does the same in `OnSpawn`.
+
+- **Change row.** It shows `+` or `−` and the change for 2.5 s above the money. CS gives it the money colour and then
+  scales it once more by the time that is left (`ScaleColors(…, 256 · t / 2.5)`, CS client.so 0x9ca68). The element
+  sends the money ramp with `fadeoutTime` 2.5 and `holdTime` 0. Sven multiplies the alpha by the share of the fade-out
+  that is left (`sven-client-hud.md` 1.9), so the row gets the product of the two CS fades, and Sven hides the row at
+  the end. This follows from the verified Sven fade rules; the scenario does not measure the row during its fade.
+  (`cs16-hud-spec.md` 5.6 proposed one ramp to alpha 0, which is not exact.)
+- **Blink.** CS blinks twice: HUD orange at alpha 255 for 0.1 s, the money colour for 0.1 s, HUD orange for 0.1 s, then
+  the money colour (CS client.so `MsgFunc_BlinkAcct` 0xa3bf0, `Draw` 0x9cada). The element sends effect 7
+  (`HUD_EFFECT_TOGGLE`) with a period of 0.2 s. The client starts the toggle when the element arrives, so the element
+  sends the money again 0.325 s after that send: in the middle of the normal phase after the second bright phase,
+  because the tick that sends it can come up to 0.05 s late.
+
+The old money display (`HudNumDisplay` on API channel 0 = client channel 16, the crosshair) and its model precache of
+`sprites/cs16/640hud7.spr` are removed.
+
+### c4 icon
+
+The icon replaces the old C4 sprite of `weapon_c4.as` (API channel 4 = client channel 20, the health). The element
+checks the inventory at each tick, so a drop, a plant, a death or a strip removes the icon without code in the weapon.
+Inside an `info_bomb_target` the icon flashes, as CS flashes the icon of the bomb carrier in a bomb zone.
+
+### Pain arrows
+
+`HIDEHUD_HEALTH` hides the native Sven health, and with it Sven's pain arrows. `pain.as` draws the CS ones instead
+(`CHudHealth::DrawPain` and `CalcDamageDirection`, `cs16-hud-spec.md` 3.14):
+
+- The `PlayerTakeDamage` hook records each hit. The damage comes from the middle of the inflictor (CS
+  `UpdateClientData`), or from the player when there is no inflictor. The cosine between the view (`v_angle`) and the
+  way to the damage lights the front or rear arrow, and the cosine with the right vector the right or left arrow, when
+  it is above 0.3. Damage within 50 units lights all four at strength 1.
+- The hook runs before the damage lands, so the element draws the hits at its next tick, and only if health plus armour
+  went down: CS shows arrows only for damage that the server applied. A hit raises an arrow to its strength and never
+  lowers it, as in CS.
+- Each arrow is one element at the CS place: x and y are ±120 px from the screen centre with `SCR_CENTER`, which gives
+  CS's (W/2 − 64, H/2 − 144) for the front arrow, (W/2 + 96, H/2 − 64) for the right one, and so on, at every screen
+  size. The colour is HUD orange, or low red at health 25 and below; the red palette of `640_pain.spr` makes both red.
+- The strength falls 2 per second, and the arrow shows while it is above 0.4: 0.3 s after a hit at strength 1. The alpha
+  is 255 × strength, but not less than the alpha of strength 0.5 (127). The element sends one ramp (effect 2 with
+  `EFFECT_ONCE`) and the hold time. With `EFFECT_ONCE` the client stops its clock at 0.999 of the ramp, also for the
+  hold time, so the ramp must last longer than the arrow (`sven-client-hud.md` 1.9). It keeps the CS slope to the end:
+  the alpha is the CS alpha until it reaches 127, and in the last 0.05 s it falls on to 96 where CS keeps 127.
+
+Measured at 1600×900 (`e2e-elements`, a hit with `e2e.hurt 10 near` and one from the front, recorded at 30 frames per
+second on the backdrop) against the CS 1.6 capture of an HE grenade at the feet (20 frames per second):
+
+| Fact                                         | CS 1.6                                          | Counter-Life                                                 |
+| -------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------ |
+| Arrows                                       | all four for a hit at the feet                  | all four for a near hit; front only for a hit from the front |
+| Lit box in the CS box (red 90 above G and B) | 119 × 39 at (1, 1), the side arrows 39–41 × 119 | 120 × 40 at (0, 0), the side arrows 39–42 × 120              |
+| Pixels outside the four CS boxes             | –                                               | 0                                                            |
+| Time on screen                               | 5 frames at 20 fps (0.25–0.3 s)                 | 9 frames at 30 fps (0.27–0.3 s)                              |
+
+The arrows are 0.5–1 px left of and above CS's, because CS draws the sprite with the half-texel bilinear filter
+([`hud-sprites.md`](hud-sprites.md#how-the-frames-are-built)) and Sven draws it 1:1. The pain sprite is drawn as it is.
+
+![CS 1.6 (left) and Counter-Life (right), all four pain arrows, 1600×900](hud/elements/pain-cs-left-ours-right.png)
+
+### Evidence
+
+`just e2e-elements <port> <label> [crop dir]` (`tests/e2e/elements.ts`) runs the elements in game and compares them with
+the CS 1.6 screenshots `.e2e/reference/cs16-ref-hud.png` (1600×900) and `cs16-1440-hud.png` (2560×1440). These show
+health 100, armour 0, $800 and the USP with 12 | 24. The scenario:
+
+1. Starts testcenter without a MOTD and waits until the client joins.
+2. Puts a flat screen of the CS floor colour (39, 32, 22) under the HUD with `e2e.backdrop`. The engine draws a screen
+   fade before the HUD, so only the HUD is on it, and the glyphs read as CS's glyphs on its floor.
+3. Sets the CS state with `e2e.health`, `e2e.armor`, `e2e.ammo 12 24` (the USP) and `e2e.frags 80` (the buy menu pays
+   $10 for each point), and waits 5.6 s until the fades end.
+4. Measures every HUD glyph with `tests/e2e/hudboxes.ts` in both images and checks each edge of each box within 1 px and
+   the added red and green within 12 levels (`tests/e2e/hudcompare.ts`). The CS floor adds noise to its estimate, and
+   HUD orange has no blue. The top right (the flashlight, off) is compared the same way with the rest capture of the CS
+   crosshair fixture, which runs with `mp_flashlight 1`; with `mp_flashlight 0` the top right must be empty.
+5. Checks the c4 icon on a black backdrop against the rect of the `hudgen` icon sheet, pixel by pixel.
+6. Records the screen centre at 30 frames per second while the player takes a hit from the front and a hit from himself
+   (`e2e.hurt 10 front`, `near`), and checks the pain arrows in the CS boxes (see [Pain arrows](#pain-arrows)).
+7. Captures the other states. For the blink and the flash it records the screen at 30 frames per second (ffmpeg).
+
+Result at 1600×900 (all checks passed, run `fx1600-el` of the review fixes). Each row is one glyph: its box and its
+added red and green. The glyphs are the same as in the first integrated run, except the ammo icon, which now comes from
+the `hudgen` icon sheet ([Compared with CS 1.6](#compared-with-cs-16)).
+
+| CS 1.6         | Counter-Life   | Largest edge error | CS colour | Our colour |
+| -------------- | -------------- | ------------------ | --------- | ---------- |
+| 14,865 21×21   | 14,865 21×21   | 0                  | 93, 58    | 91, 56     |
+| 47,864 6×24    | 47,864 6×24    | 0                  | 95, 60    | 96, 60     |
+| 56,864 16×24   | 56,864 16×24   | 0                  | 94, 59    | 98, 61     |
+| 76,864 16×24   | 76,864 16×24   | 0                  | 100, 64   | 98, 61     |
+| 323,866 19×21  | 323,866 19×21  | 0                  | 91, 55    | 87, 54     |
+| 386,864 16×24  | 386,864 16×24  | 0                  | 102, 64   | 98, 61     |
+| 1449,864 6×24  | 1449,864 6×24  | 0                  | 97, 60    | 96, 60     |
+| 1459,864 16×24 | 1459,864 16×24 | 0                  | 99, 64    | 98, 61     |
+| 1469,826 14×25 | 1469,826 14×24 | 1                  | 94, 56    | 96, 60     |
+| 1486,863 2×25  | 1486,863 2×25  | 0                  | 102, 71   | 100, 62    |
+| 1521,864 16×24 | 1521,864 16×24 | 0                  | 96, 61    | 98, 61     |
+| 1527,826 16×24 | 1527,826 16×24 | 0                  | 97, 61    | 97, 61     |
+| 1541,864 16×24 | 1541,864 16×24 | 0                  | 97, 64    | 93, 58     |
+| 1545,826 17×24 | 1546,826 16×24 | 1                  | 96, 61    | 94, 59     |
+| 1559,861 23×23 | 1560,861 22×23 | 1                  | 102, 67   | 96, 60     |
+| 1565,826 17×24 | 1566,826 16×24 | 1                  | 97, 61    | 94, 59     |
+
+The settled HUD orange at alpha 100 is (100, 62, 0) (`cs16-hud-spec.md` A.1).
+
+Result at 2560×1440 (all checks passed):
+
+| CS 1.6          | Counter-Life    | Largest edge error | CS colour | Our colour |
+| --------------- | --------------- | ------------------ | --------- | ---------- |
+| 14,1405 21×21   | 14,1405 21×21   | 0                  | 94, 58    | 91, 56     |
+| 47,1404 6×24    | 47,1404 6×24    | 0                  | 96, 60    | 96, 60     |
+| 55,1404 18×24   | 56,1404 16×24   | 1                  | 95, 57    | 98, 61     |
+| 75,1404 17×24   | 76,1404 16×24   | 1                  | 96, 60    | 98, 61     |
+| 515,1405 19×22  | 515,1406 19×21  | 1                  | 96, 61    | 87, 54     |
+| 577,1404 18×24  | 578,1404 16×24  | 1                  | 102, 68   | 98, 61     |
+| 2409,1404 6×24  | 2409,1404 6×24  | 0                  | 97, 60    | 96, 60     |
+| 2419,1404 16×24 | 2419,1404 16×24 | 0                  | 95, 60    | 98, 61     |
+| 2429,1366 14×25 | 2429,1366 14×24 | 1                  | 100, 63   | 96, 60     |
+| 2446,1403 2×25  | 2446,1403 2×25  | 0                  | 105, 68   | 100, 62    |
+| 2481,1404 16×24 | 2481,1404 16×24 | 0                  | 100, 64   | 98, 61     |
+| 2487,1366 16×24 | 2487,1366 16×24 | 0                  | 101, 62   | 97, 61     |
+| 2501,1404 16×24 | 2501,1404 16×24 | 0                  | 93, 59    | 93, 58     |
+| 2506,1366 17×24 | 2506,1366 16×24 | 1                  | 96, 63    | 97, 61     |
+| 2520,1401 22×23 | 2520,1401 22×23 | 0                  | 93, 57    | 96, 60     |
+| 2525,1366 17×24 | 2526,1366 16×24 | 1                  | 101, 70   | 97, 61     |
+
+At 2560×1440 the CS floor behind the two health digits and the armour digit is brighter, so the colour threshold takes
+one more column on both sides of these CS glyphs. Each edge is still within 1 px. The health and money positions are the
+same as at 1600×900 relative to their screen edges, and the armour is at W/5 (512).
+
+The ammo icon is drawn from the `hudgen` icon sheet ([`hud-sprites.md`](hud-sprites.md#icon-sheets)). Its glyph box
+moved by 1 px at 1600×900 (the filtered left column falls under the colour threshold) and now equals CS at 2560×1440.
+Per pixel it matches CS much better: the added red of the .45 icon against CS (background predicted from blue,
+`.e2e-pxreview/tools/pixdiff.ts`) has an RMS of 3.4 levels at zero shift at 1600×900 and 3.5 at 2560×1440, with the
+centroid within 0.2 px of CS. With the plain sheet it was 19.0 and 18.7, and the best fit was 1 px lower.
+
+The top right with the flashlight off, against the CS crosshair fixture (`mp_flashlight 1`): CS 1553,26 32×11 at (187,
+118), Counter-Life 1552,26 32×11 at (184, 114) at 1600×900; CS 2513,26 32×11 at (187, 117), Counter-Life 2512,26 32×11
+at (185, 114) at 2560×1440. The casing and the energy bar overlap there, so the added red is about 185, not 100.
+
+Other checks at 1600×900:
+
+- c4 icon: the rect of the `hudgen` icon sheet drawn in (0, 160, 0) at (12, 413) differs by at most 19 levels from the
+  screen (also at 2560×1440, at (12, 683)). One pixel off in any direction, the difference is 83 to 110 levels.
+- Pain arrows: see [Pain arrows](#pain-arrows). With `mp_flashlight 0` the top right is empty.
+- Health 20: low red at alpha 100, (96, 0, 0) on the digits (CS: 98).
+- Without the suit: no health, armour or ammo glyph, and the money glyphs at y 776 = H − 124.
+- Blink, at 30 frames per second from the purchase: `…000 111 00 11 000…`: two bright phases, then the money colour.
+- Flash in a bomb target: red and green phases of about 0.1 s.
+
+Crops (1:1, on the backdrop unless the name says otherwise), in [`hud/elements/`](hud/elements/):
+
+| Crop                                                                                      | State                                                                                        |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| ![health and armour, CS above](hud/elements/health-armour-cs-above-ours.png)              | CS 1.6 (top) and Counter-Life (bottom): health 100, armour 0                                 |
+| ![money and ammo, CS above](hud/elements/money-ammo-cs-above-ours.png)                    | CS 1.6 (top) and Counter-Life (bottom): $800, USP 12 \| 24                                   |
+| ![health 20, armour 50](hud/elements/health20-armour50.png)                               | health 20 (low red), armour 50 (the full part fills the lower half)                          |
+| ![money gain](hud/elements/money-gain.png)                                                | 0.3 s after +$100: green, change row `+ 100`                                                 |
+| ![money loss](hud/elements/money-loss.png)                                                | 0.3 s after a $650 purchase: red, change row `- 650`                                         |
+| ![money blink](hud/elements/money-blink.png)                                              | a bright phase of the blink after a failed purchase                                          |
+| ![flashlight off](hud/elements/flashlight-off.png)                                        | flashlight off (alpha 100)                                                                   |
+| ![flashlight on](hud/elements/flashlight-on.png)                                          | flashlight on (alpha 225, beam)                                                              |
+| ![flashlight low](hud/elements/flashlight-low.png)                                        | battery 10 %: alert red                                                                      |
+| ![c4 icon](hud/elements/c4.png)                                                           | c4 icon                                                                                      |
+| ![c4 icon in a bomb target](hud/elements/c4-zone.png)                                     | c4 icon in a bomb target, red phase                                                          |
+| ![no suit](hud/elements/no-suit.png)                                                      | no suit: the money moved up, no ammo                                                         |
+| ![over the world](hud/elements/world-bottom-right.png)                                    | money and ammo over the testcenter world                                                     |
+| ![health and armour at 2560×1440](hud/elements/health-armour-cs-above-ours-2560x1440.png) | 2560×1440, CS 1.6 (top) and Counter-Life (bottom)                                            |
+| ![money and ammo at 2560×1440](hud/elements/money-ammo-cs-above-ours-2560x1440.png)       | 2560×1440, CS 1.6 (top) and Counter-Life (bottom)                                            |
+| ![flashlight, CS above](hud/elements/flashlight-cs-above-ours.png)                        | CS 1.6 (top, crosshair fixture, `mp_flashlight 1`) and Counter-Life (bottom): flashlight off |
+| ![flashlight at 2560×1440, CS above](hud/elements/flashlight-cs-above-ours-2560x1440.png) | 2560×1440, CS 1.6 (top) and Counter-Life (bottom): flashlight off                            |
+
+The broad scenario `just e2e-hud <port> <label>` (`tests/e2e/hud.ts`) also captures the elements, for each CS weapon and
+after kills. Runs at 1600×900 and 2560×1440 showed: nothing for the knife; 12 | 536 with the .45 icon for the USP; 30 |
+480 with 7.62 for the AK-47; 8 | 120 with 12G for the M3; 10 | 80 with .338 for the AWP; 1 with the HE icon, 2 px
+further left, for the HE grenade; health 80 and armour 50, then health 20 in red; a hit that the armour took (armour 49
+flashes, health 20 stays dim). Its bottom-left crop is 480 px wide, so at 2560×1440 it does not show the armour at 512.
+
+The software-rendered test client (Xvfb, llvmpipe) can stall at 2560×1440 when the machine is busy. One run of
+`e2e-elements` at a load average of 60 got no HUD on the screen and failed; the next run passed.
+
+### Limits
+
+- Each message is reliable and costs about 70 bytes. A shot changes the clip and restarts the CS fade of all four ammo
+  parts. Only the clip goes out with each shot; the reserve and the icon take the fade of the clip when they are 0.5 s
+  behind it, and 0.3 s after the last shot. So during fire their alpha can be up to 10 below the alpha of the clip (the
+  fade falls 20 a second), and a P90 (15 shots per second) sends about 21 messages a second (1.4 KB/s) instead of 60.
+- `HUD_ELEM_EFFECT_ONCE` holds a fade at 99.9 % of its time, so a settled colour can be 1 level from the CS colour.
+- The armour shows the Sven armour (`pev.armorvalue`), which protects against all damage. The CS16 buy menu's Kevlar
+  raises it to 100 (it never lowers a higher value) and also sets the plugin's own CS armour
+  (`CS16BASE::g_PlayerArmor`), which only bullets of CS weapons use. A helmet needs Sven armour above 0.
+- With more than one `info_bomb_target`, each target writes the player's in-zone keyvalue every 0.1 s and the last one
+  wins, so the c4 icon can flash only part of the time (`CInfoBombTarget.as`).
+- A first connection downloads the 13 sprites of the elements, 7.9 MB without compression. The test client took about 10
+  minutes for them from a local server (about 13 KB/s). A server should offer them on an HTTP download server
+  (`sv_downloadurl`). A key press during the download can hit Cancel on the download dialog and drop the connection.
+
+## Crosshair
+
+The CS 1.6 dynamic crosshair: four green lines around the screen centre. The gap between the lines grows with each shot
+and with the movement of the player, then it shrinks back. Source: `scripts/cs16/hud/crosshair.as`. Specification:
+[`research/cs16-hud-spec.md`](research/cs16-hud-spec.md) section 3.12 (Valve `client.so`, "BIN").
+
+### What it draws
+
+- Four boxes of `cs16/hud/fill.spr` (64×64 white, [`hud-sprites.md`](hud-sprites.md)), each 1 px thick, on the client
+  channels `CROSSHAIR_WEST`, `CROSSHAIR_EAST`, `CROSSHAIR_NORTH` and `CROSSHAIR_SOUTH` (16–19).
+- Colour (50,250,50), the CS default of `cl_crosshair_color`, with the CS alpha (120–255). The lines are additive. Sven
+  multiplies RGB by the alpha as CS `FillRGBA` does (`sven-client-hud.md` 1.9).
+- The element registers with `everyFrame`, so `OnTick` runs in each `PlayerPostThink` of the player.
+
+### When it draws
+
+The lines show when all of these are true (spec 3.12.1). Else the element hides them.
+
+| Condition      | Value                                                                    |
+| -------------- | ------------------------------------------------------------------------ |
+| Player         | alive                                                                    |
+| Weapon         | a weapon in hand that is not the Scout, SG550, AWP or G3SG1              |
+| FOV (`m_iFOV`) | 0 (the default FOV) or more than 54. The AUG and SG552 zoom to 55.       |
+| `m_iHideHUD`   | `HIDEHUD_WEAPONS` and `HIDEHUD_ALL` clear                                |
+| `cs16_hud`     | 1. With 0 the foundation hides the lines and shows the native crosshair. |
+
+CS does not update a crosshair that it does not draw. Thus the state stays as it is while the lines are hidden.
+
+`cs16_hud` 1, then 0, then 1 again (AK-47, 1600×900): the CS lines, then the native Sven crosshair of the weapon list,
+then the CS lines again.
+
+![cs16_hud 1, 0 and 1](hud/crosshair/1600x900-cs16-hud-1-0-1.png)
+
+### Weapons
+
+The classname gives the CS weapon id. The id gives the base gap, the shot delta, the accuracy flags and the run limit
+(spec 3.12.3). Accuracy flags: 1 jump, 2 run, 4 duck, 8 inaccurate, 16 very inaccurate.
+
+| Classname           | CS id | Base gap | Shot delta | Flags              | Run limit |
+| ------------------- | ----- | -------- | ---------- | ------------------ | --------- |
+| `weapon_p228`       | 1     | 8        | 3          | 7                  | 0         |
+| `weapon_scout`      | 3     | 5        | 3          | 0 (no crosshair)   | –         |
+| `weapon_hegrenade`  | 4     | 8        | 3          | 0                  | –         |
+| `weapon_xm1014`     | 5     | 9        | 4          | 0                  | –         |
+| `weapon_c4`         | 6     | 6        | 3          | 0                  | –         |
+| `weapon_mac10`      | 7     | 9        | 3          | 1                  | –         |
+| `weapon_aug`        | 8     | 3        | 3          | 3                  | 140       |
+| `weapon_dualelites` | 10    | 4        | 3          | 0                  | –         |
+| `weapon_fiveseven`  | 11    | 8        | 3          | 7                  | 0         |
+| `weapon_ump45`      | 12    | 6        | 3          | 1                  | –         |
+| `weapon_sg550`      | 13    | 5        | 3          | 0 (no crosshair)   | –         |
+| `weapon_galil`      | 14    | 4        | 3          | 3                  | 140       |
+| `weapon_famas`      | 15    | 4        | 3          | 3, burst fire: 19  | 140       |
+| `weapon_usp`        | 16    | 8        | 3          | 7, silencer on: 15 | 0         |
+| `weapon_csglock18`  | 17    | 8        | 3          | 7, burst fire: 23  | 0         |
+| `weapon_awp`        | 18    | 8        | 3          | 0 (no crosshair)   | –         |
+| `weapon_mp5navy`    | 19    | 6        | 2          | 1                  | –         |
+| `weapon_csm249`     | 20    | 6        | 3          | 3                  | 140       |
+| `weapon_m3`         | 21    | 8        | 6          | 0                  | –         |
+| `weapon_m4a1`       | 22    | 4        | 3          | 3, silencer on: 11 | 140       |
+| `weapon_tmp`        | 23    | 7        | 3          | 1                  | –         |
+| `weapon_g3sg1`      | 24    | 6        | 4          | 0 (no crosshair)   | –         |
+| `weapon_csdeagle`   | 26    | 8        | 3          | 7                  | 0         |
+| `weapon_sg552`      | 27    | 5        | 3          | 3                  | 140       |
+| `weapon_ak47`       | 28    | 4        | 4          | 3                  | 140       |
+| `weapon_csknife`    | 29    | 7        | 3          | 0                  | –         |
+| `weapon_p90`        | 30    | 7        | 3          | 3                  | 170       |
+
+- Other weapons (Sven weapons, other plugins) are an unknown id: base gap 4, shot delta 3, no flags, as in CS.
+- The silencer and the burst mode come from the weapon script through `CS16BASE::IWeaponState` (`scripts/cs16/base.as`),
+  which the `WeaponBase` mixin gives to every CS weapon.
+- Shots: `ShootWeapon` in `scripts/cs16/base.as` adds 1 to `CS16BASE::g_PlayerShotsFired` for each call. One call is one
+  shot, also for the shotgun pellets and for each bullet of a burst, as one CS fire event. The knife, the HE grenade and
+  the C4 do not count, because CS has no fire event for them.
+
+### Per-frame rules
+
+CS updates the crosshair once per client frame at its default `fps_max 100` (spec 3.12.4). The server cannot see client
+frames. Thus it replays the CS frames at 100 steps per second of the player's own command time (`g_Engine.time` in
+`PlayerPostThink`).
+
+1. Each player frame computes the minimum gap g from the weapon, the pose and the speed (spec 3.12.3). The run test uses
+   the truncated 3-D speed and is strict.
+2. Each step: if no new shot, `distance -= 0.013 * distance + 0.1` and `alpha += 2`. After a new shot,
+   `distance = min(distance + delta, 15)` and `alpha = max(alpha - 40, 120)`. Then `distance = max(distance, g)` and
+   `alpha = min(alpha, 255)`.
+3. `length = (int)((distance - g) * 0.5) + 5`.
+4. After a pause of more than 1 s the element replays 100 steps only. Every state is at rest after 80 steps.
+
+### Scale and position
+
+- `cl_crosshair_size auto`, the CS default (spec 3.12.5): base 1024 for W ≤ 640, 800 for W < 1024, else 640. Then
+  `d = (int)(distance * W / base)` and `len = W * length / base`.
+- W and H come from `CS16HUD::GetScreenSize( player )`: the `.hudres` of the player, else `cs16_hud_res`.
+- The boxes are those of spec 3.12.6: west `(W/2 - d - len + 1, H/2, len, 1)`, east `(W/2 + d, H/2, len, 1)`, north
+  `(W/2, H/2 - d - len + 1, 1, len)`, south `(W/2, H/2 + d, 1, len)`.
+- The lines use `HUD_ELEM_SCR_CENTER_X | SCR_CENTER_Y | ABSOLUTE_X | ABSOLUTE_Y | NO_BORDER`. The client puts the left
+  edge of such an element at `x + ((W - width) >> 1)` (`client.so` 0xDB45D). Thus the plugin sends
+  `x = left - ((W - width) >> 1)`, and y in the same way. With a wrong screen size the crosshair stays at the centre;
+  only its scale is wrong.
+
+### Updates and network cost
+
+- The element sends the four lines when the drawn gap or length changes, after a shot (the alpha falls), and when the
+  alpha is back at 255.
+- The client ramps the alpha itself: effect 2 (`HUD_EFFECT_RAMP_DOWN`) from `color2` (the alpha now) to `color1`
+  (alpha 255) in `(255 - alpha) / 200` s, with `HUD_ELEM_EFFECT_ONCE`. That is the CS rate of 2 per frame at 100 frames
+  per second. The client holds the ramp at 0.999 of its time and truncates the result (`client.so` 0xDB640), so the ramp
+  stops at alpha 254. The send at alpha 255 corrects this.
+- A shown crosshair moves at most once per 0.1 s. A crosshair that appears goes out at once.
+- One update is four `CustSpr` messages of 70 bytes: the message id, the size byte and 68 bytes of fields with the name
+  `cs16/hud/fill.spr`. So one update is 280 bytes, and the limit is 2.8 KB/s for each player. A hide is four
+  `ToggleElem` messages of 3 bytes.
+- A crosshair on its way to rest (a gap that shrinks, an alpha below 255) goes out unreliable (`MSG_ONE_UNRELIABLE`):
+  its next update follows within 0.1 s, so a lost update shows one step late, and it does not wait behind the reliable
+  stream of a lagged connection. The rest state, the first lines after a resend and lines that appear go out reliable,
+  also when the rest lines equal the last unreliable update. During held fire nearly every update is unreliable.
+- With `developer 2` the server prints each update:
+  `[CS16HUD] crosshair <slot>: gap <d> length <len> alpha <a> shots
+  <n>, <bytes> bytes <reliable|unreliable> at <time>`.
+
+Measured bytes for each player (scenario below, `developer 2` log):
+
+| State                                      | 1600×900                | 2560×1440               |
+| ------------------------------------------ | ----------------------- | ----------------------- |
+| At rest, 3 s                               | 0 B/s                   | 0 B/s                   |
+| P90 (the fastest CS weapon) firing for 3 s | 2,707 B/s (29 updates)  | 2,520 B/s (27 updates)  |
+| Recovery after the P90 burst               | 1,400 bytes (5 updates) | 1,400 bytes (5 updates) |
+
+At 1600×900 the ten AK-47 shots of the evidence below took 10 updates in 0.94 s, and with the recovery 16 updates (4,480
+bytes).
+
+### Evidence
+
+The scenario `tests/e2e/crosshair.ts` ran on stadium4 with the view on the night sky. It freezes short states with the
+client pause key before each screenshot. `tests/e2e/crosshair-lines.ts` measures each line in the screenshot. A line is
+lit where its green is 40 or more above its red and blue. Gap = pixels from the centre pixel (W/2, H/2) to the inner
+end. Length = lit pixels in the line. All four lines had the same gap and length, 1 px thick, in every state.
+
+"g" is the minimum gap of spec Appendix A.2. "Expected" is the rest state of that g: `d = g * W / 640`,
+`len = 5 * W / 640`. "Sent last" is the last update in the log before the screenshot.
+
+1600×900 (base 640, scale 2.5):
+
+| State                | g | Expected | Measured | Sent last          | Shots |
+| -------------------- | - | -------- | -------- | ------------------ | ----- |
+| AK-47 at rest        | 4 | 10 / 12  | 10 / 12  | –                  | 0     |
+| AK-47 after 1 shot   | – | –        | 19 / 15  | 19 / 15, alpha 217 | 1     |
+| AK-47 after 3 shots  | – | –        | 30 / 22  | 30 / 22, alpha 173 | 3     |
+| AK-47 after 10 shots | – | –        | 36 / 25  | 36 / 25, alpha 124 | 10    |
+| AK-47 running        | 6 | 15 / 12  | 15 / 12  | 15 / 12, alpha 255 | 0     |
+| AK-47 ducking        | 4 | 10 / 12  | 10 / 12  | –                  | 0     |
+| AK-47 in the air     | 8 | 20 / 12  | 20 / 12  | 20 / 12, alpha 255 | 0     |
+| Desert Eagle at rest | 8 | 20 / 12  | 20 / 12  | –                  | 0     |
+| Desert Eagle ducking | 4 | 10 / 12  | 10 / 12  | 10 / 12, alpha 255 | 0     |
+| USP at rest          | 8 | 20 / 12  | 20 / 12  | –                  | 0     |
+| M3 at rest           | 8 | 20 / 12  | 20 / 12  | –                  | 0     |
+| AWP                  | – | none     | none     | –                  | 0     |
+
+2560×1440 (base 640, scale 4):
+
+| State                | g | Expected | Measured | Sent last          | Shots |
+| -------------------- | - | -------- | -------- | ------------------ | ----- |
+| AK-47 at rest        | 4 | 16 / 20  | 16 / 20  | –                  | 0     |
+| AK-47 after 1 shot   | – | –        | 32 / 28  | 32 / 28, alpha 215 | 1     |
+| AK-47 after 3 shots  | – | –        | 46 / 32  | 46 / 32, alpha 177 | 3     |
+| AK-47 after 10 shots | – | –        | 57 / 40  | 57 / 40, alpha 124 | 10    |
+| AK-47 running        | 6 | 24 / 20  | 24 / 20  | 24 / 20, alpha 255 | 0     |
+| AK-47 ducking        | 4 | 16 / 20  | 16 / 20  | –                  | 0     |
+| AK-47 in the air     | 8 | 32 / 20  | 32 / 20  | 32 / 20, alpha 255 | 0     |
+| Desert Eagle at rest | 8 | 32 / 20  | 32 / 20  | –                  | 0     |
+| Desert Eagle ducking | 4 | 16 / 20  | 16 / 20  | 16 / 20, alpha 255 | 0     |
+| USP at rest          | 8 | 32 / 20  | 32 / 20  | –                  | 0     |
+| M3 at rest           | 8 | 32 / 20  | 32 / 20  | –                  | 0     |
+| AWP                  | – | none     | none     | –                  | 0     |
+
+Comparison with the AK-47 vector of spec Appendix A.2 (shots from rest):
+
+- First shot: A.2 frame f10 has distance 8 and length 7, f11 has 7.796 and 6. At 2560×1440 the update after the shot was
+  32 / 28 (f10: 8 × 4, 7 × 4). At 1600×900 it was 19 / 15, one step later (f11: int(7.796 × 2.5), 6 × 2.5). The alpha
+  fell by 40 (255 to 215) in both.
+- Ten shots: A.2 frame f100 has distance 15, length 10, alpha 120, then f101 14.705 and alpha 122, f102 14.414 and
+  alpha 124. At 2560×1440 the last update was 57 / 40 with alpha 124, the same as f102 (int(14.414 × 4), 10 × 4). At
+  1600×900 it was 36 / 25 with alpha 124, also f102 (int(14.414 × 2.5), 10 × 2.5).
+- Poses: the AK-47 gaps 4, 6, 4 and 8 (stand, run, duck, air) and the Desert Eagle gaps 8 and 4 (stand, duck) are the
+  A.2 values.
+
+Weapon states at rest, 1600×900, after the secondary attack (a manual run with the same tools):
+
+| State                | A.2 g | Expected | Measured | Crop                                             |
+| -------------------- | ----- | -------- | -------- | ------------------------------------------------ |
+| USP, silencer on     | 11    | 27 / 12  | 27 / 12  | ![](hud/crosshair/1600x900-usp-silencer-on.png)  |
+| Glock 18, burst fire | 11    | 27 / 12  | 27 / 12  | ![](hud/crosshair/1600x900-glock18-burst.png)    |
+| M4A1, silencer on    | 5     | 12 / 12  | 12 / 12  | ![](hud/crosshair/1600x900-m4a1-silencer-on.png) |
+| FAMAS, burst fire    | 5     | 12 / 12  | 12 / 12  | ![](hud/crosshair/1600x900-famas-burst.png)      |
+
+Comparison with CS 1.6 (USP at rest, `.e2e/reference/cs16-ref-hud.png` and `cs16-1440-hud.png`, same crop): the set of
+lit pixels is the same, 48 of 48 at 1600×900 and 80 of 80 at 2560×1440, with no pixel only in one image. Both add about
+50 red and 50 blue to the background, which is (50,250,50) at alpha 255.
+
+![CS 1.6 and Counter-Life, USP at rest, 1600×900](hud/crosshair/1600x900-usp-rest-cs16-vs-counter-life.png)
+
+![CS 1.6 and Counter-Life, USP at rest, 2560×1440](hud/crosshair/2560x1440-usp-rest-cs16-vs-counter-life.png)
+
+Crops of the screen centre (1600×900: 160×140 px at 3×; 2560×1440: 256×224 px at 3×):
+
+| State                | 1600×900                                       | 2560×1440                                       |
+| -------------------- | ---------------------------------------------- | ----------------------------------------------- |
+| AK-47 at rest        | ![](hud/crosshair/1600x900-ak47-rest.png)      | ![](hud/crosshair/2560x1440-ak47-rest.png)      |
+| AK-47 after 1 shot   | ![](hud/crosshair/1600x900-ak47-shot1.png)     | ![](hud/crosshair/2560x1440-ak47-shot1.png)     |
+| AK-47 after 3 shots  | ![](hud/crosshair/1600x900-ak47-shot3.png)     | ![](hud/crosshair/2560x1440-ak47-shot3.png)     |
+| AK-47 after 10 shots | ![](hud/crosshair/1600x900-ak47-shot10.png)    | ![](hud/crosshair/2560x1440-ak47-shot10.png)    |
+| AK-47 running        | ![](hud/crosshair/1600x900-ak47-running.png)   | ![](hud/crosshair/2560x1440-ak47-running.png)   |
+| AK-47 ducking        | ![](hud/crosshair/1600x900-ak47-ducking.png)   | ![](hud/crosshair/2560x1440-ak47-ducking.png)   |
+| AK-47 in the air     | ![](hud/crosshair/1600x900-ak47-air.png)       | ![](hud/crosshair/2560x1440-ak47-air.png)       |
+| Desert Eagle at rest | ![](hud/crosshair/1600x900-deagle-rest.png)    | ![](hud/crosshair/2560x1440-deagle-rest.png)    |
+| Desert Eagle ducking | ![](hud/crosshair/1600x900-deagle-ducking.png) | ![](hud/crosshair/2560x1440-deagle-ducking.png) |
+| USP at rest          | ![](hud/crosshair/1600x900-usp-rest.png)       | ![](hud/crosshair/2560x1440-usp-rest.png)       |
+| M3 at rest           | ![](hud/crosshair/1600x900-m3-rest.png)        | ![](hud/crosshair/2560x1440-m3-rest.png)        |
+| AWP (no crosshair)   | ![](hud/crosshair/1600x900-awp-rest.png)       | ![](hud/crosshair/2560x1440-awp-rest.png)       |
+
+### Limits
+
+- `fill.spr` is 64 px. A line longer than 64 px loses its outer end. Such lines occur only at full spread: with the AUG
+  on a screen wider than 3723 px, and with the gap-4 weapons on a screen wider than 4096 px.
+- The server cannot read client cvars. `cl_crosshair_color`, `cl_crosshair_size`, `cl_crosshair_translucent` and
+  `cl_dynamiccrosshair` stay at their CS defaults.
+- The scale needs the real screen size. A player whose screen is not `cs16_hud_res` must set `.hudres`.
+- The crosshair follows a shot one network round trip later. Between shots it moves in steps of up to 0.1 s; the alpha
+  ramp is smooth.
+- No pulse with each shot. During held fire CS widens the gap with every shot and shrinks it between shots: the AK-47
+  swings between 31 and 37 px at 1600×900 (49 and 60 px at 2560×1440) every 0.0955 s. The plugin sends the lines at most
+  every 0.1 s, so its samples alias with the fire interval: the gap drifts slowly through the same band and can stay
+  near one end of it for half a second, instead of pulsing. `e2e-hud` checks that the samples stay in the band of the CS
+  rules and that the gap comes back to rest in about their time ([Compared with CS 1.6](#compared-with-cs-16)).
+- Shots of weapons that are not CS weapons do not widen the crosshair.
+
+### Reproduce
+
+```sh
+deno test -A tests/e2e/crosshair-lines.ts        # the tool measures the CS references (local .e2e/reference)
+just sandbox /abs/.svends-crosshair && export SVEN_SERVER_DIR=/abs/.svends-crosshair
+just install && just install-e2e
+CL_DISPLAY=:108 CL_LISTEN_PORT=27074 CL_RESOLUTION=1600x900 deno run -A tests/e2e/crosshair.ts 27073 x1600
+CL_DISPLAY=:108 CL_LISTEN_PORT=27074 CL_RESOLUTION=2560x1440 deno run -A tests/e2e/crosshair.ts 27073 x2560
+deno run -A tests/e2e/crosshair-lines.ts .e2e/shots/x1600-usp-rest.png .e2e/reference/cs16-ref-hud.png
+```
+
+Stop the Xvfb of the display before you change `CL_RESOLUTION`: `just display` keeps a running one. The scenario sets
+`motdfile` to a missing file (no MOTD window), `pausable 1`, `sv_timeout 300` and `cs16_hud_res` on the server, and
+binds `p` to `pause` with `showpause 0` and `r_drawviewmodel 0` on the client. The last e2e client to stop puts the
+player's own Sven configuration back.
+
+## Kill feed
+
+`scripts/cs16/killfeed.as` (namespace `CS16KILLFEED`) copies `CHudDeathNotice` of the Valve CS 1.6 client. The reference
+is [cs16-killfeed-reference.md](research/cs16-killfeed-reference.md), which measured the Valve client.
+
+### Layout and timing
+
+`W` and `H` are the screen width and height of the player. `s(n) = ⌊n × H / 480⌋`.
+
+| Item      | Value                                                                                                                                                                                                                                                                                                               |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rows      | 4 at most. A new notice goes to the bottom. A fifth notice removes the oldest.                                                                                                                                                                                                                                      |
+| Lifetime  | 6.0 s. The oldest notice expires first, and the rows below it move up together.                                                                                                                                                                                                                                     |
+| Row top   | `s(32) + i × s(16)` for row `i` (0 is the top row). The icons and the names use the same top.                                                                                                                                                                                                                       |
+| Parts     | Right to left: the victim name ends at `W − s(12)`, then `s(5)`, the headshot icon and `s(5)` (headshots only), the weapon icon, `s(5)`, and the killer name. `cs16_killfeed_names` 3 (the default) leaves the killer name out on maps with a `game_text` entity, 1 always, and 0 leaves out both names.            |
+| Names     | Players in the CT colour (153,204,255), monsters in the T colour (255,63,63). The server sends one level more (154,205,255 and 255,64,64), because the client draws text one level darker.                                                                                                                          |
+| Icons     | `d_<weapon>` rects of `640hud1.spr`, `640hud2.spr` and `640hud16.spr` (the `hud.txt` 640 rows), 16 px high, drawn from the `hudgen` copies `cs16/hud/640hud*_icons.spr` (see [`hud-sprites.md`](hud-sprites.md#icon-sheets)) and added to the screen with the tint (255,80,0). The headshot icon has the same tint. |
+| No killer | A death from the world or from the victim itself shows `d_skull` and no killer name, as a CS suicide.                                                                                                                                                                                                               |
+| Console   | Each notice also prints the `death.cpp` line to the console of every player, for example `*** Player killed Scientist with a headshot from m4a1 ***`.                                                                                                                                                               |
+
+The data for one notice comes from the `PlayerKilled` and `MonsterKilled` hooks:
+
+- Victims: every player death, and every monster that a player kills. A monster counts once, while its dead flag is
+  still `DEAD_NO` (Sven calls the hook again for a monster that takes damage while it dies). Monsters show by Sven's
+  name for them (`m_FormattedName`, for example "Head Crab").
+- Weapon: the weapon string of the CS `DeathMsg` (ReGameDLL `CHalfLifeMultiplay::DeathNotice`). When the killer is a
+  player and also the inflictor, the weapon is the item in his hands. The CS weapons inflict their bullets with the
+  player, so this is the usual case. Else the inflictor (`pev.dmg_inflictor` of the victim) names the weapon, for
+  example `weapon_m4a1` for the scripted e2e kills and `proj_cs16grenade` for an HE grenade. The prefixes `weapon_`,
+  `monster_` and `func_` are removed, and the plugin classes get their CS names (`weapon_csdeagle` is `deagle`, the
+  grenade is `grenade`). A weapon without a `d_` icon shows `d_skull`, as in CS.
+- Headshot: the victim's `m_LastHitGroup` is `HITGROUP_HEAD` when it dies. `WeaponBase` gives `TraceAttack` the hit
+  group `HITGROUP_GENERIC`, so that the engine adds no multiplier of its own. `CS16BASE::RestoreHitGroup` then puts the
+  real hit group back before the damage lands. Thus real bullets and `e2e.kill head` both give a headshot.
+
+### Messages
+
+| Part          | Where                                                                                                                           |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Weapon icon   | `KillfeedIconChannel(row)`: plugin channels 29–31 for rows 0–2, map channel 0 for row 3                                         |
+| Headshot icon | map channels 1–4 (`KILLFEED_HEADSHOT_FIRST + row`)                                                                              |
+| Victim names  | engine text slots 0–3 (`KILLFEED_VICTIM_SLOT_FIRST + pair`), with `cs16_killfeed_names` 1, 2 or 3                               |
+| Killer names  | engine text slots 7–4 (`KILLFEED_KILLER_SLOT_FIRST + 3 − pair`), with `cs16_killfeed_names` 2, or 3 on maps without `game_text` |
+
+- The icons use `HUD_ELEM_ABSOLUTE_X | HUD_ELEM_NO_BORDER`: x is a negative pixel count, so the right edge of the icon
+  is that far from the right screen edge, and y is a fraction of the height, `(top + 0.5) / H`. On the screen size of
+  the player both give the CS pixel. Their width and height are never 0 (0 means "to the edge of the sheet").
+- `cs16_killfeed_names` (admin): 3 (default) draws killer and victim as CS 1.6 does on maps without a `game_text` entity
+  and the victim names only on the others, 2 always draws both, 1 the victim names only, 0 no names. The engine has 8
+  text slots, and maps (`game_text` on slots 4–7), other plugins (0–3) and Sven's target info (3) use them too, so 2
+  lets a kill replace the objective text of a map ([conflicts](hud-architecture.md#text-slots)). Killer names take slot
+  7 first, so they reach slot 4 (a `game_text` on channel 1, the first text of a map script) only with four notices on
+  screen. A map script's text has no entity to detect: on maps whose scripts print texts (for example `th_escape`, `snd`
+  and the `bridge` maps) set 1. A name that the setting leaves out leaves no gap: without names the icons end at
+  `W − s(12)`.
+- Each notice keeps one pair of text slots (victim, killer) while its row moves up. A row goes out only when it shows
+  another notice: a new notice, rows that move up, or a resend (connection, map change, a spawn, `cs16_hud 1`, a new
+  screen size, a new `cs16_killfeed_names`). For each player the server keeps the serial number of the notice in each
+  row, so each text goes out once for each change.
+- No name is emptied when its row ends: the client removes it at the end of its hold time, or the notice moved up and
+  its name went with it. `CS16HUD::ClearText` empties a slot only for a pair that the next notice takes over while the
+  old name is still on the screen, and only when the new notice draws no name there. It sends the empty text to the last
+  position of that slot, because the client removes every other text at the position of a new text.
+- Every part goes out with the remaining time of its notice as the hold time. Thus the client removes an expired row by
+  itself. The server moves the other rows up at its next HUD tick (at most 50 ms later, or at the end of the 0.2 s
+  below).
+- A new notice shows at the next HUD tick after the kill (at most 50 ms), unless the rows of that player changed in the
+  last 0.2 s: then it waits for the end of that time, and all changes of that time go out together. A full feed moves
+  every row with each new notice, so a fight with 10 kills a second sent 3.4 KB/s of reliable messages to each player
+  before; now the rows go out at most 5 times a second.
+
+### Name position and width
+
+A `HudMessage` position is a fraction of the screen inside the HUD border `b` (`hud_bordersize`, default 16). For
+`−1 < x < 0` the client puts the left end of a line of width `w` at `⌊(x + 1) × (W − 2b) + b − w⌋`
+([sven-client-hudtext.md](research/sven-client-hudtext.md) §2). To end a name at the pixel column `R`, the server sends
+
+`x = round(((R + 0.5 − b) / (W − 2b) − 1) × 8192) / 8192`, at most `−1/8192`,
+
+and `y = round((top + 0.5 − b) / (H − 2b) × 8192) / 8192` for the top. The half pixel keeps the 1/8192 step and the
+float rounding of the client inside the wanted pixel. The server uses `b = 16`, because it cannot read the value of the
+player. With `hud_bordersize b'` the names move about `16 − b'` px to the right and `b' − 16` px down, against the
+icons. Above `W − b` the client moves the line back inside the border.
+
+The server must know the width of each name in pixels, to put the icons and the killer name next to it. The Sven client
+adds the width of each byte of the text (`charWidths`) in the face of the `HudMessage` font:
+
+1. `svencoop/resource/TrackerScheme.res` gives `CreditsFont` the name "Ariel", tall 12 and weight 600. VGUI2 scales the
+   tall with the screen height: `tall = ⌊12 × H / 480⌋`, at most 128.
+2. On Linux, `hw.so` (0x1C9E90, 0x1CA070) asks fontconfig for the family, the weight 600 as it is, and the slant. With
+   the default fontconfig of this host, "Ariel" gives `NotoSans-Black.ttf`. `hw.so` then selects the Apple Roman cmap of
+   the face (`FT_Select_Charmap(face, 'armn')`, 0x1CA27B). Noto Sans has none, so the client cannot create the font: its
+   log shows `Unable to create font 'Ariel': Can't select charmap`. VGUI2 then uses the fallback "Tahoma", which `hw.so`
+   asks for as "Bitstream Vera Sans", and fontconfig gives `VeraBd.ttf` (Bitstream Vera Sans Bold).
+3. The em size is `⌊tall × unitsPerEm / (usWinAscent + usWinDescent)⌋` = `⌊tall × 2048 / 2384⌋`: 18 px at H = 900, 30 px
+   at H = 1440. Each byte is one glyph code of the Apple Roman cmap. Its width is the hinted advance (FreeType
+   `FT_MulFix`), rounded to whole pixels.
+
+`tools/hudfont.ts` reads the face and writes `scripts/cs16/hud/textfont.as`: the advances in font units, by byte.
+`just hud-font` finds the face with the same two fontconfig requests. `TextWidth` in `killfeed.as` and `lineWidth` in
+the tool do the same sum. The client draws an outline around each text line with `hud_debug 2`, and its width is the sum
+of the glyph widths. `tools/hudfont_test.ts` holds 20 outlines measured that way (printable ASCII, bytes 128–254 and
+four names) at 1600x900 and 2560x1440. All 40 widths agree with the table.
+
+This corrects [sven-client-hudtext.md](research/sven-client-hudtext.md) §3: fontconfig maps "Ariel" to Noto Sans, but
+the client cannot use that face.
+
+### Screen size
+
+The layout uses the screen size of the player: the player types `.hudres <W>x<H>`, or the server sets `cs16_hud_res`
+(default 1920x1080) for players who did not (`scripts/cs16/hud/screen.as`). A new size sends the rows again. The names
+are fractions of the screen and the icons are anchored to the right edge with a fractional y, so with a wrong size the
+icons stay next to the names and the rows scale with the real height. What stays wrong is what the server computes in
+pixels from the assumed size: the gaps and the right margin (`s(n)` of the assumed H) and the widths of the names, which
+the client draws at the font size of its real height. The e2e driver sets `cs16_hud_res` to `CL_RESOLUTION` when it
+starts the server; `E2E_HUD_RES=default` keeps the plugin default.
+
+Measured with the plugin default 1920x1080 (`E2E_HUD_RES=default just e2e-killfeed`, `cs16_killfeed_names 2`, one M4A1
+headshot of a scientist):
+
+| Client size | Right margin | Victim name and the icons                                                                   | Killer name "Player"                    |
+| ----------- | ------------ | ------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 1600×900    | 25 (CS 22)   | headshot icon 39 px left of the victim (CS 9): the names are smaller than the server thinks | overlaps the M4A1 icon by about 30 px   |
+| 2560×1440   | 31 (CS 36)   | the headshot icon overlaps the victim name: the names are larger than the server thinks     | ends 93 px left of the M4A1 icon (CS 9) |
+
+Before this layout, the icons were placed from the left edge: at 1600×900 they were off the screen, and at 2560×1440
+about 750 px left of their names. With the default `cs16_killfeed_names 1` there is no killer name, so only the victim
+side of this table shows. A player whose screen is not 1920x1080 gets the exact feed with `.hudres`.
+
+### Measured against CS 1.6
+
+`just e2e-killfeed` and `just e2e-hud` (step `killfeed-4-cs`) made the Counter-Life captures on display `:107` with
+`cs16_killfeed_names 2`, as the CS references have killer names. `just fixture-metrics` measured the lit pixels against
+a frame of the same view without notices (the `-clear` frame, or the `before-game-text` step for `killfeed-4-cs`). The
+CS 1.6 values come from the reference captures. The icons come from the `hudgen` icon sheets; the centroid row compares
+the added red of each icon with CS per pixel (`.e2e-pxreview/tools/iconcmp.ts`; RMS 8.2–9.5 levels at zero shift,
+against 23–28.5 with the plain sheets). The name colours are those of 241–1101 pixels of each name.
+
+| Fact (lit pixels)                       | CS 1.6, 1600x900          | Counter-Life, 1600x900                         | CS 1.6, 2560x1440         | Counter-Life, 2560x1440                          |
+| --------------------------------------- | ------------------------- | ---------------------------------------------- | ------------------------- | ------------------------------------------------ |
+| Icon tops, rows 0–3                     | 61, 91, 121, 151          | 61, 91, 121, 151                               | 97, 145, 193, 241         | 97, 145, 193, 241                                |
+| Name tops, rows 0–3                     | 63, 93, 123, 153          | 63, 93, 123, 153                               | 100, 148, 196, 244        | 101, 149, 197, 245                               |
+| Right margin (last lit pixel to edge)   | 22–23                     | 22                                             | 36–37                     | 36                                               |
+| Gaps, killer → icon → headshot → victim | 9, 11, 9                  | 9, 11, 10                                      | 15, 17, 16                | 15, 17, 17                                       |
+| `d_m4a1` lit box                        | 48 × 15                   | 48 × 15                                        | 48 × 15                   | 48 × 15                                          |
+| `d_headshot` lit box                    | 35 × 16                   | 34 × 15                                        | 35 × 16                   | 34 × 15                                          |
+| Icon centroid against CS (per pixel)    | –                         | `d_m4a1` +0.20, 0.00; `d_headshot` 0.00, +0.01 | –                         | `d_m4a1` +0.06, +0.01; `d_headshot` −0.04, −0.02 |
+| Name colour (most pixels)               | 255,63,63 and 153,204,255 | 254,63,63 and 153,204,254                      | 255,63,63 and 153,204,255 | 254,63,63 and 153,204,254                        |
+| Icon tint: added green ÷ red, blue      | 0.314, 0                  | 0.315, 0                                       | 0.314, 0                  | 0.315, 0                                         |
+
+The rect rule is the same in both clients. With the headshot captures at 1600x900:
+
+| Rect                   | CS 1.6 (victim "Niles", box 33 px) | Counter-Life (victim "Scientist", box 90 px) |
+| ---------------------- | ---------------------------------- | -------------------------------------------- |
+| Victim box             | 1545–1578                          | 1488–1578                                    |
+| `d_headshot` (36 × 16) | x 1500 = 1545 − 9 − 36             | x 1443 = 1488 − 9 − 36                       |
+| `d_m4a1` (48 × 16)     | x 1443 = 1500 − 9 − 48             | x 1386 = 1443 − 9 − 48                       |
+| Killer box ends        | 1434 = 1443 − 9                    | 1377 = 1386 − 9                              |
+
+The x positions differ only by the width of the victim name. A timed run at 1600x900 killed five scientists 1 s apart
+(at 0.15, 1.14, 2.09, 3.13 and 4.12 s) and counted the rows: 4 at 5.5 s and 6.5 s, 3 at 7.8 s, 2 at 8.8 s, 1 at 9.8 s
+and none at 10.8 s. Each notice stayed 6 s, the fifth notice removed the first, and the rows moved up.
+
+The tint row is the median over the icon pixels whose red did not reach 255 (80/255 = 0.314). The added red peaks at
+164–194 in the Counter-Life captures and at 207–211 in the CS captures, because the Counter-Life captures have a bright
+wall behind the feed and an additive draw stops at 255.
+
+Comparison crops (CS 1.6 left, Counter-Life right) of the first kill-feed run, before the `hudgen` icon sheets and the
+name colours of this review. [Sheets](#sheets) has current crops of the headshot row and of the four rows.
+
+![1600x900 headshot](hud/killfeed/1600x900-headshot.png) ![1600x900 body kill](hud/killfeed/1600x900-body.png)
+![1600x900 four rows](hud/killfeed/1600x900-stack4.png) ![1600x900 world death](hud/killfeed/1600x900-world.png)
+![2560x1440 headshot](hud/killfeed/2560x1440-headshot.png) ![2560x1440 body kill](hud/killfeed/2560x1440-body.png)
+![2560x1440 four rows](hud/killfeed/2560x1440-stack4.png) ![2560x1440 world death](hud/killfeed/2560x1440-world.png)
+
+The CS world-death crop shows the `max4` capture (`bot_kill` deaths), because the reference has no single world death.
+
+### What Sven cannot copy
+
+- Font face, size and weight. CS draws the names with its console font (Verdana, which fontconfig gives as Noto Sans
+  Regular here, 14 px at H = 900 and 24 px at H = 1440). Sven draws `HudMessage` text with its scheme font, here
+  Bitstream Vera Sans Bold at an 18 px em (H = 900) or a 30 px em (H = 1440). The names are larger and bolder. The tops
+  agree within 1 px, but the Sven names go further down and further left.
+- The drop shadow. CS draws each name a second time in black, 1 px right and 1 px down. `HudMessage` has no shadow. A
+  black copy of each name would need a second text slot, and every slot is shared with maps and plugins, so the feed
+  draws no copy.
+- Other systems. The table is correct for a Linux client with the default fontconfig of this host. A Windows client maps
+  "Ariel" with GDI and gets other widths, so its icons and killer names can be some pixels away from the victim names.
+  The server cannot know the face of a client.
+- The name colour. The Sven client draws the text one level darker than the colour that it gets (254,62,62 for
+  255,63,63). The server sends each channel one level brighter (154,205,255 and 255,64,64), so only the channels at 255
+  stay one level below CS: 153,204,254 and 254,63,63.
+- `hud_bordersize`. The server assumes 16 (see [Name position and width](#name-position-and-width)).
+- The console line. CS prints it to the console only. The Sven client also shows console prints for some seconds in the
+  top-left corner of the screen. At 2560x1440 that corner showed unreadable characters for every console print, also for
+  an `echo` from the server, so this comes from the client, not from the kill feed.
+- Sven's own death message. The Sven server also prints each death as a notify line in the top-left corner (for example
+  "Player fell or something."). No AngelScript API stops it ([sven-client-hudtext.md](research/sven-client-hudtext.md)
+  §6). The Counter-Life metamod plugin on `main` drops these lines.
+- Suicides with a weapon. CS shows the icon of the weapon for a suicide that has one (an own HE grenade). Counter-Life
+  shows the skull for every death without a killer, because a death without damage (the `kill` command) leaves an old
+  inflictor in the victim.
+- Team colours and team kills. In co-op all players are one team, so every player name is CT blue, every monster name is
+  T red, and there is no green team-kill icon. Monsters that monsters kill, and monsters that die from the world, get no
+  notice.
+
+### Test
+
+```sh
+export SVEN_SERVER_DIR=/abs/path/.svends-x CL_DISPLAY=:109 CL_LISTEN_PORT=27076 CL_RESOLUTION=1600x900
+just install && just install-e2e
+just e2e-killfeed 27075 weapon_m4a1 head     # also body (real shots) and world (e2e.hurt 500 with no armour)
+just fixture-metrics .e2e/shots/killfeed-weapon_m4a1-head.png .e2e/shots/killfeed-weapon_m4a1-head-clear.png
+just e2e-hud 27075 run1                      # step killfeed-4: four rows from e2e.kill, head and body in turn
+deno test -R -E tools/hudfont_test.ts        # the width model against the measured outlines
+```
+
+The head scenario shoots real bullets at a pinned scientist until it dies. `e2e.aim head` aims 8% of the box height
+below the top of the monster's box, as the CS fixture does, because a monster's eye position lies below its head hit
+box. A first shot can still miss, and then the loop shoots again.
+
+## Compared with CS 1.6
+
+The integrated branch (`feat/cs16-hud`: the foundation, the status elements, the crosshair, the kill feed and the pain
+arrows) ran on a sandbox server, with the Sven client on Xvfb at 1600×900 and at 2560×1440. The CS 1.6 side is Valve's
+client on the CS fixture (ReGameDLL listen server, de_dust2, `just fixture-*`).
+
+| Scenario                                    | What it gives                                                                                                                                                                                                     |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `just e2e-elements <port> <label>`          | the CS reference state (health 100, armour 0, $800, USP 12 \| 24) on a flat backdrop, with checks; the flashlight against the crosshair fixture; the pain arrows; the other element states                        |
+| `just e2e-hud <port> <label>`               | testcenter: six weapons, health and armour, a hit, four kills with both name settings and a map text, firing (one frame and a 5 s recording), rest, running, flashlight, a `changelevel` and a death, with checks |
+| `just e2e-killfeed <port> weapon_m4a1 head` | one real-bullet M4A1 headshot with killer and victim names, and the same view without the notice; with `E2E_HUD_RES=default` also on the plugin default size                                                      |
+| `just e2e-lag <port> 165`                   | a P90 burst with kills behind a 330 ms round trip                                                                                                                                                                 |
+| `just fixture-crosshair <display> <WxH>`    | CS 1.6 with `mp_flashlight 1`: the AK-47 at rest and 600 ms into a held burst                                                                                                                                     |
+
+Results of the runs after the review fixes (labels `fx1600` and `fx2560`, evidence in `.e2e/runs` and `.e2e/shots`):
+
+- `e2e-elements`: all checks passed at both sizes. One earlier 1600×900 run recorded 2 s of the money row without the
+  blink; the recordings are now 3 s.
+- `e2e-hud`: all checks passed at both sizes: the settled HUD orange after a `changelevel` (health glyphs (91–98, 56–61)
+  instead of the old map's fade), no ammo counter and no c4 icon on a dead player, victim names only with the default
+  `cs16_killfeed_names 1` and the killers with 2, a `game_text` on channel 1 that the default feed leaves on the screen
+  (setting 2 replaces it), and the held-fire crosshair in the band of the CS rules.
+- `e2e-killfeed`: passed at both sizes, each with the first shot.
+- `e2e-lag`: see [Network](#network).
+- `e2e-hudproof`: all 55 checks passed at 1600×900; the proof now sees the elements' `OnSpawn` before the first resend
+  of a connection.
+
+`tests/e2e/comparesheet.ts` makes the sheets below. Each sheet has the same crop of both screenshots at 2× without
+smoothing, Counter-Life on the left and CS 1.6 on the right. The sheets are 256-colour PNGs. All numbers come from the
+screenshots: `just hudboxes` and `tests/e2e/hudcompare.ts` (HUD glyph boxes and colours), `tests/e2e/crosshair-lines.ts`
+(crosshair lines) and `just fixture-metrics` (the kill feed against a frame without notices).
+
+### Sheets
+
+| Region                                       | 1600×900                                            | 2560×1440                                            |
+| -------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------- |
+| Bottom left: health, armour                  | ![](hud/compare/1600x900-bottom-left.png)           | ![](hud/compare/2560x1440-bottom-left.png)           |
+| Bottom right: money, ammo                    | ![](hud/compare/1600x900-bottom-right.png)          | ![](hud/compare/2560x1440-bottom-right.png)          |
+| Top right: flashlight off                    | ![](hud/compare/1600x900-top-right-flashlight.png)  | ![](hud/compare/2560x1440-top-right-flashlight.png)  |
+| Crosshair, USP at rest                       | ![](hud/compare/1600x900-crosshair-usp-rest.png)    | ![](hud/compare/2560x1440-crosshair-usp-rest.png)    |
+| Crosshair, AK-47 at rest                     | ![](hud/compare/1600x900-crosshair-ak47-rest.png)   | ![](hud/compare/2560x1440-crosshair-ak47-rest.png)   |
+| Crosshair, AK-47, one frame during held fire | ![](hud/compare/1600x900-crosshair-ak47-firing.png) | ![](hud/compare/2560x1440-crosshair-ak47-firing.png) |
+| Kill feed, one M4A1 headshot row             | ![](hud/compare/1600x900-killfeed-headshot.png)     | ![](hud/compare/2560x1440-killfeed-headshot.png)     |
+| Kill feed, four rows                         | ![](hud/compare/1600x900-killfeed-stack4.png)       | ![](hud/compare/2560x1440-killfeed-stack4.png)       |
+| Weapon menu (native in Sven)                 | ![](hud/compare/1600x900-weapon-menu.png)           | no CS reference                                      |
+
+The Counter-Life crops of the bottom, the top right and the USP crosshair come from the `e2e-elements` reference state,
+on the backdrop (39, 32, 22), which is the colour of the CS floor. The CS top right comes from the crosshair fixture,
+because the CS reference state has `mp_flashlight 0`. The other Counter-Life crops show the testcenter world. The four
+CS rows are one M4A1 headshot and three `bot_kill` deaths (skulls); the four Counter-Life rows are four AK-47 kills,
+head and body in turn, with `cs16_killfeed_names 2`. Thus the contents of the rows differ, but the layout rules are the
+same. The CS weapon menu reference shows only the bucket headers. The pain arrows are in [Pain arrows](#pain-arrows).
+
+### Measured differences
+
+**Health, armour, money and ammo.** The 16 HUD glyphs of the reference state are in
+[Status elements, Evidence](#evidence):
+
+- Every edge of every glyph is within 1 px of CS 1.6 at both sizes.
+- 1 px differences: the money "$" is 24 px high (CS 25); the last two money digits are 16 px wide (CS 17, one column
+  more on the left); at 1600×900 the ammo icon starts 1 px later (its filtered left column falls under the threshold);
+  at 2560×1440 the CS health and armour digits are 1–2 px wider and the top of the armour shield is 1 px lower. The CS
+  floor is brighter there, so the colour threshold takes one more column of the CS glyph.
+- Colours: the added red and green are within 4 levels at 1600×900 and within 9 levels at 2560×1440 (the armour shield:
+  87, 54 against 96, 61). The settled HUD orange is (100, 62, 0) on both sides.
+- Per pixel, the .45 ammo icon from the `hudgen` icon sheet differs from CS by an RMS of 3.4 (1600×900) and 3.5
+  (2560×1440) levels, as the digits do (1.7–3.8); with the plain sheet it was 19.0 and 18.7.
+
+**Flashlight** (off, `mp_flashlight 1` on both sides): the box is within 1 px (Counter-Life 1 px further left) and the
+added colour within 4 levels at both sizes. With `mp_flashlight 0`, as on a default CS server, both games show none.
+
+**Crosshair** (gap / length in pixels, then the alpha from the red and blue that the line adds to the background):
+
+| State                                  | CS 1.6 1600×900   | Counter-Life  | CS 1.6 2560×1440  | Counter-Life  |
+| -------------------------------------- | ----------------- | ------------- | ----------------- | ------------- |
+| USP at rest                            | 20 / 12, 255      | 20 / 12, 255  | 32 / 20, 255      | 32 / 20, 255  |
+| AK-47 at rest                          | 10 / 12, 255      | 10 / 12       | 16 / 20, 252      | 16 / 20       |
+| AK-47, one frame 600 ms into held fire | 31 / 22, ≈135     | 31 / 22, ≈161 | 58 / 40, ≈120     | 57 / 40, ≈153 |
+| AK-47 held 1.5 s: gap band from 0.5 s  | 31–37 (CS rules)  | 36–37         | 49–60 (CS rules)  | 50–58         |
+| AK-47 held 1.5 s: release to rest      | 0.49 s (CS rules) | 0.50 s        | 0.50 s (CS rules) | 0.45 s        |
+
+- All lines are 1 px thick, and the four lines of a crosshair have the same gap and length. At rest the lines are the
+  same pixels in both games.
+- The band and the recovery of CS are the CS rules at 100 frames a second (`tests/e2e/crosshair-model.ts`, checked
+  against the AK-47 frames of `cs16-hud-spec.md` A.2): the CS fixture draws only about 30–50 frames a second on Xvfb, so
+  its firing frames do not show CS at its default `fps_max 100`. The Counter-Life rows come from a 20 fps recording of
+  the screen centre during the burst (`e2e-hud`, step `crosshair-series`), which `e2e-hud` checks against these rules.
+- The single frames during fire fall at a random point of the band in both games. Counter-Life has no pulse with each
+  shot: its samples stay near one part of the band for up to a second (see [Limits](#limits-1)).
+- The alpha estimate needs an even background. On the testcenter wall the AK-47 rest lines read 219 and 189 although the
+  plugin sends 255; on the flat backdrop of `e2e-elements` the USP rest lines read 255.
+
+**Kill feed**, M4A1 headshot row and the four rows, with `cs16_killfeed_names 2` (lit pixels; details in
+[Measured against CS 1.6](#measured-against-cs-16)):
+
+| Fact                                   | CS 1.6 1600×900           | Counter-Life              | CS 1.6 2560×1440          | Counter-Life              |
+| -------------------------------------- | ------------------------- | ------------------------- | ------------------------- | ------------------------- |
+| Icon tops, rows 1–4                    | 61, 91, 121, 151          | 61, 91, 121, 151          | 97, 145, 193, 241         | 97, 145, 193, 241         |
+| Name tops, row 1                       | 63                        | 63                        | 100                       | 101                       |
+| Right margin                           | 22–23                     | 22                        | 36–37                     | 36                        |
+| Gaps: killer, weapon, headshot, victim | 9, 11, 9                  | 9, 11, 10                 | 15, 17, 16                | 15, 17, 17                |
+| `d_m4a1` lit box                       | 48 × 15                   | 48 × 15                   | 48 × 15                   | 48 × 15                   |
+| `d_headshot` lit box                   | 35 × 16                   | 34 × 15                   | 35 × 16                   | 34 × 15                   |
+| Killer name "Player", lit box          | 40 × 13                   | 63 × 18                   | 69 × 23                   | 105 × 29                  |
+| Name colours (most pixels)             | 153,204,255 and 255,63,63 | 153,204,254 and 254,63,63 | 153,204,255 and 255,63,63 | 153,204,254 and 254,63,63 |
+| Name shadow                            | black, +1, +1             | none                      | black, +1, +1             | none                      |
+| Icon tint (added green ÷ red)          | 0.31                      | 0.31                      | 0.31                      | 0.31                      |
+
+- The rows, the right edge, the gaps and the icons agree with CS 1.6 within 1 px; per pixel the icon centroids are
+  within 0.2 px of CS.
+- The names are the large difference: "Player" is 1.6 times as wide at 1600×900 and 1.5 times as wide at 2560×1440, in a
+  bold face and without the shadow. Because the names are wider, the icons and the killer name of a Counter-Life row
+  start further left than in CS for the same names.
+- By default (`cs16_killfeed_names 1`) Counter-Life shows the victim names only, to keep the text slots of maps free.
+
+### Network
+
+`e2e-lag` at 1600×900 behind a 330 ms round trip, a 4 s P90 burst with 36 kills, before (`38c128a`) and after the
+traffic changes of this review. "Reliable" counts the bytes of the server's packets that carry reliable data:
+
+| Plugin          | HUD shows the health change after | Server bytes per second | Reliable packets per second, their bytes |
+| --------------- | --------------------------------- | ----------------------- | ---------------------------------------- |
+| before          | 0.39 s                            | 16.6–18.8 KB            | 7–10, 9.6–13.0 KB                        |
+| after           | 0.40 s                            | 17.1–18.5 KB            | 6–9, 6.3–10.8 KB                         |
+| native Sven HUD | 0.39–0.41 s                       | 14.1–15.8 KB            | 2–3, 1.9–3.4 KB                          |
+
+- In this setup the client never fell behind: the change showed after about one round trip and a tick, with the old and
+  the new plugin and with the native HUD. The reliable stream carried about 30 % fewer bytes during the burst.
+- The review saw a 21.5 s backlog only on a fresh connection with another client's reliable broadcasts in the stream,
+  which this scenario does not make. The changes cut the volume that such a backlog would hold: the moving crosshair is
+  unreliable, the ammo counter sends the clip only for each shot, and the kill feed sends rows at most every 0.2 s.
+
+**Weapon menu.** The native Sven menu stays: blue (100, 130, 200) frames and icons, eight buckets and Sven's selection
+frame. CS draws its buckets in HUD orange.
+
+## Limits that a server cannot remove
+
+The Sven client draws these parts itself, or it gives the server no control over them. Only a change of the Sven client
+could remove them.
+
+| Limit                          | Counter-Life                                                                                                                                                           | CS 1.6                                                               | Why the server cannot change it                                                                                                                                                                                               |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Weapon selection menu          | the native Sven menu: the CS weapon pictures of the weapon txts, but tinted (100, 130, 200), with Sven's buckets and selection frame                                   | HUD orange, CS buckets and frame                                     | The slot keys are client commands, so only the client draws the menu. `HIDEHUD_WEAPONS` and `HIDEHUD_WEAPON_SELECT` also stop weapon switching. The native colour is a constant in `client.so` (`sven-client-hud.md` 2.4, 4). |
+| Pickup history                 | the native Sven history, tinted (100, 130, 200)                                                                                                                        | HUD orange                                                           | The same constant colour. The history is part of the native ammo HUD, which also draws the weapon menu (`HIDEHUD_WEAPONS`).                                                                                                   |
+| Kill-feed name face and size   | the HudMessage font `CreditsFont` ("Ariel", weight 600): on a Linux client with this host's fontconfig Bitstream Vera Sans Bold, em 18 px at H 900 and 30 px at H 1440 | Verdana (console font), 14 px at H 900, 24 px at H 1440              | HudMessage text has one font. The client picks the face, and the size follows the screen height (`sven-client-hudtext.md` 3).                                                                                                 |
+| Kill-feed name shadow          | none                                                                                                                                                                   | a black copy 1 px right and 1 px down                                | HudMessage has no shadow. A black copy of each name needs a second text slot, and the 8 slots are shared with maps and plugins.                                                                                               |
+| Kill-feed name colour          | one level darker where CS has 255: 153, 204, 254 and 254, 63, 63                                                                                                       | 153, 204, 255 and 255, 63, 63                                        | The client draws text one level darker than the colour that it gets. The server sends one level more, but 255 cannot go higher.                                                                                               |
+| Kill-feed name widths          | right for a Linux client with this host's default fontconfig                                                                                                           | –                                                                    | The server cannot know the face of a client. A Windows client picks the face through GDI, so its names can be some pixels away from the icons.                                                                                |
+| `hud_bordersize`               | the server assumes 16                                                                                                                                                  | –                                                                    | A client cvar. With another value the names move against the icons ([Name position and width](#name-position-and-width)).                                                                                                     |
+| Client crosshair cvars         | the CS defaults: (50, 250, 50), size `auto`, not translucent, dynamic                                                                                                  | `cl_crosshair_color`, `_size`, `_translucent`, `cl_dynamiccrosshair` | The server cannot read client cvars.                                                                                                                                                                                          |
+| Screen size                    | the player's `.hudres`, else `cs16_hud_res`                                                                                                                            | the real size                                                        | The server cannot read the video mode of the client. A wrong size gives the crosshair the scale of the assumed width, and kill-feed gaps and name widths of the assumed height (see [Screen size](#screen-size-1)).           |
+| Crosshair timing               | the lines follow a shot one network round trip later, at most 10 times per second                                                                                      | each client frame                                                    | Each update is four reliable messages (280 bytes); the server cannot run code on the client.                                                                                                                                  |
+| Sven's own death notices       | the Sven server prints each player death as a notify line at the top left                                                                                              | none                                                                 | No AngelScript API stops it. The Counter-Life metamod plugin on `main` drops these lines.                                                                                                                                     |
+| Console prints at the top left | with `developer 1` the client shows each console print at the top left, also the kill-feed console line                                                                | only in the console                                                  | A client setting. The test client has `developer 1` in `autoexec.cfg`, so the e2e screenshots show these lines.                                                                                                               |
+
+Sven's target info is not part of the CS HUD. When the player aims at a monster or another player, the Sven server shows
+a block of four green lines at the left middle of the screen ("Friend: Scientist / Health: 50 / Armor: 0 / Frags: 0").
+It is a server text (`server.so` 0x4AA064) on engine text slot 3, sent 8 times a second, not a client part, so no client
+cvar or `m_iHideHUD` bit hides it. The map settings `mp_allowmonsterinfo` and `mp_allowplayerinfo` (both 1 in Sven's
+`default_map_settings.cfg`) turn it off for monsters and for players. The plugin leaves them as the map sets them,
+because the block is a co-op aid. CS 1.6 has only a one-line player id at (10, H − 68), for players (`cs16-hud-spec.md`
+3.15). With the default `cs16_killfeed_names 1` the target info also replaces the victim name of a fourth kill-feed
+notice while the player aims at a monster ([text slots](hud-architecture.md#text-slots)).
+
+Parts of the CS HUD that this port does not draw, because co-op Sven has no CS rounds, teams, bomb or radar data: the
+radar (client channels 14–15 are free), the round timer, the buy zone and other status icons except the C4, the bomb
+timer, team colours for players (every player is CT blue), team kills and the spectator HUD.
+
+The CS damage-type icons are not drawn either. `HIDEHUD_HEALTH` hides the native Sven ones with the native health, so a
+player who takes poison, radiation, burn, freeze, shock, gas, drowning or acid damage sees no icon for it. CS draws a
+64×64 tile from `640hud8.spr` or `640hud9.spr` for each active type at (8, H − 128), moves older tiles up, and pulses
+them for 2 s (`cs16-hud-spec.md` 3.14). Up to nine tiles can show at once, and only client channels 14 and 15 are free.
+
+The limits of each element that a later change can remove (downloads, channels, bandwidth, the armour value, the second
+ammo row) are in its own section: [status elements](#limits), [crosshair](#limits-1) and
+[kill feed](#what-sven-cannot-copy).
+
+## Reproduce
+
+Each run needs a sandbox server, its own display and ports, and the CS 1.6 references in `.e2e/reference` (git ignores
+them). `e2e-elements` reads the main checkout's copy unless `CS_REFERENCE_DIR` names another one; the flashlight
+comparison needs the crosshair fixture captures with `mp_flashlight 1` (fixture runs after this review).
+
+```sh
+just sandbox /abs/path/.svends-hud && export SVEN_SERVER_DIR=/abs/path/.svends-hud
+just fixture-crosshair :107 1600x900 27071 27072 /abs/path/.hl-hud   # CS 1.6 AK-47 rest and firing, flashlight on
+export CL_DISPLAY=:107 CL_LISTEN_PORT=27072 CL_RESOLUTION=1600x900
+just install && just install-e2e && just check 27071
+CS_REFERENCE_DIR=$PWD/.e2e/reference just e2e-elements 27071 fx1600-el /abs/crops   # reference state, checks
+just e2e-hud 27071 fx1600                            # HUD states with checks
+just e2e-killfeed 27071 weapon_m4a1 head             # one headshot row and the -clear frame
+E2E_HUD_RES=default just e2e-killfeed 27071 weapon_m4a1 head   # the same on the plugin default size
+just e2e-lag 27071 165                               # a busy burst behind a 330 ms round trip
+just e2e-hudproof 27071 /abs/proof                   # foundation proof (patches the sandbox copy of the plugin)
+deno run -A tests/e2e/comparesheet.ts 1600x900 .e2e/shots fx1600 fx1600-el .e2e/reference docs/hud/compare
+```
+
+Stop the Xvfb of the display before you change `CL_RESOLUTION`, because `just display` keeps a running one. The CS
+fixture starts its own Xvfb on its display, so run it while no Sven client uses that display. `comparesheet.ts` reads
+the shots of all scenarios from one directory: copy the `e2e-killfeed` and `e2e-hudproof` shots next to the others,
+because a later run overwrites them.

@@ -5,8 +5,11 @@ import { encodeSpr, parseSpr } from "./spr.ts";
 import {
   BLANK,
   encodeHudSprite,
+  encodeIconSheet,
   HUD_TXT_FILE,
   hudSprites,
+  iconSheetFile,
+  loadIconSheets,
   moneyHighCells,
   parseHudTxt,
   type Rect,
@@ -19,6 +22,7 @@ import {
 const steamCommon = Deno.env.get("STEAM_COMMON") ?? `${Deno.env.get("HOME")}/.local/share/Steam/steamapps/common`;
 const cstrikeDir = Deno.env.get("CSTRIKE_DIR") ?? `${steamCommon}/Half-Life/cstrike`;
 const sheet = await Sheet.load(cstrikeDir);
+const iconSheets = await loadIconSheets(cstrikeDir);
 
 Deno.test("640hud7.spr decodes, encodes back to the same bytes and decodes the same", async () => {
   const bytes = await Deno.readFile(`${cstrikeDir}/${SHEET_FILE}`);
@@ -211,6 +215,10 @@ const SHIPPED_SHA1: Record<string, string> = {
   "flashlight.spr": "74633fbfcde66094924c52f939003aed97181205",
   "flashlight_energy.spr": "3f8c0e65ffee19984d130aef1cceec11fbe51bf9",
   "fill.spr": "8d1ee209ece09252ff30f5282cf213292b1be9b3",
+  "640hud1_icons.spr": "ab98a77b89a8d637c56856200fe92e327ba605e3",
+  "640hud2_icons.spr": "d4f7dfe5267be05aa3efd9e054282bda33a05a38",
+  "640hud7_icons.spr": "914c0de966d5ac6cf1631cd6335580758e3b262a",
+  "640hud16_icons.spr": "01ff46b0bc2c79cbcdc34515a34943a61a2e873a",
 };
 
 Deno.test("hudgen writes the bytes that clients already cached under sprites/cs16/hud", async () => {
@@ -220,9 +228,10 @@ Deno.test("hudgen writes the bytes that clients already cached under sprites/cs1
       (byte) => byte.toString(16).padStart(2, "0"),
     )
       .join("");
-  const generated = await Promise.all(
-    hudSprites(sheet).map(async (hudSprite) => [hudSprite.file, await sha1(encodeHudSprite(sheet, hudSprite))]),
-  );
+  const generated = await Promise.all([
+    ...hudSprites(sheet).map(async (hudSprite) => [hudSprite.file, await sha1(encodeHudSprite(sheet, hudSprite))]),
+    ...iconSheets.map(async (icons) => [iconSheetFile(icons.name), await sha1(encodeIconSheet(icons))]),
+  ]);
   assertEquals(Object.fromEntries(generated), SHIPPED_SHA1);
 });
 
@@ -238,5 +247,57 @@ Deno.test("reserve frames rebuild the three-cell number for 0..255", () => {
   for (let reserve = 0; reserve <= 255; reserve++) {
     const high = reserve >= 100 ? Math.floor(reserve / 10) : reserve >= 10 ? 100 + Math.floor(reserve / 10) : 110;
     assertEquals(twoCells(high) + String(reserve % 10), threeCells(reserve), `reserve ${reserve}`);
+  }
+});
+
+// Valve's draw of a sheet rect (see expectedPixel): pixel (column, row) of the rect shows texel k * (w - 1) / w.
+const valvePixel = (texel: (x: number, y: number) => number, rect: Rect, column: number, row: number) => {
+  const [sourceX, sourceY] = [column * (rect.width - 1) / rect.width, row * (rect.height - 1) / rect.height];
+  const [left, top] = [Math.floor(sourceX), Math.floor(sourceY)];
+  const [right, bottom] = [Math.min(left + 1, rect.width - 1), Math.min(top + 1, rect.height - 1)];
+  const at = (x: number, y: number) => texel(rect.x + x, rect.y + y);
+  const [fractionX, fractionY] = [sourceX - left, sourceY - top];
+  const across = (y: number) => at(left, y) * (1 - fractionX) + at(right, y) * fractionX;
+  return Math.round(across(top) * (1 - fractionY) + across(bottom) * fractionY);
+};
+
+for (const iconSheet of iconSheets) {
+  Deno.test(`${iconSheetFile(iconSheet.name)} holds each icon rect as Valve draws it, at its place, and nothing else`, () => {
+    const { header, palette, frames: [frame] } = parseSpr(encodeIconSheet(iconSheet));
+    const source = iconSheet.sprite.frames[0];
+    const brightness = (x: number, y: number) => iconSheet.sprite.palette[source.pixels[y * source.width + x] * 3];
+    assertEquals([header.textureFormat, frame.width, frame.height], ["additive", source.width, source.height]);
+    assertEquals(palette, Uint8Array.from({ length: 768 }, (_, at) => Math.floor(at / 3)));
+    const mismatch = frame.pixels.findIndex((value, at) => {
+      const [x, y] = [at % frame.width, Math.floor(at / frame.width)];
+      // Where two rects overlap, the later one keeps its pixels.
+      const rect = iconSheet.rects.findLast((r) => x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height);
+      return value !== (rect ? valvePixel(brightness, rect, x - rect.x, y - rect.y) : 0);
+    });
+    assertEquals(mismatch, -1, `${iconSheet.name} differs at pixel ${mismatch}`);
+  });
+}
+
+// Every rect that the AngelScript HUD draws from an icon sheet is one that hudgen filtered: the death icons of
+// killfeed.as, the ammo icons of ammo.as and the c4 status icon.
+Deno.test("the HUD draws only filtered icon rects", async () => {
+  const scripts = new URL("../scripts/cs16/", import.meta.url).pathname;
+  const killfeed = await Deno.readTextFile(`${scripts}killfeed.as`);
+  const ammo = await Deno.readTextFile(`${scripts}hud/ammo.as`);
+  const sheetOf: Record<string, string> = { HUD1: "640hud1", HUD2: "640hud2", HUD16: "640hud16" };
+  const drawn = [
+    ...[...killfeed.matchAll(/DeathIcon\( (HUD\d+), (\d+), (\d+), (\d+) \)/g)]
+      .map(([, sheetName, x, y, width]) => [sheetOf[sheetName], +x, +y, +width, 16] as const),
+    ...[...ammo.matchAll(/"(\d+),(\d+),[^"]*"/g)].map(([, x, y]) => ["640hud7", +x, +y, 24, 24] as const),
+    ["640hud7", 0, 148, 32, 32] as const,
+  ];
+  assertEquals(drawn.length > 30, true, `found only ${drawn.length} rects in the scripts`);
+  for (const [name, x, y, width, height] of drawn) {
+    const rects = iconSheets.find((icons) => icons.name === name)!.rects;
+    assertEquals(
+      rects.some((rect) => rect.x === x && rect.y === y && rect.width === width && rect.height === height),
+      true,
+      `${name} ${x},${y} ${width}x${height} is not a filtered icon rect`,
+    );
   }
 });

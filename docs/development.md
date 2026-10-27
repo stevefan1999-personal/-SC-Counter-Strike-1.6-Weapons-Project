@@ -9,7 +9,8 @@ them.
 - Sven Co-op and the Sven Co-op Dedicated Server (Steam).
 - Half-Life with Counter-Strike 1.6 (Steam). The install recipe copies some CS 1.6 files from it. These files are not in
   git.
-- `just`, `deno`, `rsync`, `rg`, `fd`, `Xvfb`, `xdotool`, `xdpyinfo` and ImageMagick (`magick`, `import`).
+- `just`, `deno`, `rsync`, `rg`, `fd`, `Xvfb`, `xdotool`, `xdpyinfo`, ImageMagick (`magick`, `import`) and `ffmpeg`
+  (screen recordings of `e2e-elements`).
 - Steam must run, because the game clients ask Steam for the login.
 
 ## Paths
@@ -70,6 +71,15 @@ just log 27015 40                 # read the console
 just stop 27015
 ```
 
+Crash dumps: `-nobreakpad` does not stop Steam's crash handler. The server's `steamclient.so` asserts (for example
+`Assert( !BLoggedOn() )`, often at the first `changelevel` of a server process), writes a minidump to `/tmp/dumps` and
+sends it to Valve. A minidump holds the whole environment of the process. Thus every game process (server, Sven client,
+CS fixture) starts through `game_env`, an `env -i` with only `HOME`, `USER`, `PATH`, `LANG`, `XDG_RUNTIME_DIR` and the
+D-Bus address. The `server` recipe also passes steamclient's `-noassert` (no assert dumps in 12 `changelevel`s, against
+2 dumps in 11 without it) and sets `http_proxy` and `HTTP_PROXY` to a closed local port, so that any other dump stays on
+the machine (its log then says `upload no: Could not connect to server`). `just stop` deletes the dumps that the server
+log names.
+
 ## Drive the game client without a monitor
 
 The client runs on an Xvfb display, so it does not take over the desktop. Input goes through `xdotool`, and screenshots
@@ -92,7 +102,8 @@ Known client problems:
 
 ## Test plugin
 
-`just install-e2e` adds `tests/e2e/e2e.as` to the server. Use it from the server console with `as_command`:
+`just install-e2e` adds `tests/e2e/e2e.as` to the server. Use it from the server console with `as_command`. "Player 1"
+is the first connected player:
 
 | Command                             | Effect                                                                               |
 | ----------------------------------- | ------------------------------------------------------------------------------------ |
@@ -102,9 +113,15 @@ Known client problems:
 | `e2e.give <class>`                  | give player 1 an item                                                                |
 | `e2e.health <n>`, `e2e.armor <n>`   | set health or armour                                                                 |
 | `e2e.hurt <n>`                      | damage player 1 from the world; armour absorbs most of it                            |
+| `e2e.stuff <command>`               | run a console command on the client (the client can refuse some of them)             |
+| `e2e.ammo <clip> <reserve>`         | set the clip and the reserve of the held weapon; prints the weapon                   |
+| `e2e.frags <n>`                     | set the score; the CS16 buy menu pays $10 for each point of score                    |
+| `e2e.battery <percent>`             | set the flashlight battery                                                           |
+| `e2e.suit <0\|1>`                   | take away or give back the HEV suit                                                  |
+| `e2e.backdrop [<r> <g> <b>]`        | one colour under the HUD (a screen fade); without a colour, remove it                |
+| `e2e.gametext <channel> <text>`     | a white map text from a `game_text` entity, centred at y 0.3, for 30 s               |
 | `e2e.respawn`                       | respawn player 1, also when dead                                                     |
 | `e2e.notify <text>`                 | print a line in the top-left notify area of every player                             |
-| `e2e.stuff <command>`               | run a console command on the client (the client can refuse some of them)             |
 | `e2e.turn <degrees>`                | turn player 1's view by an exact yaw step (left is positive)                         |
 | `e2e.fov`                           | print player 1's `m_iFOV`, held weapon (script or native), life state and view model |
 | `e2e.camera <seconds>`              | view player 1 through a `trigger_camera`, as a map cutscene does                     |
@@ -112,8 +129,11 @@ Known client problems:
 ## Scenarios
 
 ```sh
-just e2e-killfeed 27017 weapon_m4a1 head   # shoot a scientist, save the kill feed
+just e2e-killfeed 27017 weapon_m4a1 head   # shoot a scientist (head, body) or die from the world (world)
 just e2e-hud 27017 run1                    # 15 HUD states with crops of each HUD region
+just e2e-hudproof 27017                    # prove the CS HUD foundation (needs a sandbox, see below)
+just e2e-elements 27017 run1 /abs/crops    # status elements against CS 1.6, with checks (docs/hud.md)
+just e2e-lag 27017 165                     # HUD delay behind a 330 ms round trip after a busy burst
 just e2e-obituary 27017                    # metamod plugin: no Sven death lines, see docs/metamod.md
 ```
 
@@ -121,7 +141,19 @@ just e2e-obituary 27017                    # metamod plugin: no Sven death lines
 just e2e-fov 27017 "$PWD/.e2e/fov/run1"    # view models, scopes and turned views of the CS weapons
 ```
 
-The scenarios start the server and the client themselves and print a JSON list of the screenshots.
+The scenarios start the server and the client themselves and print a JSON list of the screenshots. The kill-feed
+scenario also saves the same view once the notice is gone (`-clear`). The server gets the client size (`CL_RESOLUTION`)
+as `cs16_hud_res`, because the CS HUD places its icons in screen pixels. `E2E_HUD_RES=<W>x<H>` gives the server another
+size, and `E2E_HUD_RES=default` leaves the plugin default (1920x1080), as for a player who never typed `.hudres`.
+
+`e2e-lag` puts the client behind `tests/e2e/lagproxy.ts`, a UDP proxy that holds each datagram for the given time in
+each direction and counts the bytes and reliable packets that the server sends. After a 4 s P90 burst with ten kills a
+second it sets the health to 5 and times how long the HUD needs to show it, first with the CS HUD and then with the
+native Sven HUD (`cs16_hud 0`). The health change waits in the reliable stream behind everything that the burst put
+there, so the time is how far that stream is behind. It prints the times and the traffic for each second.
+
+`e2e-hudproof` adds a proof element to the sandbox copy of the plugin, so set `SVEN_SERVER_DIR` to a sandbox. It fails
+on any failed check and writes `report.json` and evidence crops to `.e2e/proof`. See `docs/hud-architecture.md`.
 
 ## Compare with Counter-Strike 1.6
 
@@ -155,10 +187,23 @@ way, against a frame of the same view without notices:
 
 ```sh
 just fixture-killfeed :96 2560x1440
-just fixture-metrics .e2e/shots/run1-killfeed.png .e2e/shots/run1-killfeed-before.png
+just fixture-metrics .e2e/shots/killfeed-weapon_m4a1-head.png .e2e/shots/killfeed-weapon_m4a1-head-clear.png
 ```
 
 [CS 1.6 kill-feed reference](research/cs16-killfeed-reference.md) describes the fixture and the measured layout.
+
+### Crosshair reference and comparison sheets
+
+`just fixture-crosshair` gives the CS fixture an AK-47 and saves it at rest and 600 ms into a held burst
+(`.e2e/reference/cs16-crosshair-<W>x<H>-ak47-{rest,firing}.png`), with the waits of the `e2e-hud` steps. Measure both
+games with `tests/e2e/crosshair-lines.ts`. `tests/e2e/comparesheet.ts` puts the same crop of a Counter-Life shot and a
+CS reference side by side at 2× (`docs/hud.md`, "Compared with CS 1.6"):
+
+```sh
+just fixture-crosshair :96 1600x900
+deno run -A tests/e2e/crosshair-lines.ts .e2e/reference/cs16-crosshair-1600x900-ak47-firing.png
+deno run -A tests/e2e/comparesheet.ts 1600x900 <shots dir> <hud label> <elements label> .e2e/reference docs/hud/compare
+```
 
 ### Field-of-view reference
 

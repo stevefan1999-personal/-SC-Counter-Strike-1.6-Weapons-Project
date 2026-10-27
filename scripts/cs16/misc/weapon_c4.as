@@ -122,33 +122,12 @@ class weapon_c4 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase, CS16BASE::
         return true;
     }
 
-    void ShowC4Sprite( float flHoldTime )
-    {
-        Vector2D vec2dPos( 0, 300 );
-
-        HUDSpriteParams SpriteParams;
-        SpriteParams.channel = 4;
-        SpriteParams.flags = HUD_ELEM_ABSOLUTE_X | HUD_ELEM_ABSOLUTE_Y | HUD_ELEM_DYNAMIC_ALPHA;
-        SpriteParams.x = vec2dPos.x;
-        SpriteParams.y = vec2dPos.y;
-        SpriteParams.left = 0; // Offset
-        SpriteParams.top = 148; // Offset
-        SpriteParams.width = 32; // 0: auto; use total width of the sprite
-        SpriteParams.height = 32; // 0: auto; use total height of the sprite
-        SpriteParams.spritename = CS16BASE::MAIN_CSTRIKE_DIR + "640hud7.spr";
-        SpriteParams.effect = HUD_EFFECT_NONE;
-        SpriteParams.color1 = RGBA_SVENCOOP;
-        SpriteParams.holdTime = flHoldTime;
-        g_PlayerFuncs.HudCustomSprite( m_pPlayer, SpriteParams );
-    }
-
     bool AddToPlayer( CBasePlayer@ pPlayer )
     {
         if( !BaseClass.AddToPlayer( pPlayer ) )
             return false;
 
-        ShowC4Sprite( -1 );
-
+        // The CS HUD shows the c4 status icon while the player carries the C4 (scripts/cs16/hud/statusicon.as).
         NetworkMessage weapon( MSG_ONE, NetworkMessages::WeapPickup, pPlayer.edict() );
             weapon.WriteShort( g_ItemRegistry.GetIdForName( self.pev.classname ) );
         weapon.End();
@@ -165,7 +144,6 @@ class weapon_c4 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase, CS16BASE::
     private int m_iAmmoSave;
     bool Deploy()
     {
-        ShowC4Sprite( -1 );
         m_iAmmoSave = 0; // Zero out the ammo save
         return Deploy( V_MODEL, P_MODEL, DRAW, "trip", GetBodygroup(), (15.0/30.0) );
     }
@@ -173,7 +151,6 @@ class weapon_c4 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase, CS16BASE::
     private CBasePlayerItem@ DropItem()
     {
         m_iAmmoSave = m_pPlayer.AmmoInventory( self.m_iPrimaryAmmoType ); //Save the player's ammo pool in case it has any in DropItem
-        ShowC4Sprite( 0 );
 
         return self;
     }
@@ -195,11 +172,7 @@ class weapon_c4 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase, CS16BASE::
         {
             SetThink( ThinkFunction( DestroyThink ) );
             self.pev.nextthink = g_Engine.time + 0.1;
-            ShowC4Sprite( 0 );
         }
-
-        if( !m_pPlayer.IsAlive() )
-            ShowC4Sprite( 0 );
 
         BaseClass.Holster( skipLocal );
     }

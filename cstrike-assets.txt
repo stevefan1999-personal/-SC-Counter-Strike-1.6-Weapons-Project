@@ -21,3 +21,5 @@ sprites/640hud17.spr sprites/cs16/icons/640hud17.spr
 sprites/640hud18.spr sprites/cs16/icons/640hud18.spr
 # The muzzle flash fireball (events/cs16_muzzleflash2_*.txt) gets its own folder for the same reason.
 sprites/muzzleflash2.spr sprites/cs16/muzzle/muzzleflash2.spr
+# The pain arrows: a Half-Life file that CS 1.6 draws, so it comes from valve/ next to cstrike/.
+../valve/sprites/640_pain.spr sprites/cs16/icons/640_pain.spr

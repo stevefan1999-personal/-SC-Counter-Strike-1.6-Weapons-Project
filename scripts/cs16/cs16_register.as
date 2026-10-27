@@ -2,6 +2,9 @@
 #include "BuyMenu"
 #include "killfeed"
 #include "../DamageMoneyScore"
+#include "hud/hud"
+#include "hud/status"
+#include "hud/crosshair"
 
 void PluginInit()
 {
@@ -50,13 +53,13 @@ void PluginInit()
     BuyMenu::RegisterHooks();
     // Damage-based money writes into the BuyMenu wallet, so it must live in this module.
     DMS_PluginInit();
+    // Shared CS 1.6 HUD foundation: element registry, native HUD hiding, screen size (docs/hud-architecture.md).
+    CS16HUD::PluginInit();
+    CS16HUD::RegisterStatus();
+    CS16CROSSHAIR::Register();
+    CS16KILLFEED::PluginInit();
 
     g_Hooks.RegisterHook( Hooks::Player::PlayerSpawn,    @CS16_PlayerSpawn );
-    g_Hooks.RegisterHook( Hooks::Player::PlayerKilled,   @CS16KILLFEED::OnPlayerKilled );
-    g_Hooks.RegisterHook( Hooks::Monster::MonsterKilled, @CS16KILLFEED::OnMonsterKilled );
-
-    // Killfeed sprite refresh — 0.1 s tick, runs forever
-    g_Scheduler.SetInterval( "CS16KillfeedDraw", 0.1f, g_Scheduler.REPEAT_INFINITE_TIMES );
 
     // Server-side view.cpp approximations (V_DropPunchAngle + V_CalcViewRoll)
     // g_Scheduler.SetInterval( "CS16ViewThink", 0.05f, g_Scheduler.REPEAT_INFINITE_TIMES );
@@ -160,19 +163,12 @@ void MapInit()
 
     g_CS16Menu.AddItem( BuyMenu::BuyableItem( CS16_C4::WPN_NAME, CS16_C4::GetName(), CS16_C4::WPN_PRICE, "equip" ) );
 
-    //Initializes per-map state for the Buy Menu (clears points, precaches sprites)
+    //Initializes per-map state for the Buy Menu (clears points)
     BuyMenu::MoneyInit();
     DMS_MapInit();
 
-    // Precache CS1.6 death notice sprite sheets (640hud1/2/16.spr)
-    CS16KILLFEED::PrecacheSprites();
-    CS16KILLFEED::ResetForNewMap();
-}
-
-// Top-level wrapper so g_Scheduler can resolve "CS16KillfeedDraw" by name
-void CS16KillfeedDraw()
-{
-    CS16KILLFEED::DrawNotices();
+    CS16KILLFEED::MapInit();
+    CS16HUD::MapInit();
 }
 
 // Top-level wrapper so g_Scheduler can resolve "CS16ViewThink" by name
