@@ -1,7 +1,8 @@
 // Raw senders for the Sven custom HUD messages. They write the client channel (0-31) and the engine text slot (0-7)
 // themselves instead of the group and slot that the stock API derives from the module type, so one plugin can use
 // both channel groups and all eight text slots. Byte layouts: sven-client-hud.md 1.2 (CustSpr, ToggleElem) and
-// sven-client-hudtext.md 1.1 (TE_TEXTMESSAGE). Like the stock API, every message is reliable and goes to one player.
+// sven-client-hudtext.md 1.1 (TE_TEXTMESSAGE). Like the stock API, every message goes to one player, and it is reliable
+// unless the caller asks for an unreliable sprite.
 namespace CS16HUD
 {
   const uint MAX_PLAYERS = 32;
@@ -35,11 +36,13 @@ namespace CS16HUD
   // a slot whose text is over may hold another text by now, which an empty text would erase.
   array<float> g_SentTextEnd( ( MAX_PLAYERS + 1 ) * TEXT_SLOTS );
 
-  void SendSprite( CBasePlayer@ player, uint clientChannel, const HUDSpriteParams& in params )
+  // reliable false: the message skips the reliable stream, which a lagged connection delivers late and in order with
+  // everything else, and it can get lost. Only for a state that a later reliable message corrects.
+  void SendSprite( CBasePlayer@ player, uint clientChannel, const HUDSpriteParams& in params, bool reliable = true )
   {
     if( !CanSend( player, clientChannel, CLIENT_CHANNELS, "sprite channel" ) )
       return;
-    NetworkMessage message( MSG_ONE, NetworkMessages::CustSpr, player.edict() );
+    NetworkMessage message( reliable ? MSG_ONE : MSG_ONE_UNRELIABLE, NetworkMessages::CustSpr, player.edict() );
     message.WriteByte( clientChannel );
     message.WriteLong( params.flags );
     message.WriteString( params.spritename );

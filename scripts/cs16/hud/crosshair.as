@@ -210,6 +210,7 @@ namespace CS16CROSSHAIR
     int shownAlpha = 0;
     bool shotSinceSend = false;
     float lastSendTime = 0.0f;
+    bool sentReliably = true; // the lines on the client came in a reliable message
 
     // Replays the CS frames that fit in the time since the last call. A shot is seen at the first frame after it.
     void Simulate( float dt, int gap, int shotDelta, int shotCount )
@@ -301,23 +302,30 @@ namespace CS16CROSSHAIR
       // shortcut: fill.spr is 64 px, so a longer line (full spread on a screen wider than 3723 px) loses its outer end;
       // ship a wider fill sprite under a new path if such screens matter.
       const int lineLength = Math.min( scaled ? screen.width * length / base : length, FILL_SIZE );
+      // At rest nothing changes by itself any more. A crosshair on its way there goes out unreliable: its next send
+      // follows within MIN_SEND_INTERVAL, and the rest state at the end goes out reliable, also when it draws the same
+      // lines as the last unreliable send. So the moving crosshair does not wait behind the reliable stream of a lagged
+      // connection (40 messages a second during fire), and a lost message only shows a step late.
+      const bool atRest = state.alpha == ALPHA_MAX && state.distance <= float( gap );
       const bool changed = !state.clientKnown || !state.shown || lineGap != state.shownGap
         || lineLength != state.shownLength || state.shotSinceSend
-        || ( state.alpha == ALPHA_MAX && state.shownAlpha != ALPHA_MAX );
+        || ( state.alpha == ALPHA_MAX && state.shownAlpha != ALPHA_MAX ) || ( atRest && !state.sentReliably );
       // A crosshair that appears goes out at once; changes of a shown one wait for the send interval.
       if( !changed || ( state.clientKnown && state.shown && g_Engine.time - state.lastSendTime < MIN_SEND_INTERVAL ) )
         return;
+      const bool reliable = !state.clientKnown || !state.shown || atRest;
       const int centreX = screen.width / 2;
       const int centreY = screen.height / 2;
       const int outerOffset = lineGap + lineLength - 1;
       SendLine( player, screen, CS16HUD::CROSSHAIR_WEST, centreX - outerOffset, centreY, lineLength, LINE_WIDTH,
-        state.alpha );
+        state.alpha, reliable );
       SendLine( player, screen, CS16HUD::CROSSHAIR_EAST, centreX + lineGap, centreY, lineLength, LINE_WIDTH,
-        state.alpha );
+        state.alpha, reliable );
       SendLine( player, screen, CS16HUD::CROSSHAIR_NORTH, centreX, centreY - outerOffset, LINE_WIDTH, lineLength,
-        state.alpha );
+        state.alpha, reliable );
       SendLine( player, screen, CS16HUD::CROSSHAIR_SOUTH, centreX, centreY + lineGap, LINE_WIDTH, lineLength,
-        state.alpha );
+        state.alpha, reliable );
+      state.sentReliably = reliable;
       state.clientKnown = true;
       state.shown = true;
       state.shownGap = lineGap;
@@ -325,14 +333,15 @@ namespace CS16CROSSHAIR
       state.shownAlpha = state.alpha;
       state.shotSinceSend = false;
       state.lastSendTime = g_Engine.time;
-      g_Game.AlertMessage( at_aiconsole, "[CS16HUD] crosshair %1: gap %2 length %3 alpha %4 shots %5, %6 bytes at %7\n",
-        player.entindex(), lineGap, lineLength, state.alpha, state.lastShotCount, LINE_CHANNELS.length() * LINE_BYTES,
-        g_Engine.time );
+      g_Game.AlertMessage( at_aiconsole,
+        "[CS16HUD] crosshair %1: gap %2 length %3 alpha %4 shots %5, %6 bytes %7 at %8\n", player.entindex(), lineGap,
+        lineLength, state.alpha, state.lastShotCount, LINE_CHANNELS.length() * LINE_BYTES,
+        reliable ? "reliable" : "unreliable", g_Engine.time );
     }
 
     // One line as a box of fill.spr with its top-left corner at (left, top) in screen pixels.
     private void SendLine( CBasePlayer@ player, const CS16HUD::ScreenSize& in screen, uint channel, int left, int top,
-      int width, int height, int alpha )
+      int width, int height, int alpha, bool reliable )
     {
       HUDSpriteParams params; // the defaults keep it: hold -1 (forever), frame 0 of 1
       params.flags = LINE_FLAGS;
@@ -355,7 +364,7 @@ namespace CS16CROSSHAIR
         params.color2 = RGBA( LINE_RED, LINE_GREEN, LINE_BLUE, alpha );
         params.fxTime = ( ALPHA_MAX - alpha ) / ALPHA_RECOVERY_PER_SECOND;
       }
-      CS16HUD::SendSprite( player, channel, params );
+      CS16HUD::SendSprite( player, channel, params, reliable );
     }
 
     // CS does not update a crosshair that it does not draw, so the hidden time is never replayed.

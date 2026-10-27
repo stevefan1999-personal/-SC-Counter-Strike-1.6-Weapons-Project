@@ -503,9 +503,13 @@ frames. Thus it replays the CS frames at 100 steps per second of the player's ow
 - One update is four `CustSpr` messages of 70 bytes: the message id, the size byte and 68 bytes of fields with the name
   `cs16/hud/fill.spr`. So one update is 280 bytes, and the limit is 2.8 KB/s for each player. A hide is four
   `ToggleElem` messages of 3 bytes.
+- A crosshair on its way to rest (a gap that shrinks, an alpha below 255) goes out unreliable (`MSG_ONE_UNRELIABLE`):
+  its next update follows within 0.1 s, so a lost update shows one step late, and it does not wait behind the reliable
+  stream of a lagged connection. The rest state, the first lines after a resend and lines that appear go out reliable,
+  also when the rest lines equal the last unreliable update. During held fire nearly every update is unreliable.
 - With `developer 2` the server prints each update:
   `[CS16HUD] crosshair <slot>: gap <d> length <len> alpha <a> shots
-  <n>, <bytes> bytes at <time>`.
+  <n>, <bytes> bytes <reliable|unreliable> at <time>`.
 
 Measured bytes for each player (scenario below, `developer 2` log):
 
