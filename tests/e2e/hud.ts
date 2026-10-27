@@ -10,6 +10,8 @@ import { addedColour, Pixels, type Region, type Rgb } from "./hudcompare.ts";
 const MOTD_DELAY_MS = 3_000;
 const SETTLE_MS = 1_200;
 const LEVEL_LOAD_MS = 120_000;
+// A missing file: the server then sends no MOTD after the changelevel, whose window would cover the HUD.
+const NO_MOTD_FILE = "e2e-no-motd.txt";
 const KILLFEED_REDRAW_MS = 500; // the rows go out at the next HUD tick; the first notice still has 3 s of its 6
 const FADE_SETTLE_MS = 6_000; // CS fades end after 5 s; the connection on the new map restarts the ammo fade
 // The CS floor colour under the HUD, and HUD orange at the settled alpha 100 (cs16-hud-spec.md A.1) on top of it.
@@ -104,6 +106,7 @@ async function changeLevel() {
   await sleep(SETTLE_MS);
   await e2e("health 100", /\[e2e\] health/);
   await sleep(FADE_SETTLE_MS);
+  await server.command(`motdfile ${NO_MOTD_FILE}`);
   const since = (await server.log()).length;
   await server.command("changelevel testcenter");
   await server.waitFor(/entered the game/, since, LEVEL_LOAD_MS);
