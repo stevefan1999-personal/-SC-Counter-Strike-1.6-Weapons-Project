@@ -121,12 +121,19 @@ just e2e-killfeed 27017 weapon_m4a1 head   # shoot a scientist (head, body) or d
 just e2e-hud 27017 run1                    # 15 HUD states with crops of each HUD region
 just e2e-hudproof 27017                    # prove the CS HUD foundation (needs a sandbox, see below)
 just e2e-elements 27017 run1 /abs/crops    # status elements against CS 1.6, with checks (docs/hud.md)
+just e2e-lag 27017 165                     # HUD delay behind a 330 ms round trip after a busy burst
 ```
 
 The scenarios start the server and the client themselves and print a JSON list of the screenshots. The kill-feed
 scenario also saves the same view once the notice is gone (`-clear`). The server gets the client size (`CL_RESOLUTION`)
 as `cs16_hud_res`, because the CS HUD places its icons in screen pixels. `E2E_HUD_RES=<W>x<H>` gives the server another
 size, and `E2E_HUD_RES=default` leaves the plugin default (1920x1080), as for a player who never typed `.hudres`.
+
+`e2e-lag` puts the client behind `tests/e2e/lagproxy.ts`, a UDP proxy that holds each datagram for the given time in
+each direction and counts the bytes and reliable packets that the server sends. After a 4 s P90 burst with ten kills a
+second it sets the health to 5 and times how long the HUD needs to show it, first with the CS HUD and then with the
+native Sven HUD (`cs16_hud 0`). The health change waits in the reliable stream behind everything that the burst put
+there, so the time is how far that stream is behind. It prints the times and the traffic for each second.
 
 `e2e-hudproof` adds a proof element to the sandbox copy of the plugin, so set `SVEN_SERVER_DIR` to a sandbox. It fails
 on any failed check and writes `report.json` and evidence crops to `.e2e/proof`. See `docs/hud-architecture.md`.

@@ -86,14 +86,15 @@ export class Client {
   }
 
   // Connects and returns once the player stays in the game. The client reconnects at once when it downloads a
-  // soundcache that differs from its copy, which happens when the servers of other worktrees wrote other ones.
-  async join(server: Server) {
+  // soundcache that differs from its copy, which happens when the servers of other worktrees wrote other ones. `port`
+  // is where the client connects, for example a proxy in front of the server.
+  async join(server: Server, port = server.port) {
     const since = (await server.log()).length;
     const inGame = async () => {
       const fresh = (await server.log()).slice(since);
       return fresh.lastIndexOf("entered the game") > fresh.lastIndexOf("disconnected");
     };
-    await this.connect(server.port);
+    await this.connect(port);
     const deadline = Date.now() + JOIN_TIMEOUT_MS;
     while (Date.now() < deadline) {
       if (await inGame()) {

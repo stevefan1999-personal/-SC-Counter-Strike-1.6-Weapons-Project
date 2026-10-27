@@ -222,6 +222,11 @@ sandbox dir:
 e2e-killfeed port='27017' weapon='weapon_csdeagle' aim='head':
   deno run -A '{{justfile_directory()}}/tests/e2e/killfeed.ts' {{port}} {{weapon}} {{aim}}
 
+# Play behind a UDP proxy that delays each datagram, fire a P90 burst with kills, and time how long the HUD needs to show a health change made after it (CS HUD, then native HUD): just e2e-lag 27017 165
+[group('e2e')]
+e2e-lag port='27017' delay='165':
+  deno run -A '{{justfile_directory()}}/tests/e2e/lag.ts' {{port}} {{delay}}
+
 # Walk through every CS HUD state on testcenter and save shots plus HUD crops: just e2e-hud 27017 hud
 [group('e2e')]
 e2e-hud port='27017' label='hud':
