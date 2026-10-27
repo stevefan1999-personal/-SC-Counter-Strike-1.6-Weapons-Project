@@ -33,6 +33,11 @@ weapons now show CS's view and scope in Sven, and how much they still differ. De
 - When `m_iFOV` differs from `default_fov`, the client multiplies the mouse sensitivity by FOV / `default_fov` ×
   `zoom_sensitivity_ratio` (1.2 by default; `client.so` 0xDA3AE, 0xE0F66).
 - The server sets `m_iFOV` to 0 on death (`server.so` 0x4a125a) and on spawn (0x49eb8d).
+- A `trigger_camera` takes a zoom back. When it takes the view, and again at each of its thinks, it looks at `m_iFOV`.
+  If the value is not 0 or 90, it calls `SecondaryAttack` of the held weapon, clears `m_fInZoom` and sets `m_iFOV` to 0
+  (`server.so` 0x525481, from `CTriggerCamera::Use` 0x52f6d8 and its think 0x52fc58). A CS weapon holds 74 when it is
+  not zoomed, so the camera also calls it then. The weapon frame clears the attack2 button before its own call to
+  `SecondaryAttack` (`server.so` 0x55dedc), so the button does not show which of the two calls it is.
 
 ## Conversion
 
@@ -57,6 +62,10 @@ The world scale is the ratio of the focal lengths, tan(exact / 2) / tan(sent / 2
   - `CsFov(player)` gives a player's FOV in CS degrees, for code that compares with CS values. Whole Sven degrees and
     the 10° minimum make it differ from CS's value: zoom 40 reads 40.6, the AWP's 10 reads 13.3.
   - `AWP_2X_ZOOM_VALUE = 10` and the scope sequence `SCP_IDLE_FOV10` for the AWP's second zoom.
+  - `ItemPostFrame` runs the engine's weapon frame through `WeaponFrame()`, which marks it. A `SecondaryAttack` from
+    outside the frame comes from a camera (`IsCameraCall()`). Then a weapon only ends its zoom: it does not stab, change
+    its silencer or burst mode, or zoom in. The Glock, FAMAS, M3 and XM1014 have their own `ItemPostFrame` and call
+    `WeaponFrame()` in it.
 - The scope view model is `models/cs16/scope/cs_scope.mdl`, a new path, because a client never downloads a path that it
   already has. `tools/scopegen.ts` (`just scope-model`) builds it from CS's `sniper_scope.spr`:
   - Sven draws view models with the vertical world FOV, so a flat model keeps its share of the screen height at every
@@ -70,8 +79,8 @@ The world scale is the ratio of the focal lengths, tan(exact / 2) / tan(sent / 2
   - The reticle sprite, texel for texel at 900 lines, without its own lines.
   - The old `models/cs16/wpn/scope.mdl` is removed.
 - Tests: `tests/fixture/fov.ts` (CS 1.6, `just fixture-fov`), `tests/e2e/fov.ts` (Counter-Life, `just e2e-fov`),
-  `tests/fixture/fov-metrics.ts` (`just fov-metrics`) and `tests/e2e/fov-reset.ts`. The e2e plugin has two new commands:
-  `turn` and `fov`.
+  `tests/fixture/fov-metrics.ts` (`just fov-metrics`) and `tests/e2e/fov-reset.ts`. The e2e plugin has three new
+  commands: `turn`, `fov` and `camera`.
 
 ### Crosshair
 
@@ -183,9 +192,10 @@ lines) of the pixels are pure black in both games, before and after. The other p
 
 ### Reset paths
 
-`tests/e2e/fov-reset.ts` passes all nine checks: a CS weapon shows 74, Sven's medkit 0 (the player's view), the AWP
-zooms to 31 and 10, and switching to Sven's medkit while zoomed, death, respawn and dropping the held weapon end
-unzoomed. In Counter-Life a dead player holds the next CS weapon (the C4), so the death view is 74, which is CS's 90.
+`tests/e2e/fov-reset.ts` passes all eleven checks: a CS weapon shows 74, Sven's medkit 0 (the player's view), the AWP
+zooms to 31 and 10 with the scope, and switching to Sven's medkit while zoomed, death, respawn and dropping the held
+weapon end unzoomed, without the scope. In Counter-Life a dead player holds the next CS weapon (the C4), so the death
+view is 74, which is CS's 90. A camera (`e2e.camera`) does not zoom an unzoomed AWP in, and it ends a zoomed one.
 
 ## Limits
 
@@ -205,7 +215,7 @@ unzoomed. In Counter-Life a dead player holds the next CS weapon (the C4), so th
   empty.
 - Walking: Sven's view bob moves the view model forward and back, so the circle grows and shrinks by up to 0.4 % (3
   pixels at 900 lines). CS's scope does not move.
-- A `trigger_camera` sets `m_iFOV` to 0 (`server.so` 0x5253d6). A CS weapon gets CS's view back at its next deploy or
+- A `trigger_camera` sets `m_iFOV` to 0 (`server.so` 0x525481). A CS weapon gets CS's view back at its next deploy or
   zoom.
 - The measurements use software GL under Xvfb, and the two games show different maps (de_dust2 and testcenter). The
   focal lengths do not depend on the map.

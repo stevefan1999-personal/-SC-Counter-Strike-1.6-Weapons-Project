@@ -277,6 +277,32 @@ mixin class WeaponBase
         return self;
     }
 
+    // Sven's trigger_camera calls the held weapon's SecondaryAttack, from outside the weapon's frame, to take a zoom
+    // back whenever m_iFOV is not 0 or 90, at the camera's start and on every camera think (server.so 0x525481). CS
+    // weapons hold 74 unzoomed, so they get these calls too. The frame clears the attack2 button before its own call
+    // (server.so 0x55dedc), so the button cannot tell the two apart; this flag does.
+    private bool m_fInWeaponFrame = false;
+
+    void ItemPostFrame()
+    {
+        WeaponFrame();
+    }
+
+    // The engine's weapon frame (attacks, reload, idle); a weapon with its own ItemPostFrame calls this instead of
+    // BaseClass.ItemPostFrame()
+    void WeaponFrame()
+    {
+        m_fInWeaponFrame = true;
+        BaseClass.ItemPostFrame();
+        m_fInWeaponFrame = false;
+    }
+
+    // A SecondaryAttack from a camera may only end a zoom: no stab, no silencer or burst toggle, no zoom in
+    bool IsCameraCall()
+    {
+        return !m_fInWeaponFrame;
+    }
+
     void CommonSpawn( const string worldModel, const int GiveDefaultAmmo ) // things that are commonly executed in spawn
     {
         m_iShotsFired = 0;

@@ -1,5 +1,5 @@
 // FOV reset paths (docs/fov.md): CS weapons show CS's field of view, Sven's weapons keep the player's default_fov,
-// and switching weapons, death, respawn and dropping a weapon never leave a zoom behind.
+// and switching weapons, death, respawn, dropping a weapon and a trigger_camera never leave a zoom behind.
 // Usage: deno run -A tests/e2e/fov-reset.ts [port] [map]
 // The server install (SVEN_SERVER_DIR) must contain the game content and the e2e plugin. Exits with an error when a
 // check fails.
@@ -18,6 +18,11 @@ const CS_ZOOM_40 = 31;
 const AWP_SECOND_ZOOM = 10;
 // counterlife.as replaces most Half-Life weapons with CS ones; Sven's medkit stays a native weapon.
 const SVEN_WEAPON = "weapon_medkit";
+// The sniper scope is a view model (base.as SCOPE_MODEL).
+const SCOPE_MODEL = "models/cs16/scope/cs_scope.mdl";
+// A map cutscene: trigger_camera calls the held weapon's SecondaryAttack to take a zoom back (base.as IsCameraCall).
+const CAMERA_SECONDS = 2;
+const CAMERA_MS = (CAMERA_SECONDS + 1) * 1_000;
 
 const [portArg = "27017", map = "testcenter"] = Deno.args;
 const port = Number(portArg);
@@ -43,14 +48,17 @@ const zoom = async () => {
   await sleep(ZOOM_MS);
 };
 
-// "[e2e] fov <m_iFOV> weapon <classname> <script|native> <alive|dead>"
-const check = async (step: string, wanted: (weapon: { script: boolean }) => number) => {
+// "[e2e] fov <m_iFOV> weapon <classname> <script|native> <alive|dead> viewmodel <model>"
+const check = async (step: string, wanted: (weapon: { script: boolean }) => number, scoped = false) => {
   const line = await e2e("fov", /\[e2e\] fov [^\n]*/);
-  const [, , fov, , , kind] = line.split(" ");
+  const [, , fov, , , kind, , , viewModel] = line.split(" ");
   const expected = wanted({ script: kind === "script" });
-  if (Number(fov) !== expected) failures.push(step);
+  const passed = Number(fov) === expected && (viewModel === SCOPE_MODEL) === scoped;
+  if (!passed) failures.push(step);
   console.log(
-    `${Number(fov) === expected ? "ok  " : "FAIL"} ${step}: wanted ${expected}, ${line.replace("[e2e] ", "")}`,
+    `${passed ? "ok  " : "FAIL"} ${step}: wanted ${expected}${scoped ? " with the scope" : ""}, ${
+      line.replace("[e2e] ", "")
+    }`,
   );
 };
 const exactly = (fov: number) => () => fov;
@@ -71,9 +79,9 @@ try {
 
   await select("weapon_awp");
   await zoom();
-  await check("first AWP zoom", exactly(CS_ZOOM_40));
+  await check("first AWP zoom", exactly(CS_ZOOM_40), true);
   await zoom();
-  await check("second AWP zoom stops at Sven's minimum", exactly(AWP_SECOND_ZOOM));
+  await check("second AWP zoom stops at Sven's minimum", exactly(AWP_SECOND_ZOOM), true);
   await run(SVEN_WEAPON);
   await sleep(DRAW_MS);
   await check("switching to Sven's weapon while zoomed", exactly(PLAYER_DEFAULT));
@@ -93,6 +101,16 @@ try {
   await run("drop");
   await sleep(DRAW_MS);
   await check("dropping the held CS weapon", unzoomed);
+
+  // The camera resets m_iFOV to 0, the player's own view.
+  await select("weapon_awp");
+  await e2e(`camera ${CAMERA_SECONDS}`, /\[e2e\] camera on/);
+  await sleep(CAMERA_MS);
+  await check("a camera does not zoom an unzoomed sniper in", exactly(PLAYER_DEFAULT));
+  await zoom();
+  await e2e(`camera ${CAMERA_SECONDS}`, /\[e2e\] camera on/);
+  await sleep(CAMERA_MS);
+  await check("a camera ends a sniper's zoom", exactly(PLAYER_DEFAULT));
 
   if (failures.length > 0) throw new E2eError(`FOV checks failed: ${failures.join("; ")}`);
 } finally {

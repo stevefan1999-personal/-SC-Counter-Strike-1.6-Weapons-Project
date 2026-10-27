@@ -224,6 +224,10 @@ class weapon_csglock18 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
 
     void SecondaryAttack()
     {
+        // A camera only ends a zoom, and this weapon has none (base.as IsCameraCall)
+        if( IsCameraCall() )
+            return;
+
         switch( WeaponFireMode )
         {
             case CS16BASE::MODE_NORMAL:
@@ -271,7 +275,7 @@ class weapon_csglock18 : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
             }
         }
 
-        BaseClass.ItemPostFrame();
+        WeaponFrame(); // base.as: marks the frame for IsCameraCall
     }
 
     void Reload()

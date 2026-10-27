@@ -11,11 +11,16 @@
 //   as_command e2e.respawn                        respawn player 1, also when dead
 //   as_command e2e.notify <text...>               print a line in the top-left notify area of every player
 //   as_command e2e.turn <degrees>                 turn player 1's view by an exact yaw step (left is positive)
-//   as_command e2e.fov                            print player 1's FOV (m_iFOV), held weapon (script or native), life
+//   as_command e2e.fov                            print player 1's FOV (m_iFOV), held weapon (script or native), life,
+//                                                 view model
+//   as_command e2e.camera <seconds>               view player 1 through a trigger_camera, as a map cutscene does
 
 const float DEFAULT_SPAWN_DISTANCE = 160.0f;
 const float LETHAL_DAMAGE = 10000.0f;
 const float PIN_DELAY = 1.0f;
+// trigger_camera spawnflags (sven-coop.fgd): start at the player and look at the player, so no map entity is needed.
+const int CAMERA_START_AT_PLAYER = 1;
+const int CAMERA_FOLLOW_PLAYER = 2;
 
 array<CConCommand@> g_Commands;
 
@@ -35,7 +40,8 @@ void PluginInit()
   g_Commands.insertLast( CConCommand( "respawn", "- respawn player 1, also when dead", @Respawn ) );
   g_Commands.insertLast( CConCommand( "notify", "<text...> - print a line in the notify area of every player", @NotifyAll ) );
   g_Commands.insertLast( CConCommand( "turn", "<degrees> - turn player 1's view by a yaw step", @TurnView ) );
-  g_Commands.insertLast( CConCommand( "fov", "- print player 1's FOV, weapon and life state", @PrintFov ) );
+  g_Commands.insertLast( CConCommand( "fov", "- print player 1's FOV, weapon, life state and view model", @PrintFov ) );
+  g_Commands.insertLast( CConCommand( "camera", "<seconds> - view player 1 through a trigger_camera", @ViewThroughCamera ) );
 }
 
 CBasePlayer@ FirstPlayer()
@@ -228,7 +234,24 @@ void PrintFov( const CCommand@ args )
   // Script weapons are the CS weapons; native ones are Sven's own.
   const string kind = g_CustomEntityFuncs.IsCustomEntity( classname ) ? "script" : "native";
   g_EngineFuncs.ServerPrint( "[e2e] fov " + player.m_iFOV + " weapon " + classname + " " + kind
-    + ( player.IsAlive() ? " alive" : " dead" ) + "\n" );
+    + ( player.IsAlive() ? " alive" : " dead" ) + " viewmodel " + player.pev.viewmodel + "\n" );
+}
+
+// Sven's trigger_camera unzooms the held weapon when it takes over the view (server.so 0x525481, docs/fov.md).
+void ViewThroughCamera( const CCommand@ args )
+{
+  CBasePlayer@ player = FirstPlayer();
+  if( player is null || args.ArgC() < 2 )
+    return;
+  dictionary keys = { { "wait", args.Arg( 1 ) }, { "spawnflags", "" + ( CAMERA_START_AT_PLAYER | CAMERA_FOLLOW_PLAYER ) } };
+  CBaseEntity@ camera = g_EntityFuncs.CreateEntity( "trigger_camera", keys );
+  if( camera is null )
+  {
+    g_EngineFuncs.ServerPrint( "[e2e] camera failed\n" );
+    return;
+  }
+  camera.Use( player, player, USE_ON );
+  g_EngineFuncs.ServerPrint( "[e2e] camera on for " + args.Arg( 1 ) + " s\n" );
 }
 
 void HurtPlayer( const CCommand@ args )

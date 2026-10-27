@@ -251,11 +251,15 @@ class weapon_famas : ScriptBasePlayerWeaponEntity, CS16BASE::WeaponBase
             }
         }
 
-        BaseClass.ItemPostFrame();
+        WeaponFrame(); // base.as: marks the frame for IsCameraCall
     }
 
     void SecondaryAttack()
     {
+        // A camera only ends a zoom, and this weapon has none (base.as IsCameraCall)
+        if( IsCameraCall() )
+            return;
+
         switch( WeaponFireMode )
         {
             case CS16BASE::MODE_NORMAL:
