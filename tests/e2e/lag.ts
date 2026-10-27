@@ -72,7 +72,8 @@ async function burstAndMarker(hud: string, proxy: LagProxy) {
       shown = (await measure(image, HEALTH, LOW_RED_ON_BACKDROP, MARKER_FUZZ_PERCENT)).length >= MARKER_GLYPHS;
       if (!shown) await sleep(POLL_MS);
     }
-    const kills = [...(await server.log()).slice(logStart).matchAll(/\[KillFeed\]/g)].length;
+    const kills = [...(await server.log()).slice(logStart).matchAll(/\[e2e\] killed (\d+)/g)]
+      .reduce((sum, [, count]) => sum + Number(count), 0);
     return { hud, catchUpMs: shown ? Date.now() - markerSet : undefined, kills, traffic };
   } finally {
     clearInterval(sampler);
