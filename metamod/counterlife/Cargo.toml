@@ -13,4 +13,4 @@ crate-type = ["cdylib", "rlib"]
 log = "0.4"
 # Sven Co-op runs metamod-svencoop. Cargo clones this revision and the crate
 # fetches the header trees it binds against.
-metamod-p = { git = "https://github.com/stevefan1999-personal/metamod-p-rs", rev = "1776bbbbca8091974c1b88a8ab3e4847625ea07b", features = ["fallguys"] }
+metamod-p = { git = "https://github.com/stevefan1999-personal/metamod-p-rs", rev = "5bdba18f3b50a81dd58eef3f3c6a816de2c2dff2", features = ["fallguys"] }

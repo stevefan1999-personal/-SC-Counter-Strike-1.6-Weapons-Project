@@ -279,7 +279,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 [[package]]
 name = "metamod-p"
 version = "0.0.1"
-source = "git+https://github.com/stevefan1999-personal/metamod-p-rs?rev=1776bbbbca8091974c1b88a8ab3e4847625ea07b#1776bbbbca8091974c1b88a8ab3e4847625ea07b"
+source = "git+https://github.com/stevefan1999-personal/metamod-p-rs?rev=5bdba18f3b50a81dd58eef3f3c6a816de2c2dff2#5bdba18f3b50a81dd58eef3f3c6a816de2c2dff2"
 dependencies = [
  "bindgen",
  "log",
@@ -290,7 +290,7 @@ dependencies = [
 [[package]]
 name = "metamod-p-macros"
 version = "0.0.1"
-source = "git+https://github.com/stevefan1999-personal/metamod-p-rs?rev=1776bbbbca8091974c1b88a8ab3e4847625ea07b#1776bbbbca8091974c1b88a8ab3e4847625ea07b"
+source = "git+https://github.com/stevefan1999-personal/metamod-p-rs?rev=5bdba18f3b50a81dd58eef3f3c6a816de2c2dff2#5bdba18f3b50a81dd58eef3f3c6a816de2c2dff2"
 
 [[package]]
 name = "miette"
