@@ -68,6 +68,9 @@ namespace CS16KILLFEED
   final class Notice
   {
     uint serial; // tells each player's rows which notice they show
+    // The pair of text slots of the names (victim, killer). It stays with the notice while its row moves up, so a moving
+    // name replaces only its own text, and the client removes an expired name by its hold time.
+    uint pair;
     string killer; // empty: the world or the victim itself killed, which CS draws without a killer
     RGBA killerColour;
     string victim;
@@ -77,6 +80,12 @@ namespace CS16KILLFEED
     float expireTime;
   }
 
+  // cs16_killfeed_names: which names the feed draws. The engine has 8 text slots, and the kill feed shares them: game_text
+  // and map scripts use 4-7, plugins and Sven's target info 0-3 (docs/hud-architecture.md, "Conflicts"). A new name on a
+  // slot replaces the text of a map or another plugin there, so by default only the victims show, on slots 0-3.
+  enum Names { NO_NAMES = 0, VICTIM_NAMES = 1, ALL_NAMES = 2 }
+  CCVar@ g_NamesCvar;
+
   const uint NO_NOTICE = 0; // a row that is empty on the client; serials start at 1
   array<Notice@> g_Notices; // oldest first, as the rows from the top
   uint g_LastSerial = NO_NOTICE;
@@ -85,6 +94,9 @@ namespace CS16KILLFEED
 
   void PluginInit()
   {
+    @g_NamesCvar = CCVar( "cs16_killfeed_names", VICTIM_NAMES, "Kill feed names. 2: killer and victim, as CS 1.6 (all 8 HUD "
+      + "text slots, so a kill replaces texts of game_text and map scripts), 1: victims only (text slots 0-3), 0: none",
+      ConCommandFlag::AdminOnly, @OnNamesChanged );
     for( uint index = 0; index < ICON_SHEETS.length(); ++index )
       CS16HUD::PrecacheSprite( CS16HUD::ICON_SHEET_DIR + ICON_SHEETS[index] + ".spr" );
     CS16HUD::Register( KillFeed() );
@@ -133,11 +145,47 @@ namespace CS16KILLFEED
     }
     @notice.icon = FindIcon( weapon );
     notice.expireTime = g_Engine.time + NOTICE_TIME;
-    // A fifth notice pushes the oldest out (death.cpp MsgFunc_DeathMsg).
+    // A fifth notice pushes the oldest out (death.cpp MsgFunc_DeathMsg) and takes its text slots.
     if( g_Notices.length() == CS16HUD::KILLFEED_ROWS )
       g_Notices.removeAt( 0 );
+    notice.pair = FreePair();
     g_Notices.insertLast( notice );
     PrintConsoleLine( notice, weapon, killedSelf );
+  }
+
+  // The lowest text slot pair that no notice on screen holds. A new notice always finds one: at most KILLFEED_ROWS - 1
+  // notices remain when it comes.
+  uint FreePair()
+  {
+    uint pair = 0;
+    while( IsPairUsed( pair ) )
+      ++pair;
+    return pair;
+  }
+
+  bool IsPairUsed( uint pair )
+  {
+    for( uint index = 0; index < g_Notices.length(); ++index )
+    {
+      if( g_Notices[index].pair == pair )
+        return true;
+    }
+    return false;
+  }
+
+  // Every row goes out again with the new setting, and the rows clear the names that it no longer draws.
+  void OnNamesChanged( CCVar@ cvar, const string& in oldValue, float oldNumber )
+  {
+    for( uint slot = 0; slot < g_DrawnSerials.length(); ++slot )
+      ForgetRows( slot );
+  }
+
+  // The client shows none of the rows of this player slot, as far as the next Draw knows.
+  void ForgetRows( uint slot )
+  {
+    array<uint>@ drawn = g_DrawnSerials[slot];
+    for( uint row = 0; row < drawn.length(); ++row )
+      drawn[row] = NO_NOTICE;
   }
 
   // Players by their name, monsters by Sven's name for them ("Head Crab", or the map's display name).
@@ -266,9 +314,7 @@ namespace CS16KILLFEED
     // The client lost its rows (or must draw them for a new screen size): every notice goes out again.
     void OnResend( CBasePlayer@ player )
     {
-      array<uint>@ drawn = g_DrawnSerials[player.entindex()];
-      for( uint row = 0; row < drawn.length(); ++row )
-        drawn[row] = NO_NOTICE;
+      ForgetRows( player.entindex() );
       Draw( player );
     }
 
@@ -293,17 +339,23 @@ namespace CS16KILLFEED
     }
 
     // Right to left from W - s(12): the victim name, s(5), the headshot icon and s(5) if any, the weapon icon, s(5), the
-    // killer name. Every part has the row's top.
+    // killer name. Every part has the row's top. Names that cs16_killfeed_names leaves out leave no gap.
     void DrawRow( CBasePlayer@ player, uint row, Notice@ notice )
     {
       const CS16HUD::ScreenSize screen = CS16HUD::GetScreenSize( player );
       const float hold = notice.expireTime - g_Engine.time;
       const int top = Scaled( TOP, screen ) + int( row ) * Scaled( LINE_STEP, screen );
       const int gap = Scaled( GAP, screen );
-      const int victimRight = screen.width - Scaled( RIGHT_MARGIN, screen );
-      SendName( player, CS16HUD::KILLFEED_VICTIM_SLOT_FIRST + row, notice.victim, notice.victimColour, victimRight, top,
-        screen, hold );
-      int left = victimRight - TextWidth( notice.victim, screen.height ) - gap;
+      const int names = g_NamesCvar.GetInt();
+      const uint victimSlot = CS16HUD::KILLFEED_VICTIM_SLOT_FIRST + notice.pair;
+      int left = screen.width - Scaled( RIGHT_MARGIN, screen );
+      if( names >= VICTIM_NAMES )
+      {
+        SendName( player, victimSlot, notice.victim, notice.victimColour, left, top, screen, hold );
+        left -= TextWidth( notice.victim, screen.height ) + gap;
+      }
+      else
+        CS16HUD::ClearText( player, victimSlot );
       const uint headshotChannel = CS16HUD::KILLFEED_HEADSHOT_FIRST + row;
       if( notice.headshot )
       {
@@ -316,19 +368,19 @@ namespace CS16KILLFEED
         CS16HUD::HideElement( player, headshotChannel );
       left -= notice.icon.width;
       SendIcon( player, CS16HUD::KillfeedIconChannel( row ), notice.icon, left, top, screen, hold );
-      const uint killerSlot = CS16HUD::KILLFEED_KILLER_SLOT_FIRST + row;
-      if( notice.killer.IsEmpty() )
-        CS16HUD::ClearText( player, killerSlot );
-      else
+      // The pair may still hold the killer of the notice that a fifth one pushed out, or of the last names setting.
+      const uint killerSlot = CS16HUD::KILLFEED_KILLER_SLOT_FIRST + notice.pair;
+      if( names >= ALL_NAMES && !notice.killer.IsEmpty() )
         SendName( player, killerSlot, notice.killer, notice.killerColour, left - gap, top, screen, hold );
+      else
+        CS16HUD::ClearText( player, killerSlot );
     }
 
+    // The names of the notice that left this row moved up with it or end by their hold time, so only the icons go.
     void ClearRow( CBasePlayer@ player, uint row )
     {
       CS16HUD::HideElement( player, CS16HUD::KillfeedIconChannel( row ) );
       CS16HUD::HideElement( player, CS16HUD::KILLFEED_HEADSHOT_FIRST + row );
-      CS16HUD::ClearText( player, CS16HUD::KILLFEED_VICTIM_SLOT_FIRST + row );
-      CS16HUD::ClearText( player, CS16HUD::KILLFEED_KILLER_SLOT_FIRST + row );
     }
   }
 

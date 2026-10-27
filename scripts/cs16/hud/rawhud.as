@@ -31,6 +31,9 @@ namespace CS16HUD
   // of a new text (sven-client-hudtext.md 1.4), so the empty text that clears ours must go to the same place.
   array<float> g_SentTextX( ( MAX_PLAYERS + 1 ) * TEXT_SLOTS );
   array<float> g_SentTextY( ( MAX_PLAYERS + 1 ) * TEXT_SLOTS );
+  // And when the client removes that text by itself. The slots are shared with maps and other plugins (docs/hud.md), so
+  // a slot whose text is over may hold another text by now, which an empty text would erase.
+  array<float> g_SentTextEnd( ( MAX_PLAYERS + 1 ) * TEXT_SLOTS );
 
   void SendSprite( CBasePlayer@ player, uint clientChannel, const HUDSpriteParams& in params )
   {
@@ -106,6 +109,14 @@ namespace CS16HUD
     g_SentTextSlots[player.entindex()] |= uint( 1 ) << engineSlot;
     g_SentTextX[SentTextIndex( player, engineSlot )] = params.x;
     g_SentTextY[SentTextIndex( player, engineSlot )] = params.y;
+    g_SentTextEnd[SentTextIndex( player, engineSlot )] = g_Engine.time + TextLifetime( params, text );
+  }
+
+  // How long the client shows a text (sven-client-hudtext.md 1.4): the scan effect fades in each character in turn.
+  float TextLifetime( const HUDTextParams& in params, const string& in text )
+  {
+    const float fadeIn = params.effect == TEXT_SCAN_EFFECT ? params.fadeinTime * text.Length() : params.fadeinTime;
+    return fadeIn + params.fadeoutTime + params.holdTime;
   }
 
   // Hides every channel and empties every text slot that this plugin drew for the player.
@@ -122,12 +133,15 @@ namespace CS16HUD
     ForgetSent( player );
   }
 
-  // Empties a text slot that this plugin drew. The empty text goes to the slot's last position, because the client
-  // removes every other text at the position of a new text (sven-client-hudtext.md 1.4).
+  // Empties a text slot whose text from this plugin is still on the screen. The empty text goes to the slot's last
+  // position, because the client removes every other text at the position of a new text (sven-client-hudtext.md 1.4).
   void ClearText( CBasePlayer@ player, uint engineSlot )
   {
     const uint bit = uint( 1 ) << engineSlot;
-    if( ( g_SentTextSlots[player.entindex()] & bit ) == 0 )
+    const bool shown = ( g_SentTextSlots[player.entindex()] & bit ) != 0
+      && g_Engine.time < g_SentTextEnd[SentTextIndex( player, engineSlot )];
+    g_SentTextSlots[player.entindex()] &= ~bit;
+    if( !shown )
       return;
     // An empty text with no fades and no hold replaces the old text of its slot and expires at once.
     HUDTextParams empty;

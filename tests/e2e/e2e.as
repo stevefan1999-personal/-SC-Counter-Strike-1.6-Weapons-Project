@@ -13,6 +13,7 @@
 //   as_command e2e.battery <percent>              set player 1's flashlight battery
 //   as_command e2e.suit <0|1>                     take away or give back player 1's HEV suit
 //   as_command e2e.backdrop [<r> <g> <b>]         hold a screen of one colour under the HUD; no colour removes it
+//   as_command e2e.gametext <channel> <text...>   show a map text (a game_text entity) to all players for 30 s
 
 const float DEFAULT_SPAWN_DISTANCE = 160.0f;
 const float LETHAL_DAMAGE = 10000.0f;
@@ -20,6 +21,10 @@ const float PIN_DELAY = 1.0f;
 // Head shots aim this share of the height below the top of the box, as the CS 1.6 reference capture does
 // (cs16-killfeed-reference.md 2.4); the eye position of a monster lies below its head hit box.
 const float HEAD_DROP = 0.08f;
+// A map text as mappers place it: centred, white, held long enough to outlast a kill-feed check.
+const string GAME_TEXT_Y = "0.3";
+const string GAME_TEXT_HOLD = "30";
+const int GAME_TEXT_ALL_PLAYERS = 1; // game_text spawnflag 1
 
 array<CConCommand@> g_Commands;
 
@@ -41,6 +46,7 @@ void PluginInit()
   g_Commands.insertLast( CConCommand( "battery", "<percent> - set player 1 flashlight battery", @SetBattery ) );
   g_Commands.insertLast( CConCommand( "suit", "<0|1> - take away or give back player 1 HEV suit", @SetSuit ) );
   g_Commands.insertLast( CConCommand( "backdrop", "[<r> <g> <b>] - one colour under player 1 HUD", @SetBackdrop ) );
+  g_Commands.insertLast( CConCommand( "gametext", "<channel> <text...> - a game_text to all players", @ShowGameText ) );
 }
 
 // "Player 1" is the first connected player. A client that retries its connection can come back in a later slot while
@@ -277,4 +283,32 @@ void SetBackdrop( const CCommand@ args )
   const Vector colour = on ? Vector( atof( args.Arg( 1 ) ), atof( args.Arg( 2 ) ), atof( args.Arg( 3 ) ) ) : g_vecZero;
   g_PlayerFuncs.ScreenFade( player, colour, 0.0f, 0.0f, on ? opaque : 0, on ? FFADE_STAYOUT : FFADE_IN );
   g_EngineFuncs.ServerPrint( "[e2e] backdrop " + ( on ? colour.ToString() : "off" ) + "\n" );
+}
+
+// A map text through a real game_text entity, so the channel goes through the entity's own channel mapping (game_text
+// channel n draws on engine text slot 4 + ((n - 1) & 3), docs/hud-architecture.md "Text slots").
+void ShowGameText( const CCommand@ args )
+{
+  if( args.ArgC() < 3 )
+    return;
+  string text = args.Arg( 2 );
+  for( int index = 3; index < args.ArgC(); ++index )
+    text += " " + args.Arg( index );
+  dictionary keys;
+  keys["message"] = text;
+  keys["channel"] = args.Arg( 1 );
+  keys["x"] = "-1";
+  keys["y"] = GAME_TEXT_Y;
+  keys["color"] = "255 255 255";
+  keys["holdtime"] = GAME_TEXT_HOLD;
+  keys["spawnflags"] = string( GAME_TEXT_ALL_PLAYERS );
+  CBaseEntity@ entity = g_EntityFuncs.CreateEntity( "game_text", keys, true );
+  if( entity is null )
+  {
+    g_EngineFuncs.ServerPrint( "[e2e] gametext failed\n" );
+    return;
+  }
+  entity.Use( null, null, USE_ON, 0 );
+  g_EntityFuncs.Remove( entity );
+  g_EngineFuncs.ServerPrint( "[e2e] gametext channel " + args.Arg( 1 ) + "\n" );
 }

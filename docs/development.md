@@ -112,6 +112,7 @@ is the first connected player:
 | `e2e.battery <percent>`             | set the flashlight battery                                               |
 | `e2e.suit <0\|1>`                   | take away or give back the HEV suit                                      |
 | `e2e.backdrop [<r> <g> <b>]`        | one colour under the HUD (a screen fade); without a colour, remove it    |
+| `e2e.gametext <channel> <text>`     | a white map text from a `game_text` entity, centred at y 0.3, for 30 s   |
 
 ## Scenarios
 

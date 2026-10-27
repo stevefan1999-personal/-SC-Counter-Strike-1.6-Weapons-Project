@@ -72,7 +72,7 @@ export function sheets(width: number, height: number, hudLabel: string, elements
     },
     {
       name: "killfeed-stack4",
-      ours: `${hudLabel}-killfeed-4.png`,
+      ours: `${hudLabel}-killfeed-4-cs.png`, // cs16_killfeed_names 2: killer and victim names, as the CS rows
       cs: `cs16-killfeed-${size}-stack4.png`,
       region: feed(4),
     },

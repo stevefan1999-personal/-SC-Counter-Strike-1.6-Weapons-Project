@@ -10,6 +10,7 @@ import { addedColour, Pixels, type Region, type Rgb } from "./hudcompare.ts";
 const MOTD_DELAY_MS = 3_000;
 const SETTLE_MS = 1_200;
 const LEVEL_LOAD_MS = 120_000;
+const KILLFEED_REDRAW_MS = 500; // the rows go out at the next HUD tick; the first notice still has 3 s of its 6
 const FADE_SETTLE_MS = 6_000; // CS fades end after 5 s; the connection on the new map restarts the ammo fade
 // The CS floor colour under the HUD, and HUD orange at the settled alpha 100 (cs16-hud-spec.md A.1) on top of it.
 const BACKDROP: Rgb = [39, 32, 22];
@@ -24,6 +25,16 @@ const LIT_LEVELS = 40;
 const MIN_LIT_PIXELS = 20;
 const [RED, GREEN] = [0, 1];
 const CHANNELS = 3;
+// Kill-feed names: victims are monsters in T red (254,63,63 on screen) and killers the player in CT blue (153,204,254).
+// The icons add HUD-orange light with no blue, so a red pixel of a name has green and blue alike, an icon pixel not.
+const NAME_PIXELS = 50;
+// The white pixels that the map text adds over the same view without it.
+const GAME_TEXT_PIXELS = 100;
+const isWhite = (pixel: Rgb) => pixel.every((value) => value > 235);
+const NAME_CHANNEL_SPREAD = 25;
+const isVictimRed = ([red, green, blue]: Rgb) =>
+  red > 200 && green < 110 && Math.abs(green - blue) < NAME_CHANNEL_SPREAD;
+const isKillerBlue = ([red, green, blue]: Rgb) => red > 130 && red < 180 && green > 185 && green < 225 && blue > 235;
 const VICTIM = "monster_scientist";
 const VICTIM_DISTANCES = [160, 220, 280, 340];
 const WEAPONS = ["weapon_csknife", "weapon_usp", "weapon_ak47", "weapon_m3", "weapon_awp", "weapon_hegrenade"];
@@ -44,6 +55,13 @@ const [width, height] = (Deno.env.get("CL_RESOLUTION") ?? "1600x900").split("x")
 // H / 2 - 37).
 const AMMO_ROW: Region = { x: width - 200, y: height - 40, width: 200, height: 40 };
 const STATUS_ICON: Region = { x: 0, y: Math.floor(height / 2) - 60, width: 60, height: 60 };
+// The four kill-feed rows: from s(24) down to below the fourth row, s(200) wide at the right edge (s(n) = n * H / 480).
+const SCALE_BASE_HEIGHT = 480;
+const scaled = (units: number) => Math.floor(units * height / SCALE_BASE_HEIGHT);
+const FEED: Region = { x: width - scaled(200), y: scaled(24), width: scaled(200), height: scaled(16) * 5 };
+// The map text of e2e.gametext: white, centred, top at y 0.3 inside the 16 px HUD border, two lines of the text font.
+const GAME_TEXT_TOP = Math.floor(0.3 * (height - 32) + 16);
+const GAME_TEXT: Region = { x: width / 2 - 250, y: GAME_TEXT_TOP - 10, width: 500, height: scaled(24) + 20 };
 const server = new Server(port);
 const client = new Client();
 const manifest: Array<{ step: string; full: string; crops: string[] }> = [];
@@ -120,6 +138,22 @@ async function statusParts(step: string) {
   return { ammo: await litPixels(image, AMMO_ROW, RED), c4: await litPixels(image, STATUS_ICON, GREEN) };
 }
 
+async function regionPixels(image: string, region: Region): Promise<Rgb[]> {
+  const { data } = await Pixels.read(image, region);
+  return Array.from(
+    { length: data.length / CHANNELS },
+    (_, pixel) => [...data.subarray(pixel * CHANNELS, pixel * CHANNELS + CHANNELS)] as Rgb,
+  );
+}
+
+// The victim (red) and killer (blue) name pixels of the kill feed in a shot.
+async function namePixels(image: string) {
+  const pixels = await regionPixels(image, FEED);
+  return { victims: pixels.filter(isVictimRed).length, killers: pixels.filter(isKillerBlue).length };
+}
+
+const gameTextPixels = async (image: string) => (await regionPixels(image, GAME_TEXT)).filter(isWhite).length;
+
 // CS sends CurWeapon without a weapon at death and drops the C4 (ReGameDLL CBasePlayer::Killed), so a dead player has
 // no ammo counter and no c4 icon. Both must show first, or the check would pass without them.
 async function die() {
@@ -173,10 +207,36 @@ try {
     await e2e(`spawn ${VICTIM} ${distance}`, /\[e2e\] spawn/);
   }
   await server.waitFor(/\[e2e\] pinned[\s\S]*\[e2e\] pinned[\s\S]*\[e2e\] pinned[\s\S]*\[e2e\] pinned/, 0, 10_000);
+  // A map text on game_text channel 1, the Hammer default (engine text slot 4): the default kill feed leaves it alone.
+  await capture("before-game-text");
+  await e2e("gametext 1 Find the keycard in the office", /\[e2e\] gametext/);
+  await sleep(SETTLE_MS);
+  await capture("game-text");
   for (const [index] of VICTIM_DISTANCES.entries()) {
     await killNearest(index % 2 === 0 ? "head" : "body");
   }
   await capture("killfeed-4");
+  // cs16_killfeed_names: the default draws the victims only; 2 draws the killers too, as CS 1.6, on the same rows.
+  await server.command("as_command .cs16_killfeed_names 2");
+  await sleep(KILLFEED_REDRAW_MS);
+  await capture("killfeed-4-cs");
+  await server.command("as_command .cs16_killfeed_names 1");
+  const [victimsOnly, allNames] = await Promise.all(manifest.slice(-2).map(({ full }) => namePixels(full)));
+  report.killfeedNames = { victimsOnly, allNames };
+  const shotOf = (step: string) => manifest.find((entry) => entry.step === step)!.full;
+  const [noText, text, textAfterKills, textWithKillers] = await Promise.all(
+    ["before-game-text", "game-text", "killfeed-4", "killfeed-4-cs"].map((step) => gameTextPixels(shotOf(step))),
+  );
+  report.gameText = { noText, text, textAfterKills, textWithKillers };
+  if (text - noText < GAME_TEXT_PIXELS || textAfterKills - noText < GAME_TEXT_PIXELS) {
+    failures.push(`the default kill feed must keep a game_text on channel 1: ${JSON.stringify(report.gameText)}`);
+  }
+  if (victimsOnly.victims < NAME_PIXELS || victimsOnly.killers >= NAME_PIXELS) {
+    failures.push(`cs16_killfeed_names 1 must draw victims only: ${JSON.stringify(victimsOnly)}`);
+  }
+  if (allNames.victims < NAME_PIXELS || allNames.killers < NAME_PIXELS) {
+    failures.push(`cs16_killfeed_names 2 must draw killers and victims: ${JSON.stringify(allNames)}`);
+  }
 
   await hold(() => client.mouseDown(), () => client.mouseUp(), "crosshair-firing", 600);
   await sleep(1_500);

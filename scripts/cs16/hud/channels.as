@@ -46,10 +46,12 @@ namespace CS16HUD
     return row < KILLFEED_ROWS - 1 ? KILLFEED_ICON_PLUGIN_FIRST + row : KILLFEED_ICON_ROW4;
   }
 
-  // Engine text slots of TE_TEXTMESSAGE: plugins get 0-3 and map scripts 4-7 (sven-client-hudtext.md 1.2).
+  // Engine text slots of TE_TEXTMESSAGE: stock-API plugins get 0-3, map scripts and game_text 4-7 (sven-client-hudtext.md
+  // 1.2), and Sven's own target info uses 3 (docs/hud-architecture.md, "Conflicts"). Each kill-feed notice holds one pair
+  // (victim slot, killer slot); cs16_killfeed_names decides which of the two it fills.
   const uint TEXT_SLOTS = 8;
-  const uint KILLFEED_VICTIM_SLOT_FIRST = 0; // victim names of rows 1-4: 0-3
-  const uint KILLFEED_KILLER_SLOT_FIRST = 4; // killer names of rows 1-4: 4-7
+  const uint KILLFEED_VICTIM_SLOT_FIRST = 0; // victim names of pairs 0-3: 0-3
+  const uint KILLFEED_KILLER_SLOT_FIRST = 4; // killer names of pairs 0-3: 4-7
 
   // Sprite sheets that are safe to address on every client: install-time copies of the CS 1.6 files under a folder
   // that no other pack uses (cstrike-assets.txt). Never draw from sprites/cs16/640hud*.spr: player caches can hold

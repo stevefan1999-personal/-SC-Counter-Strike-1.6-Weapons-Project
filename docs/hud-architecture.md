@@ -129,13 +129,19 @@ headshot icons, the money change, the flashlight, the status icon and the radar)
 stock maps with their own HUD can share (see [Conflicts](#conflicts)). Both parts of an element draw additively, so
 their order on the client does not change the picture.
 
-The engine keeps 8 text slots. The stock API gives plugins slots 0–3 and map scripts slots 4–7 (`sven-client-hudtext.md`
-1.2). A new text on a slot replaces the old text on that slot. Text and custom elements never share a slot.
+The engine keeps 8 text slots. A new text on a slot replaces the old text on that slot. Text and custom elements never
+share a slot. The stock API gives plugins slots 0–3 and map scripts slots 4–7 (`sven-client-hudtext.md` 1.2), and
+`game_text` entities and Sven itself use them too (see [Text slots](#text-slots)).
 
-| Engine text slot | Constant                         | Text                            | Owner     |
-| ---------------- | -------------------------------- | ------------------------------- | --------- |
-| 0–3              | `KILLFEED_VICTIM_SLOT_FIRST` + n | kill feed victim name, rows 1–4 | kill feed |
-| 4–7              | `KILLFEED_KILLER_SLOT_FIRST` + n | kill feed killer name, rows 1–4 | kill feed |
+| Engine text slot | Constant                            | Text                   | Drawn with `cs16_killfeed_names` |
+| ---------------- | ----------------------------------- | ---------------------- | -------------------------------- |
+| 0–3              | `KILLFEED_VICTIM_SLOT_FIRST` + pair | kill feed victim names | 1 (default) and 2                |
+| 4–7              | `KILLFEED_KILLER_SLOT_FIRST` + pair | kill feed killer names | 2                                |
+
+Each notice holds one pair of slots (its victim slot and its killer slot, pair 0–3, the lowest free one) for its whole
+life, also when its row moves up. So a moving name replaces only its own text, and the client removes a name when its
+hold time ends: the feed sends no empty text when a row ends. `ClearText` sends an empty text only while the text that
+this plugin drew in the slot is still on the screen (`rawhud.as` keeps the end time of each text).
 
 `KILLFEED_ROWS` is 4. Sven Co-op is a co-operative game, so players do not kill other players. A kill feed row shows a
 player who kills a monster, or a monster or the world that kills a player.
@@ -146,28 +152,54 @@ player who kills a monster, or a monster or the world that kills a player.
 
 These stock maps load map scripts that draw custom elements (map group) or texts (map slots):
 
-| Map            | Map script                                     | Client channels                                     | Text slot | Our elements on the same targets                                                         |
-| -------------- | ---------------------------------------------- | --------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------- |
-| `polar_rescue` | `scripts/maps/polar_rescue.as`                 | 0 timer (time display), 1–5 objective sprites       | none      | kill feed icon row 4, headshot icons rows 1–4, money change high part                    |
-| `th_escape`    | `scripts/maps/th_escape/CustomHUD.as`          | 0 timer (time display), 1–3 item sprites            | 4         | kill feed icon row 4, headshot icons rows 1–3, killer name row 1                         |
-| `suspension`   | `scripts/maps/bridge/CustomHUD.as` (`bridge3`) | 0 tickets (number display), 1 award sprite          | 4         | kill feed icon row 4, headshot icon row 1, killer name row 1                             |
-| `snd`          | `scripts/maps/snd/CustomHUD.as`                | 0–1 tickets and caches (number displays), 2–5 zones | 4         | kill feed icon row 4, headshot icons rows 1–4, money change high part, killer name row 1 |
-| `bm_sts`       | `scripts/maps/bm_sts/bm_sts_hudtimer.as`       | 1 timer sprite                                      | none      | headshot icon row 1                                                                      |
+| Map            | Map script                                     | Client channels                                     | Text slot | Our elements on the same targets                                                             |
+| -------------- | ---------------------------------------------- | --------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------- |
+| `polar_rescue` | `scripts/maps/polar_rescue.as`                 | 0 timer (time display), 1–5 objective sprites       | none      | kill feed icon row 4, headshot icons rows 1–4, money change high part                        |
+| `th_escape`    | `scripts/maps/th_escape/CustomHUD.as`          | 0 timer (time display), 1–3 item sprites            | 4         | kill feed icon row 4, headshot icons rows 1–3, killer name of pair 0                         |
+| `suspension`   | `scripts/maps/bridge/CustomHUD.as` (`bridge3`) | 0 tickets (number display), 1 award sprite          | 4         | kill feed icon row 4, headshot icon row 1, killer name of pair 0                             |
+| `snd`          | `scripts/maps/snd/CustomHUD.as`                | 0–1 tickets and caches (number displays), 2–5 zones | 4         | kill feed icon row 4, headshot icons rows 1–4, money change high part, killer name of pair 0 |
+| `bm_sts`       | `scripts/maps/bm_sts/bm_sts_hudtimer.as`       | 1 timer sprite                                      | none      | headshot icon row 1                                                                          |
 
-The map files are in `svencoop/maps/<map>.cfg` (`map_script` lines) of the dedicated server. No stock map uses client
-channels 6–15 or text slots 5–7. Thus the money change low part, the flashlight, the status icon and the radar have no
-conflict with stock maps.
+The map files are in `svencoop/maps/<map>.cfg` (`map_script` lines) of the dedicated server. No stock map script uses
+client channels 6–15 or text slots 5–7. Thus the money change low part, the flashlight, the status icon and the radar
+have no conflict with stock maps. The `game_text` entities of maps use text slots 4–7 (see [Text slots](#text-slots)).
 
 On these maps the map script and this plugin write the same targets:
 
 - The last sender wins. A sprite deletes a time or number display on the same channel, and the reverse.
 - The map script sends again when its own state changes. Then our element is gone until our next send.
 - `HudToggleElement( null, channel, false )` from the map script also hides our element on that channel.
-- A map text on slot 4 replaces our killer name of row 1, and the reverse.
+- A map text on slot 4 replaces the killer name of pair 0 (only with `cs16_killfeed_names 2`), and the reverse.
 
 The foundation cannot find out if a map script uses a channel. The owner of a map-group element must accept the conflict
 or avoid it. Two ways to avoid it: merge the headshot icon into the weapon icon frame (`cs16-hud-spec.md` 5.5,
 `killicons.spr`), or show the money change only on maps without these scripts.
+
+### Text slots
+
+Every text slot has other users. The values come from the dedicated server `server.so` (IDA, `.re/server/server.so.i64`)
+and from the entity lumps of the stock maps:
+
+| Engine text slot | Other users                                                                                                                                                                                                                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0                | stock-API plugin `HudMessage` with channel 0, 1 or 5; Sven's vehicle line ("In Vehicle at position …", channel 0, 0x37AA26)                                                                                                                                                                 |
+| 1, 2             | stock-API plugin channels 2 and 6, 3 and 7                                                                                                                                                                                                                                                  |
+| 3                | stock-API plugin channels 4, 8 and above; Sven's target info ("Friend: … / Health / Armor / Frags", channel 3 written as it is, 0x4AA064): 8 times a second with a hold of 1.75 s while the player aims at a monster or a player, unless `mp_allowmonsterinfo` or `mp_allowplayerinfo` is 0 |
+| 4–7              | `game_text` channels 1–4 (the entity maps channel n to slot `4 + ((n − 1) & 3)`, 0 or less to 4, above 8 to 7: `KeyValue` 0x3FB230); map-script `HudMessage` channels 1–4                                                                                                                   |
+
+`game_text` is the common case: 55 of the 108 stock maps of the Sven client have `game_text` entities, 615 of them on
+channel 1 (slot 4), 502 on channel 2, 126 on channel 3 and 81 on channel 4. `env_message` uses no slot: it sends a
+`titles.txt` name in `HudText` (0x35EA6A calls `UTIL_ShowMessage`, 0x5471F2), and such a text only removes another text
+at the same x and y (`sven-client-hudtext.md` 1.4).
+
+So each kill-feed name can replace a text of a map, of a plugin or of Sven, and each of these texts can replace a name.
+`cs16_killfeed_names` (admin) sets the trade-off:
+
+| Value       | Names                          | Slots | Conflicts                                                                                                                                                 |
+| ----------- | ------------------------------ | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0           | none (icons only)              | none  | none                                                                                                                                                      |
+| 1 (default) | victims                        | 0–3   | texts of other plugins; the target info on slot 3 replaces the victim of a fourth notice while the player aims at a monster, and it comes back in 0.125 s |
+| 2           | killers and victims, as CS 1.6 | 0–7   | also `game_text` and map-script texts: a kill can remove the objective or story text of a map, which does not come back                                   |
 
 ### This repository
 

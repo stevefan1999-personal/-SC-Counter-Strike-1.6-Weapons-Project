@@ -22,6 +22,8 @@ const client = new Client();
 try {
   await server.start("testcenter");
   await server.command(`motdfile ${NO_MOTD_FILE}`);
+  // The CS 1.6 layout with killer and victim names, which the CS references show (the plugin default draws victims).
+  await server.command("as_command .cs16_killfeed_names 2");
   await client.join(server);
   await client.console(`cl_showfps 0; net_graph 0; name ${PLAYER_NAME}`);
   await client.console(weapon);
