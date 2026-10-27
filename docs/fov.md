@@ -66,6 +66,9 @@ The world scale is the ratio of the focal lengths, tan(exact / 2) / tan(sent / 2
     outside the frame comes from a camera (`IsCameraCall()`). Then a weapon only ends its zoom: it does not stab, change
     its silencer or burst mode, or zoom in. The Glock, FAMAS, M3 and XM1014 have their own `ItemPostFrame` and call
     `WeaponFrame()` in it.
+  - The camera leaves `m_iFOV` at 0, the player's own view. After the frame, a CS weapon that is not zoomed sets CS's 90
+    again when `m_iFOV` is 0 and the player does not look through a camera (`PFLAG_CAMERA`, which the camera sets while
+    it holds the view). During the camera the weapon does nothing, because the camera sets 0 again at each think.
 - The scope view model is `models/cs16/scope/cs_scope.mdl`, a new path, because a client never downloads a path that it
   already has. `tools/scopegen.ts` (`just scope-model`) builds it from CS's `sniper_scope.spr`:
   - Sven draws view models with the vertical world FOV, so a flat model keeps its share of the screen height at every
@@ -195,7 +198,8 @@ lines) of the pixels are pure black in both games, before and after. The other p
 `tests/e2e/fov-reset.ts` passes all eleven checks: a CS weapon shows 74, Sven's medkit 0 (the player's view), the AWP
 zooms to 31 and 10 with the scope, and switching to Sven's medkit while zoomed, death, respawn and dropping the held
 weapon end unzoomed, without the scope. In Counter-Life a dead player holds the next CS weapon (the C4), so the death
-view is 74, which is CS's 90. A camera (`e2e.camera`) does not zoom an unzoomed AWP in, and it ends a zoomed one.
+view is 74, which is CS's 90. A camera (`e2e.camera`) does not zoom an unzoomed AWP in, and it ends a zoomed one; after
+the camera the AWP shows 74 again.
 
 ## Limits
 
@@ -215,8 +219,6 @@ view is 74, which is CS's 90. A camera (`e2e.camera`) does not zoom an unzoomed 
   empty.
 - Walking: Sven's view bob moves the view model forward and back, so the circle grows and shrinks by up to 0.4 % (3
   pixels at 900 lines). CS's scope does not move.
-- A `trigger_camera` sets `m_iFOV` to 0 (`server.so` 0x525481). A CS weapon gets CS's view back at its next deploy or
-  zoom.
 - The measurements use software GL under Xvfb, and the two games show different maps (de_dust2 and testcenter). The
   focal lengths do not depend on the map.
 

@@ -102,15 +102,15 @@ try {
   await sleep(DRAW_MS);
   await check("dropping the held CS weapon", unzoomed);
 
-  // The camera resets m_iFOV to 0, the player's own view.
+  // The camera resets m_iFOV to 0, the player's own view; the CS weapon takes CS's view back when the camera ends.
   await select("weapon_awp");
   await e2e(`camera ${CAMERA_SECONDS}`, /\[e2e\] camera on/);
   await sleep(CAMERA_MS);
-  await check("a camera does not zoom an unzoomed sniper in", exactly(PLAYER_DEFAULT));
+  await check("a camera does not zoom an unzoomed sniper in", exactly(CS_NORMAL));
   await zoom();
   await e2e(`camera ${CAMERA_SECONDS}`, /\[e2e\] camera on/);
   await sleep(CAMERA_MS);
-  await check("a camera ends a sniper's zoom", exactly(PLAYER_DEFAULT));
+  await check("a camera ends a sniper's zoom", exactly(CS_NORMAL));
 
   if (failures.length > 0) throw new E2eError(`FOV checks failed: ${failures.join("; ")}`);
 } finally {

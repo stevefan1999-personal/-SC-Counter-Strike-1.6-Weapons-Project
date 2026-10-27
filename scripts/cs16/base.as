@@ -295,6 +295,10 @@ mixin class WeaponBase
         m_fInWeaponFrame = true;
         BaseClass.ItemPostFrame();
         m_fInWeaponFrame = false;
+        // A camera leaves m_iFOV at 0 (the player's own view) and sets 0 again at each think, so CS's view comes back
+        // only once it lets the view go
+        if( m_pPlayer.m_iFOV == 0 && WeaponZoomMode == MODE_FOV_NORMAL && ( m_pPlayer.m_afPhysicsFlags & PFLAG_CAMERA ) == 0 )
+            SetFOV( CS_DEFAULT_FOV );
     }
 
     // A SecondaryAttack from a camera may only end a zoom: no stab, no silencer or burst toggle, no zoom in
