@@ -18,9 +18,6 @@
 const float DEFAULT_SPAWN_DISTANCE = 160.0f;
 const float LETHAL_DAMAGE = 10000.0f;
 const float PIN_DELAY = 1.0f;
-// trigger_camera spawnflags (sven-coop.fgd): start at the player and look at the player, so no map entity is needed.
-const int CAMERA_START_AT_PLAYER = 1;
-const int CAMERA_FOLLOW_PLAYER = 2;
 
 array<CConCommand@> g_Commands;
 
@@ -236,6 +233,10 @@ void PrintFov( const CCommand@ args )
   g_EngineFuncs.ServerPrint( "[e2e] fov " + player.m_iFOV + " weapon " + classname + " " + kind
     + ( player.IsAlive() ? " alive" : " dead" ) + " viewmodel " + player.pev.viewmodel + "\n" );
 }
+
+// trigger_camera spawnflags (sven-coop.fgd): start at the player and look at the player, so no map entity is needed.
+const int CAMERA_START_AT_PLAYER = 1;
+const int CAMERA_FOLLOW_PLAYER = 2;
 
 // Sven's trigger_camera unzooms the held weapon when it takes over the view (server.so 0x525481, docs/fov.md).
 void ViewThroughCamera( const CCommand@ args )
