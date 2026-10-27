@@ -1003,6 +1003,15 @@ could remove them.
 | Sven's own death notices       | the Sven server prints each player death as a notify line at the top left                                                                                              | none                                                                 | No AngelScript API stops it. The Counter-Life metamod plugin on `main` drops these lines.                                                                                                                                     |
 | Console prints at the top left | with `developer 1` the client shows each console print at the top left, also the kill-feed console line                                                                | only in the console                                                  | A client setting. The test client has `developer 1` in `autoexec.cfg`, so the e2e screenshots show these lines.                                                                                                               |
 
+Sven's target info is not part of the CS HUD. When the player aims at a monster or another player, the Sven server shows
+a block of four green lines at the left middle of the screen ("Friend: Scientist / Health: 50 / Armor: 0 / Frags: 0").
+It is a server text (`server.so` 0x4AA064) on engine text slot 3, sent 8 times a second, not a client part, so no client
+cvar or `m_iHideHUD` bit hides it. The map settings `mp_allowmonsterinfo` and `mp_allowplayerinfo` (both 1 in Sven's
+`default_map_settings.cfg`) turn it off for monsters and for players. The plugin leaves them as the map sets them,
+because the block is a co-op aid. CS 1.6 has only a one-line player id at (10, H − 68), for players (`cs16-hud-spec.md`
+3.15). With the default `cs16_killfeed_names 1` the target info also replaces the victim name of a fourth kill-feed
+notice while the player aims at a monster ([text slots](hud-architecture.md#text-slots)).
+
 Parts of the CS HUD that this port does not draw, because co-op Sven has no CS rounds, teams, bomb or radar data: the
 radar (client channels 14–15 are free), the round timer, the buy zone and other status icons except the C4, the bomb
 timer, team colours for players (every player is CT blue), team kills and the spectator HUD.

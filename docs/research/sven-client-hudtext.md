@@ -95,6 +95,13 @@ Engine (`hw.so`):
   `__NETMESSAGE__1` … `__NETMESSAGE__8` (table 0x2F06E0, strings 0x266D8F–0x266DFF). Stock GoldSrc has 4.
 - All plugins share engine slots 0–3. All map scripts share 4–7. Other server code that writes `TE_TEXTMESSAGE` with a
   raw channel (for example map entities) uses the same 8 slots.
+- Review addendum (server.so, IDA): `UTIL_HudMessage (0x544214)` writes the channel byte as it is. `game_text` maps its
+  `channel` key in `KeyValue (0x3FB230)`: n = 1…8 → `4 + ((n − 1) & 3)`, 0 or less → 4, above 8 → 7, so `game_text`
+  draws on slots 4–7 like a map script (channel 1, the Hammer default, is slot 4). Sven's target info ("Friend: … /
+  Health / Armor / Frags", 0x4AA064) sends channel 3 as it is (slot 3), 8 times a second with a hold of 1.75 s while the
+  player aims at a monster or a player, when `mp_allowmonsterinfo` or `mp_allowplayerinfo` allows it. The vehicle line
+  (0x37AA26) uses channel 0. `env_message` sends a `titles.txt` name in `HudText` (`UTIL_ShowMessage 0x5471F2`) and uses
+  no slot.
 
 Text and sprites do not collide. Custom sprites, numbers and time displays use user messages 139–144 and the 32 element
 pointers of `CHudCustom` (`sven-client-hud.md` 1.3). Text uses `TE_TEXTMESSAGE`, the 8 engine slots and the 16 display
