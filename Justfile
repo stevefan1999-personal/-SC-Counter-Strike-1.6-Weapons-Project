@@ -558,13 +558,20 @@ bindings:
   git clone --filter=blob:none https://github.com/stevefan1999-personal/metamod-p-rs.git "$dest"
   git -C "$dest" fetch --depth 1 origin "$rev"
   git -C "$dest" checkout --detach FETCH_HEAD
-  sub=$(git -C "$dest" rev-parse 'HEAD:metamod-fallguys')
-  rm -rf "$dest/metamod-fallguys"
-  git clone --filter=blob:none --sparse https://github.com/hzqst/metamod-fallguys.git "$dest/metamod-fallguys"
-  git -C "$dest/metamod-fallguys" sparse-checkout set metamod/include
-  git -C "$dest/metamod-fallguys" fetch --depth 1 origin "$sub"
-  git -C "$dest/metamod-fallguys" checkout --detach FETCH_HEAD
+  # metamod-fallguys records its headers as a nested gitlink, not as files.
+  probe=$(mktemp -d)
+  git -C "$probe" init -q
+  git -C "$probe" fetch --depth 1 https://github.com/hzqst/metamod-fallguys.git "$(git -C "$dest" rev-parse 'HEAD:metamod-fallguys')"
+  headers=$(git -C "$probe" rev-parse 'FETCH_HEAD:metamod')
+  rm -rf "$probe"
+  mkdir -p "$dest/metamod-fallguys"
+  rm -rf "$dest/metamod-fallguys/metamod"
+  git clone --filter=blob:none --sparse https://github.com/metamod-fallguys/metamod.git "$dest/metamod-fallguys/metamod"
+  git -C "$dest/metamod-fallguys/metamod" sparse-checkout set include
+  git -C "$dest/metamod-fallguys/metamod" fetch --depth 1 origin "$headers"
+  git -C "$dest/metamod-fallguys/metamod" checkout --detach FETCH_HEAD
   test -f "$dest/metamod-fallguys/metamod/include/meta_api.h"
+  test -d "$dest/metamod-fallguys/metamod/include/HLSDK"
 
 # CS 1.6 sprites and hud.txt. A local install wins; otherwise keep the small tree under .image/half-life.
 # GitHub Actions has no Steam library, so the first run there installs the Half-Life dedicated server.
