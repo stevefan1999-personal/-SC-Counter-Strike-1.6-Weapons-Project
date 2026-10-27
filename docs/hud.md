@@ -53,7 +53,7 @@ Each element implements `CS16HUD::IHudElement`:
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | `OnTick`   | every 0.05 s; the crosshair in every `PlayerPostThink` of its player                                                                                           | read the player state and send only what changed                                |
 | `OnResend` | after a connection and a map change, two `PlayerPostThink`s after each spawn (after the client's `ResetHUD`), after `cs16_hud 1`, `.hudres` and `cs16_hud_res` | send the whole element again; a running fade continues, it does not start again |
-| `OnSpawn`  | after a spawn or a revive, before the client resets its HUD                                                                                                    | update state only: the ammo fade restarts, the money fades in from green        |
+| `OnSpawn`  | after a spawn, a revive, a connection or a map change, before the client resets its HUD                                                                        | update state only: the ammo fade restarts, the money fades in from green        |
 | `OnDeath`  | when the player dies                                                                                                                                           | the crosshair hides its lines                                                   |
 
 All callbacks run only while `cs16_hud` is 1 and the player is in the server on this map. With `cs16_hud 0` the

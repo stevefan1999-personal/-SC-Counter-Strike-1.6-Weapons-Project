@@ -10,7 +10,8 @@ namespace CS16HUD
   // One HUD part. Each callback runs only while cs16_hud is 1 and the player can receive messages.
   interface IHudElement
   {
-    // After a respawn or a revive, before the client resets its HUD: update state here, draw in OnResend.
+    // After a respawn, a revive or the first spawn of a connection (each connection and map change), before the
+    // client resets its HUD: update state here, draw in OnResend.
     void OnSpawn( CBasePlayer@ player );
     void OnDeath( CBasePlayer@ player );
     // Every TICK_PERIOD, or every player frame for elements registered with everyFrame.
@@ -168,9 +169,18 @@ namespace CS16HUD
     ForgetNative( player );
     LoadPlayerScreen( player );
     MarkReady( player );
-    // The first spawn of a connection runs before this hook, so it never reaches OnPlayerSpawn.
+    // The first spawn of a connection runs before this hook, so it never reaches OnPlayerSpawn: the elements get it
+    // here. As in CS after a connection, the ammo fade starts again and the money fades in.
+    if( IsEnabled() )
+      SpawnElements( player );
     ResendAfterHudReset( player );
     return HOOK_CONTINUE;
+  }
+
+  void SpawnElements( CBasePlayer@ player )
+  {
+    for( uint index = 0; index < g_Elements.length(); ++index )
+      g_Elements[index].OnSpawn( player );
   }
 
   HookReturnCode OnClientDisconnect( CBasePlayer@ player )
@@ -184,8 +194,7 @@ namespace CS16HUD
     if( !IsActive( player ) )
       return HOOK_CONTINUE;
     HideNative( player );
-    for( uint index = 0; index < g_Elements.length(); ++index )
-      g_Elements[index].OnSpawn( player );
+    SpawnElements( player );
     ResendAfterHudReset( player );
     return HOOK_CONTINUE;
   }

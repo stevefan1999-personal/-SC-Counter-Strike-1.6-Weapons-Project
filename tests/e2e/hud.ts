@@ -1,10 +1,21 @@
-// HUD scenario: walks through the CS HUD states on testcenter and saves full shots plus HUD-region crops.
+// HUD scenario: walks through the CS HUD states on testcenter and saves full shots plus HUD-region crops. The last step
+// changes the level and checks that the health shows the settled CS colour on the new map. Exits 1 when it does not.
 // Usage: deno run -A tests/e2e/hud.ts [port] [label]
 // The server install (SVEN_SERVER_DIR) must already contain the game content and the e2e plugin.
 import { Client, crop, PLAYER_NAME, Server, sleep } from "./driver.ts";
+import { measure } from "./hudboxes.ts";
+import { addedColour, Pixels, type Region, type Rgb } from "./hudcompare.ts";
 
 const MOTD_DELAY_MS = 3_000;
 const SETTLE_MS = 1_200;
+const LEVEL_LOAD_MS = 120_000;
+const FADE_SETTLE_MS = 6_000; // CS fades end after 5 s; the connection on the new map restarts the ammo fade
+// The CS floor colour under the HUD, and HUD orange at the settled alpha 100 (cs16-hud-spec.md A.1) on top of it.
+const BACKDROP: Rgb = [39, 32, 22];
+const SETTLED_ORANGE: Rgb = [100, 62, 0];
+// The dimmest settled glyph is the armour shield (87, 54); a fade from the old map shows 147-180 or 33-54 red.
+const SETTLED_TOLERANCE = 15;
+const HEALTH_GLYPHS = 4; // the cross and "100"
 const VICTIM = "monster_scientist";
 const VICTIM_DISTANCES = [160, 220, 280, 340];
 const WEAPONS = ["weapon_csknife", "weapon_usp", "weapon_ak47", "weapon_m3", "weapon_awp", "weapon_hegrenade"];
@@ -20,9 +31,12 @@ const REGIONS: Array<[string, string, string]> = [
 
 const [portArg = "27017", label = "hud"] = Deno.args;
 const port = Number(portArg);
+const height = Number((Deno.env.get("CL_RESOLUTION") ?? "1600x900").split("x")[1]);
 const server = new Server(port);
 const client = new Client();
 const manifest: Array<{ step: string; full: string; crops: string[] }> = [];
+const failures: string[] = [];
+const report: Record<string, unknown> = {};
 
 async function capture(step: string) {
   const full = await client.shot(`${label}-${step}`);
@@ -50,6 +64,34 @@ async function hold(action: () => Promise<void>, release: () => Promise<void>, s
   await sleep(holdMs);
   await capture(step);
   await release();
+}
+
+// g_Engine.time starts again with each map, so a fade that started late on the old map lies in the future of the new
+// one. A health change right before the changelevel puts the start there; on the new map the unchanged health must
+// still show the settled colour.
+async function changeLevel() {
+  await e2e("health 99", /\[e2e\] health/);
+  await sleep(SETTLE_MS);
+  await e2e("health 100", /\[e2e\] health/);
+  await sleep(FADE_SETTLE_MS);
+  const since = (await server.log()).length;
+  await server.command("changelevel testcenter");
+  await server.waitFor(/entered the game/, since, LEVEL_LOAD_MS);
+  await sleep(SETTLE_MS);
+  await e2e(`backdrop ${BACKDROP.join(" ")}`, /\[e2e\] backdrop/);
+  await sleep(FADE_SETTLE_MS);
+  await capture("changelevel");
+  const image = manifest.at(-1)!.full;
+  const region: Region = { x: 0, y: height - 60, width: 120, height: 60 };
+  const [boxes, pixels] = await Promise.all([measure(image, region), Pixels.read(image, region)]);
+  const glyphs = boxes.map((box) => ({ ...box, added: addedColour(pixels, box) }));
+  report.changelevelHealth = glyphs;
+  const settled = (added: Rgb) =>
+    [0, 1].every((channel) => Math.abs(added[channel] - SETTLED_ORANGE[channel]) <= SETTLED_TOLERANCE);
+  if (glyphs.length !== HEALTH_GLYPHS || !glyphs.every((glyph) => settled(glyph.added))) {
+    failures.push(`after changelevel the health glyphs are not settled: ${JSON.stringify(glyphs)}`);
+  }
+  await e2e("backdrop", /\[e2e\] backdrop/);
 }
 
 try {
@@ -97,9 +139,12 @@ try {
   await client.console("impulse 100");
   await sleep(SETTLE_MS);
   await capture("flashlight-on");
+  await client.console("impulse 100");
+  await changeLevel();
 
-  console.log(JSON.stringify({ label, port, manifest }, null, 2));
+  console.log(JSON.stringify({ label, port, manifest, report, failures }, null, 2));
 } finally {
   await client.stop();
   await server.stop();
 }
+if (failures.length > 0) Deno.exit(1);

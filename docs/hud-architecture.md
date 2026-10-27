@@ -319,16 +319,16 @@ Measured on the test server and client (the proof logs the rates every 5 s):
 
 ### When elements draw again
 
-| Event                                   | What the foundation does                                                                |
-| --------------------------------------- | --------------------------------------------------------------------------------------- |
-| connection, `changelevel`, reconnection | marks the player ready, sets the hide bits, calls `OnResend` after the client HUD reset |
-| respawn, revive                         | sets the hide bits, calls `OnSpawn`, then `OnResend` after the client HUD reset         |
-| death                                   | calls `OnDeath`                                                                         |
-| `cs16_hud 0`                            | clears the recorded hide bits, hides the recorded channels, empties the recorded slots  |
-| `cs16_hud 1`                            | sets the hide bits, calls `OnResend` at the next tick                                   |
-| `.hudres`, `cs16_hud_res`               | calls `OnResend` at the next tick                                                       |
-| plugin reload                           | takes over the connected players, calls `OnResend` at the next tick                     |
-| video mode change on the client         | nothing: the server cannot see it. The player types `.hudres` to get the HUD back.      |
+| Event                                   | What the foundation does                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| connection, `changelevel`, reconnection | marks the player ready, sets the hide bits, calls `OnSpawn`, then `OnResend` after the client HUD reset |
+| respawn, revive                         | sets the hide bits, calls `OnSpawn`, then `OnResend` after the client HUD reset                         |
+| death                                   | calls `OnDeath`                                                                                         |
+| `cs16_hud 0`                            | clears the recorded hide bits, hides the recorded channels, empties the recorded slots                  |
+| `cs16_hud 1`                            | sets the hide bits, calls `OnResend` at the next tick                                                   |
+| `.hudres`, `cs16_hud_res`               | calls `OnResend` at the next tick                                                                       |
+| plugin reload                           | takes over the connected players, calls `OnResend` at the next tick                                     |
+| video mode change on the client         | nothing: the server cannot see it. The player types `.hudres` to get the HUD back.                      |
 
 Two client resets make these resends necessary:
 
@@ -346,8 +346,14 @@ foundation now waits for two `PostThink` calls after a spawn before it calls `On
 runs before a `PreThink` (connection) and a spawn that runs inside one (respawn). The proof shows the texts after the
 first connection, a respawn, a `changelevel` and a reconnection.
 
-At a connection the proof saw no `OnSpawn` call: the first spawn comes before the `ClientPutInServer` hook marks the
-player ready. Thus an element must not start only in `OnSpawn`. `OnResend` runs for each connection.
+The first spawn of a connection comes before the `ClientPutInServer` hook marks the player ready, so it never reaches
+the `PlayerSpawn` hook (the first proof saw no `OnSpawn` call at a connection). Thus `ClientPutInServer` calls `OnSpawn`
+itself, so that each connection and each map change starts the element state as a spawn does: the ammo fade starts again
+and the money fades in from green, as CS does after a connection.
+
+`g_Engine.time` starts again at each map. A time that an element stored on an earlier map (the start of a fade or a
+blink) is then later than the new time. `Fading` treats such a start as a fade that is over, and the money blink ends,
+so a value that did not change over a `changelevel` shows the settled colour.
 
 ## Precache
 

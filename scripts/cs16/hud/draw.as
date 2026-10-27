@@ -59,7 +59,8 @@ namespace CS16HUD
   // starts the ramp at the colour that the fade reached, so the fade goes on instead of starting again.
   Look@ Fading( const RGBA& in start, const RGBA& in end, float duration, float elapsed )
   {
-    if( elapsed >= duration )
+    // g_Engine.time starts again with each map, so a start from an earlier map lies in the future: that fade is over.
+    if( elapsed >= duration || elapsed < 0.0f )
       return Steady( end );
     Look look;
     look.effect = HUD_EFFECT_RAMP_DOWN;

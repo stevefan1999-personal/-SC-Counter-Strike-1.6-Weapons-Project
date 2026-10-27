@@ -92,7 +92,9 @@ namespace CS16HUD
       float y = player.HasSuit() ? MONEY_Y : MONEY_Y_NO_SUIT;
       if( player.GetObserver().IsObserver() )
         y = NO_VALUE;
-      const bool blinkOver = m_blinking[slot] && now - m_blinkStart[slot] >= MONEY_BLINK_END;
+      // A blink that started on an earlier map has a start in the future (g_Engine.time restarts with each map).
+      const float blinkTime = now - m_blinkStart[slot];
+      const bool blinkOver = m_blinking[slot] && ( blinkTime >= MONEY_BLINK_END || blinkTime < 0.0f );
       if( blinkOver )
         m_blinking[slot] = false;
       if( y == m_drawnY[slot] && !m_dirty[slot] && !blinkOver && !resend )
