@@ -442,8 +442,8 @@ The software-rendered test client (Xvfb, llvmpipe) can stall at 2560×1440 when 
   fade falls 20 a second), and a P90 (15 shots per second) sends about 21 messages a second (1.4 KB/s) instead of 60.
 - `HUD_ELEM_EFFECT_ONCE` holds a fade at 99.9 % of its time, so a settled colour can be 1 level from the CS colour.
 - The armour shows the Sven armour (`pev.armorvalue`), which protects against all damage. The CS16 buy menu's Kevlar
-  sets the plugin's own CS armour (`CS16BASE::g_PlayerArmor`), which only bullets of CS weapons use. The HUD does not
-  show that value.
+  raises it to 100 (it never lowers a higher value) and also sets the plugin's own CS armour
+  (`CS16BASE::g_PlayerArmor`), which only bullets of CS weapons use. A helmet needs Sven armour above 0.
 - With more than one `info_bomb_target`, each target writes the player's in-zone keyvalue every 0.1 s and the last one
   wins, so the c4 icon can flash only part of the time (`CInfoBombTarget.as`).
 - A first connection downloads the 13 sprites of the elements, 7.9 MB without compression. The test client took about 10

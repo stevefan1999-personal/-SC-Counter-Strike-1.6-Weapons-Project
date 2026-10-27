@@ -9,6 +9,9 @@ namespace BuyMenu
 {
 
 dictionary BuyPoints; // Save the player's current money
+// Kevlar's armour. Monsters hurt players through Sven's own armour (pev.armorvalue), which the CS HUD shows, so a
+// purchase sets it too; the CS armour only meets CS weapons (CS16BASE::ApplyArmorDamage).
+const int KEVLAR_ARMOR = 100;
 dictionary OldScore; // Save the player's score (frags)
 
 void BuyKevlar( CBasePlayer@ pPlayer )
@@ -27,7 +30,9 @@ void BuyKevlar( CBasePlayer@ pPlayer )
     }
 
     BuyPoints[pid] = uint( BuyPoints[pid] ) - uiCost;
-    CS16BASE::g_PlayerArmor[idx] = 100;
+    CS16BASE::g_PlayerArmor[idx] = KEVLAR_ARMOR;
+    if( pPlayer.pev.armorvalue < KEVLAR_ARMOR )
+        pPlayer.pev.armorvalue = KEVLAR_ARMOR;
     BuyMenuCVARS@ hooks = @BuyMenuCVARS();
     hooks.ShowPointsSprite( pPlayer );
     g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[CS16 BUYMENU] Kevlar purchased (100 armor)\n" );
@@ -38,7 +43,7 @@ void BuyHelmet( CBasePlayer@ pPlayer )
     int idx = pPlayer.entindex();
     if( idx < 1 || idx > 32 ) return;
 
-    if( CS16BASE::g_PlayerArmor[idx] <= 0 )
+    if( pPlayer.pev.armorvalue <= 0 )
     {
         g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[CS16 BUYMENU] Buy Kevlar first!\n" );
         return;
