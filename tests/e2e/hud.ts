@@ -46,7 +46,7 @@ const isKillerBlue = ([red, green, blue]: Rgb) => red > 130 && red < 180 && gree
 // model by a send interval plus a tick and a recording frame.
 const AK47_BURST = { gap: 4, shotDelta: 4, fireInterval: 0.0955, fireSeconds: 1.5 };
 const SERIES_SETTLED_SECONDS = 0.5;
-const SERIES_SECONDS = 3;
+const SERIES_SECONDS = 5; // the first shot shows about 1 s into the recording, then 1.5 s of fire and the recovery
 const SERIES_FRAMES_PER_SECOND = 20;
 const SERIES_BAND_SLACK_PX = 1;
 const RECOVERY_EARLY_S = 0.15;
