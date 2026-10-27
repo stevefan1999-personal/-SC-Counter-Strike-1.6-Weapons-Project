@@ -87,7 +87,8 @@ the conflicts with five stock maps.
 | 5, 6           | map    | money change row: sign and hundreds, the last two digits | `money.as`      |
 | 7, 8           | map    | flashlight: casing and beam, energy bar                  | `flashlight.as` |
 | 9              | map    | status icon (the carried C4)                             | `statusicon.as` |
-| 10–15          | map    | radar background and dots (reserved)                     | none            |
+| 10–13          | map    | pain arrows: front, right, rear, left                    | `pain.as`       |
+| 14–15          | map    | free (CS draws the radar there; it is not drawn)         | none            |
 | 16–19          | plugin | crosshair lines: west, east, north, south                | `crosshair.as`  |
 | 20             | plugin | health                                                   | `health.as`     |
 | 21, 22         | plugin | armour: icon and digits, full part                       | `armour.as`     |
@@ -115,14 +116,15 @@ The status elements are the CS 1.6 HUD parts that are always on the screen: heal
 the c4 status icon. `CS16HUD::RegisterStatus()` (`scripts/cs16/hud/status.as`) precaches their sprites and registers
 them. `cs16_register.as` calls it in `PluginInit`, after `CS16HUD::PluginInit()`.
 
-| Element    | File            | Client channels                                                                                    | Sprites                                                                                | CS 1.6 reference       |
-| ---------- | --------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------- |
-| Health     | `health.as`     | 20 `HEALTH`                                                                                        | `health.spr`                                                                           | `cs16-hud-spec.md` 3.1 |
-| Armour     | `armour.as`     | 21 `ARMOUR`, 22 `ARMOUR_FULL`                                                                      | `armor.spr` + `armor_full.spr`, or `armor_helmet.spr` + `armor_helmet_full.spr`        | 3.2                    |
-| Ammo       | `ammo.as`       | 23 `CLIP`, 24 `RESERVE_HIGH`, 25 `RESERVE_LOW`, 26 `AMMO_ICON`                                     | `clip.spr`, `two_cells.spr`, `reserve_lo.spr`, a rect of `cs16/icons/640hud7.spr`      | 3.3                    |
-| Money      | `money.as`      | 27 `MONEY_HIGH`, 28 `MONEY_LOW`; change row: 5 `MONEY_DELTA_HIGH`, 6 `MONEY_DELTA_LOW` (map group) | `money_hi.spr`, `two_cells.spr`, `money_delta_plus_hi.spr`, `money_delta_minus_hi.spr` | 3.5                    |
-| Flashlight | `flashlight.as` | 7 `FLASHLIGHT`, 8 `FLASHLIGHT_ENERGY` (map group)                                                  | `flashlight.spr` + `flashlight_energy.spr`                                             | 3.13                   |
-| c4 icon    | `statusicon.as` | 9 `STATUS_ICON` (map group)                                                                        | the rect (0, 148, 32, 32) of `cs16/icons/640hud7.spr`                                  | 3.10                   |
+| Element     | File            | Client channels                                                                                    | Sprites                                                                                | CS 1.6 reference       |
+| ----------- | --------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------- |
+| Health      | `health.as`     | 20 `HEALTH`                                                                                        | `health.spr`                                                                           | `cs16-hud-spec.md` 3.1 |
+| Armour      | `armour.as`     | 21 `ARMOUR`, 22 `ARMOUR_FULL`                                                                      | `armor.spr` + `armor_full.spr`, or `armor_helmet.spr` + `armor_helmet_full.spr`        | 3.2                    |
+| Ammo        | `ammo.as`       | 23 `CLIP`, 24 `RESERVE_HIGH`, 25 `RESERVE_LOW`, 26 `AMMO_ICON`                                     | `clip.spr`, `two_cells.spr`, `reserve_lo.spr`, a rect of `cs16/icons/640hud7.spr`      | 3.3                    |
+| Money       | `money.as`      | 27 `MONEY_HIGH`, 28 `MONEY_LOW`; change row: 5 `MONEY_DELTA_HIGH`, 6 `MONEY_DELTA_LOW` (map group) | `money_hi.spr`, `two_cells.spr`, `money_delta_plus_hi.spr`, `money_delta_minus_hi.spr` | 3.5                    |
+| Flashlight  | `flashlight.as` | 7 `FLASHLIGHT`, 8 `FLASHLIGHT_ENERGY` (map group)                                                  | `flashlight.spr` + `flashlight_energy.spr`                                             | 3.13                   |
+| c4 icon     | `statusicon.as` | 9 `STATUS_ICON` (map group)                                                                        | the rect (0, 148, 32, 32) of `cs16/icons/640hud7.spr`                                  | 3.10                   |
+| Pain arrows | `pain.as`       | 10–13 `PAIN_ARROW_FIRST` + n (map group): front, right, rear, left                                 | frames 0–3 of `cs16/icons/640_pain.spr` (Half-Life `valve/sprites/640_pain.spr`)       | 3.14                   |
 
 `draw.as` has the shared parts: the CS colours, the fades, the part of a sprite at its CS position, and the gate
 `ShowsStatus`.
@@ -269,6 +271,42 @@ The old money display (`HudNumDisplay` on API channel 0 = client channel 16, the
 The icon replaces the old C4 sprite of `weapon_c4.as` (API channel 4 = client channel 20, the health). The element
 checks the inventory at each tick, so a drop, a plant, a death or a strip removes the icon without code in the weapon.
 Inside an `info_bomb_target` the icon flashes, as CS flashes the icon of the bomb carrier in a bomb zone.
+
+### Pain arrows
+
+`HIDEHUD_HEALTH` hides the native Sven health, and with it Sven's pain arrows. `pain.as` draws the CS ones instead
+(`CHudHealth::DrawPain` and `CalcDamageDirection`, `cs16-hud-spec.md` 3.14):
+
+- The `PlayerTakeDamage` hook records each hit. The damage comes from the middle of the inflictor (CS
+  `UpdateClientData`), or from the player when there is no inflictor. The cosine between the view (`v_angle`) and the
+  way to the damage lights the front or rear arrow, and the cosine with the right vector the right or left arrow, when
+  it is above 0.3. Damage within 50 units lights all four at strength 1.
+- The hook runs before the damage lands, so the element draws the hits at its next tick, and only if health plus armour
+  went down: CS shows arrows only for damage that the server applied. A hit raises an arrow to its strength and never
+  lowers it, as in CS.
+- Each arrow is one element at the CS place: x and y are ±120 px from the screen centre with `SCR_CENTER`, which gives
+  CS's (W/2 − 64, H/2 − 144) for the front arrow, (W/2 + 96, H/2 − 64) for the right one, and so on, at every screen
+  size. The colour is HUD orange, or low red at health 25 and below; the red palette of `640_pain.spr` makes both red.
+- The strength falls 2 per second, and the arrow shows while it is above 0.4: 0.3 s after a hit at strength 1. The alpha
+  is 255 × strength, but not less than the alpha of strength 0.5 (127). The element sends one ramp (effect 2 with
+  `EFFECT_ONCE`) and the hold time. With `EFFECT_ONCE` the client stops its clock at 0.999 of the ramp, also for the
+  hold time, so the ramp must last longer than the arrow (`sven-client-hud.md` 1.9). It keeps the CS slope to the end:
+  the alpha is the CS alpha until it reaches 127, and in the last 0.05 s it falls on to 96 where CS keeps 127.
+
+Measured at 1600×900 (`e2e-elements`, a hit with `e2e.hurt 10 near` and one from the front, recorded at 30 frames per
+second on the backdrop) against the CS 1.6 capture of an HE grenade at the feet (20 frames per second):
+
+| Fact                                         | CS 1.6                                          | Counter-Life                                                 |
+| -------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------ |
+| Arrows                                       | all four for a hit at the feet                  | all four for a near hit; front only for a hit from the front |
+| Lit box in the CS box (red 90 above G and B) | 119 × 39 at (1, 1), the side arrows 39–41 × 119 | 120 × 40 at (0, 0), the side arrows 39–42 × 120              |
+| Pixels outside the four CS boxes             | –                                               | 0                                                            |
+| Time on screen                               | 5 frames at 20 fps (0.25–0.3 s)                 | 9 frames at 30 fps (0.27–0.3 s)                              |
+
+The arrows are 0.5–1 px left of and above CS's, because CS draws the sprite with the half-texel bilinear filter
+([`hud-sprites.md`](hud-sprites.md#how-the-frames-are-built)) and Sven draws it 1:1. The pain sprite is drawn as it is.
+
+![CS 1.6 (left) and Counter-Life (right), all four pain arrows, 1600×900](hud/elements/pain-cs-left-ours-right.png)
 
 ### Evidence
 
@@ -965,8 +1003,13 @@ could remove them.
 | Console prints at the top left | with `developer 1` the client shows each console print at the top left, also the kill-feed console line                                                                | only in the console                                                  | A client setting. The test client has `developer 1` in `autoexec.cfg`, so the e2e screenshots show these lines.                                                                                                               |
 
 Parts of the CS HUD that this port does not draw, because co-op Sven has no CS rounds, teams, bomb or radar data: the
-radar (channels 10–15 stay reserved for it), the round timer, the buy zone and other status icons except the C4, the
-bomb timer, team colours for players (every player is CT blue), team kills and the spectator HUD.
+radar (client channels 14–15 are free), the round timer, the buy zone and other status icons except the C4, the bomb
+timer, team colours for players (every player is CT blue), team kills and the spectator HUD.
+
+The CS damage-type icons are not drawn either. `HIDEHUD_HEALTH` hides the native Sven ones with the native health, so a
+player who takes poison, radiation, burn, freeze, shock, gas, drowning or acid damage sees no icon for it. CS draws a
+64×64 tile from `640hud8.spr` or `640hud9.spr` for each active type at (8, H − 128), moves older tiles up, and pulses
+them for 2 s (`cs16-hud-spec.md` 3.14). Up to nine tiles can show at once, and only client channels 14 and 15 are free.
 
 The limits of each element that a later change can remove (downloads, channels, bandwidth, the armour value, the second
 ammo row) are in its own section: [status elements](#limits), [crosshair](#limits-1) and

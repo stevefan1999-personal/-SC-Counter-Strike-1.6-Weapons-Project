@@ -93,31 +93,31 @@ script gets 0–15 (`sven-client-hud.md` 1.3). The raw senders write the client 
 both groups. The client draws channel 0 first and channel 31 last. One channel holds one element. A message of another
 element type on a used channel deletes the old element.
 
-| Client channel | Group  | Constant                         | Element                           | Owner     |
-| -------------- | ------ | -------------------------------- | --------------------------------- | --------- |
-| 0              | map    | `KILLFEED_ICON_ROW4`             | kill feed weapon icon, row 4      | kill feed |
-| 1–4            | map    | `KILLFEED_HEADSHOT_FIRST` + n    | kill feed headshot icon, rows 1–4 | kill feed |
-| 5              | map    | `MONEY_DELTA_HIGH`               | money change, high part           | status    |
-| 6              | map    | `MONEY_DELTA_LOW`                | money change, low part            | status    |
-| 7              | map    | `FLASHLIGHT`                     | flashlight                        | status    |
-| 8              | map    | `FLASHLIGHT_ENERGY`              | flashlight, energy part           | status    |
-| 9              | map    | `STATUS_ICON`                    | status icon (the carried C4)      | status    |
-| 10             | map    | `RADAR_BACKGROUND`               | radar background                  | none yet  |
-| 11–15          | map    | `RADAR_DOT_FIRST` + n            | radar dots (`RADAR_DOTS` = 5)     | none yet  |
-| 16             | plugin | `CROSSHAIR_WEST`                 | crosshair, west line              | crosshair |
-| 17             | plugin | `CROSSHAIR_EAST`                 | crosshair, east line              | crosshair |
-| 18             | plugin | `CROSSHAIR_NORTH`                | crosshair, north line             | crosshair |
-| 19             | plugin | `CROSSHAIR_SOUTH`                | crosshair, south line             | crosshair |
-| 20             | plugin | `HEALTH`                         | health                            | status    |
-| 21             | plugin | `ARMOUR`                         | armour                            | status    |
-| 22             | plugin | `ARMOUR_FULL`                    | armour, full part                 | status    |
-| 23             | plugin | `CLIP`                           | ammo in the clip                  | status    |
-| 24             | plugin | `RESERVE_HIGH`                   | reserve ammo, high part           | status    |
-| 25             | plugin | `RESERVE_LOW`                    | reserve ammo, low part            | status    |
-| 26             | plugin | `AMMO_ICON`                      | ammo icon                         | status    |
-| 27             | plugin | `MONEY_HIGH`                     | money, high part                  | status    |
-| 28             | plugin | `MONEY_LOW`                      | money, low part                   | status    |
-| 29–31          | plugin | `KILLFEED_ICON_PLUGIN_FIRST` + n | kill feed weapon icon, rows 1–3   | kill feed |
+| Client channel | Group  | Constant                         | Element                                          | Owner     |
+| -------------- | ------ | -------------------------------- | ------------------------------------------------ | --------- |
+| 0              | map    | `KILLFEED_ICON_ROW4`             | kill feed weapon icon, row 4                     | kill feed |
+| 1–4            | map    | `KILLFEED_HEADSHOT_FIRST` + n    | kill feed headshot icon, rows 1–4                | kill feed |
+| 5              | map    | `MONEY_DELTA_HIGH`               | money change, high part                          | status    |
+| 6              | map    | `MONEY_DELTA_LOW`                | money change, low part                           | status    |
+| 7              | map    | `FLASHLIGHT`                     | flashlight                                       | status    |
+| 8              | map    | `FLASHLIGHT_ENERGY`              | flashlight, energy part                          | status    |
+| 9              | map    | `STATUS_ICON`                    | status icon (the carried C4)                     | status    |
+| 10–13          | map    | `PAIN_ARROW_FIRST` + n           | pain arrows: front, right, rear, left            | status    |
+| 14–15          | map    | –                                | free (CS draws the radar there; it is not drawn) | none      |
+| 16             | plugin | `CROSSHAIR_WEST`                 | crosshair, west line                             | crosshair |
+| 17             | plugin | `CROSSHAIR_EAST`                 | crosshair, east line                             | crosshair |
+| 18             | plugin | `CROSSHAIR_NORTH`                | crosshair, north line                            | crosshair |
+| 19             | plugin | `CROSSHAIR_SOUTH`                | crosshair, south line                            | crosshair |
+| 20             | plugin | `HEALTH`                         | health                                           | status    |
+| 21             | plugin | `ARMOUR`                         | armour                                           | status    |
+| 22             | plugin | `ARMOUR_FULL`                    | armour, full part                                | status    |
+| 23             | plugin | `CLIP`                           | ammo in the clip                                 | status    |
+| 24             | plugin | `RESERVE_HIGH`                   | reserve ammo, high part                          | status    |
+| 25             | plugin | `RESERVE_LOW`                    | reserve ammo, low part                           | status    |
+| 26             | plugin | `AMMO_ICON`                      | ammo icon                                        | status    |
+| 27             | plugin | `MONEY_HIGH`                     | money, high part                                 | status    |
+| 28             | plugin | `MONEY_LOW`                      | money, low part                                  | status    |
+| 29–31          | plugin | `KILLFEED_ICON_PLUGIN_FIRST` + n | kill feed weapon icon, rows 1–3                  | kill feed |
 
 `KillfeedIconChannel(row)` gives the weapon icon channel of a kill feed row (row 0 is the oldest line on screen).
 
@@ -125,8 +125,8 @@ Armour and flashlight are two elements each, because their bright part overlaps 
 So the always-visible HUD needs 17 elements: the 4 crosshair lines, health, both armour parts, clip, both reserve parts,
 the ammo icon, both money parts and the kill feed weapon icons. That is one more than the plugin group holds. Everything
 that is always on screen stays in the plugin group, with kill feed rows 1–3. The transient or optional parts (row 4, the
-headshot icons, the money change, the flashlight, the status icon and the radar) go to the map group, which the few
-stock maps with their own HUD can share (see [Conflicts](#conflicts)). Both parts of an element draw additively, so
+headshot icons, the money change, the flashlight, the status icon and the pain arrows) go to the map group, which the
+few stock maps with their own HUD can share (see [Conflicts](#conflicts)). Both parts of an element draw additively, so
 their order on the client does not change the picture.
 
 The engine keeps 8 text slots. A new text on a slot replaces the old text on that slot. Text and custom elements never
@@ -161,8 +161,9 @@ These stock maps load map scripts that draw custom elements (map group) or texts
 | `bm_sts`       | `scripts/maps/bm_sts/bm_sts_hudtimer.as`       | 1 timer sprite                                      | none      | headshot icon row 1                                                                          |
 
 The map files are in `svencoop/maps/<map>.cfg` (`map_script` lines) of the dedicated server. No stock map script uses
-client channels 6–15 or text slots 5–7. Thus the money change low part, the flashlight, the status icon and the radar
-have no conflict with stock maps. The `game_text` entities of maps use text slots 4–7 (see [Text slots](#text-slots)).
+client channels 6–15 or text slots 5–7. Thus the money change low part, the flashlight, the status icon and the pain
+arrows have no conflict with stock maps. The `game_text` entities of maps use text slots 4–7 (see
+[Text slots](#text-slots)).
 
 On these maps the map script and this plugin write the same targets:
 
@@ -307,13 +308,13 @@ server with a segmentation fault. The same copy with `if` and `return`, or a new
 
 `hidenative.as` sets these bits in `CBasePlayer.m_iHideHUD`. Their sum is 810.
 
-| Bit | Name                 | Native part that the CS HUD replaces |
-| --- | -------------------- | ------------------------------------ |
-| 2   | `HIDEHUD_FLASHLIGHT` | flashlight                           |
-| 8   | `HIDEHUD_HEALTH`     | health, pain arrows, damage icons    |
-| 32  | `HIDEHUD_SUITPOWER`  | armour                               |
-| 256 | `HIDEHUD_CROSSHAIR`  | crosshair                            |
-| 512 | `HIDEHUD_AMMO`       | ammo numbers and ammo icon           |
+| Bit | Name                 | Native parts that the bit hides   | What the CS HUD draws instead                                         |
+| --- | -------------------- | --------------------------------- | --------------------------------------------------------------------- |
+| 2   | `HIDEHUD_FLASHLIGHT` | flashlight                        | the CS flashlight                                                     |
+| 8   | `HIDEHUD_HEALTH`     | health, pain arrows, damage icons | the CS health and the CS pain arrows; no damage icons (`docs/hud.md`) |
+| 32  | `HIDEHUD_SUITPOWER`  | armour                            | the CS armour                                                         |
+| 256 | `HIDEHUD_CROSSHAIR`  | crosshair                         | the CS crosshair                                                      |
+| 512 | `HIDEHUD_AMMO`       | ammo numbers and ammo icon        | the CS ammo counter                                                   |
 
 Rules:
 

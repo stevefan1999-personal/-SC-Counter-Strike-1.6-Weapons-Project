@@ -7,7 +7,8 @@
 //   as_command e2e.stuff <client command...>      run a console command on player 1's client
 //   as_command e2e.health <value>                 set player 1's health
 //   as_command e2e.armor <value>                  set player 1's armour
-//   as_command e2e.hurt <amount>                  damage player 1 from the world (pain, armour absorption)
+//   as_command e2e.hurt <amount> [side]           damage player 1 from the world, or from front, right, back, left of
+//                                                 the view (200 units away) or near (the player itself: all arrows)
 //   as_command e2e.ammo <clip> <reserve>          set the clip and the reserve of player 1's active weapon
 //   as_command e2e.frags <value>                  set player 1's score; the CS16 buy menu pays score changes as money
 //   as_command e2e.battery <percent>              set player 1's flashlight battery
@@ -18,6 +19,9 @@
 const float DEFAULT_SPAWN_DISTANCE = 160.0f;
 const float LETHAL_DAMAGE = 10000.0f;
 const float PIN_DELAY = 1.0f;
+// A directed hit comes from this far away along the view, beyond the 50 units in which CS lights every pain arrow.
+const float HURT_DISTANCE = 200.0f;
+const array<string> HURT_SIDES = { "front", "right", "back", "left" }; // 0, -90, 180 and 90 degrees of yaw
 // Head shots aim this share of the height below the top of the box, as the CS 1.6 reference capture does
 // (cs16-killfeed-reference.md 2.4); the eye position of a monster lies below its head hit box.
 const float HEAD_DROP = 0.08f;
@@ -40,7 +44,7 @@ void PluginInit()
   g_Commands.insertLast( CConCommand( "stuff", "<command...> - run a client command on player 1", @StuffText ) );
   g_Commands.insertLast( CConCommand( "health", "<value> - set player 1 health", @SetHealth ) );
   g_Commands.insertLast( CConCommand( "armor", "<value> - set player 1 armour", @SetArmor ) );
-  g_Commands.insertLast( CConCommand( "hurt", "<amount> - damage player 1 from the world", @HurtPlayer ) );
+  g_Commands.insertLast( CConCommand( "hurt", "<amount> [front|right|back|left|near] - damage player 1", @HurtPlayer ) );
   g_Commands.insertLast( CConCommand( "ammo", "<clip> <reserve> - set player 1 active weapon ammo", @SetAmmo ) );
   g_Commands.insertLast( CConCommand( "frags", "<value> - set player 1 score", @SetFrags ) );
   g_Commands.insertLast( CConCommand( "battery", "<percent> - set player 1 flashlight battery", @SetBattery ) );
@@ -216,14 +220,28 @@ void SetArmor( const CCommand@ args )
   g_EngineFuncs.ServerPrint( "[e2e] armor " + player.pev.armorvalue + "\n" );
 }
 
+// The inflictor gives the pain arrows their direction (its centre): the world, the player itself, or a point on one side
+// of the view.
 void HurtPlayer( const CCommand@ args )
 {
   CBasePlayer@ player = FirstPlayer();
   if( player is null || args.ArgC() < 2 )
     return;
   CBaseEntity@ world = g_EntityFuncs.Instance( 0 );
-  player.TakeDamage( world.pev, world.pev, atof( args.Arg( 1 ) ), DMG_GENERIC );
-  g_EngineFuncs.ServerPrint( "[e2e] hurt to " + player.pev.health + "\n" );
+  const string side = args.ArgC() > 2 ? args.Arg( 2 ) : "";
+  const int sideIndex = HURT_SIDES.find( side );
+  CBaseEntity@ inflictor = side == "near" ? cast<CBaseEntity@>( player ) : world;
+  if( sideIndex >= 0 )
+  {
+    const float quarterTurn = 90.0f;
+    g_EngineFuncs.MakeVectors( Vector( 0, player.pev.v_angle.y - quarterTurn * sideIndex, 0 ) );
+    @inflictor = g_EntityFuncs.Create( "info_target", player.pev.origin + g_Engine.v_forward * HURT_DISTANCE,
+      g_vecZero, false );
+  }
+  player.TakeDamage( inflictor.pev, world.pev, atof( args.Arg( 1 ) ), DMG_GENERIC );
+  if( sideIndex >= 0 )
+    g_EntityFuncs.Remove( inflictor );
+  g_EngineFuncs.ServerPrint( "[e2e] hurt to " + player.pev.health + ( side.IsEmpty() ? "" : " from " + side ) + "\n" );
 }
 
 // Puts the held weapon into a known state, for example the CS 1.6 spawn USP with 12 | 24.

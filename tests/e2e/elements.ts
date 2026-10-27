@@ -68,6 +68,28 @@ const BOTTOM_RIGHT: Region = { x: width - 200, y: height - 100, width: 200, heig
 const MONEY_ROWS: Region = { x: width - 200, y: height - 125, width: 200, height: 80 }; // change row and money row
 const TOP_RIGHT: Region = { x: width - 80, y: 0, width: 80, height: 64 };
 const STATUS_ICON: Region = { x: 0, y: Math.floor(height / 2) - 60, width: 60, height: 60 };
+// The pain arrows around the centre (cs16-hud-spec.md 3.14): a 500 px square, as the CS 1.6 pain captures, and the CS
+// box of each arrow in it: front (W/2 - 64, H/2 - 144), right (W/2 + 96, H/2 - 64), rear (W/2 - 64, H/2 + 96) and left
+// (W/2 - 144, H/2 - 64), 128 x 48 or 48 x 128.
+const PAIN_SIDE = 500;
+const PAIN: Region = {
+  x: Math.floor(width / 2) - PAIN_SIDE / 2,
+  y: Math.floor(height / 2) - PAIN_SIDE / 2,
+  width: PAIN_SIDE,
+  height: PAIN_SIDE,
+};
+const PAIN_ARROWS = ["front", "right", "rear", "left"];
+const PAIN_BOXES: Region[] = [[-64, -144, 128, 48], [96, -64, 48, 128], [-64, 96, 128, 48], [-144, -64, 48, 128]]
+  .map(([dx, dy, boxWidth, boxHeight]) => ({
+    x: PAIN_SIDE / 2 + dx,
+    y: PAIN_SIDE / 2 + dy,
+    width: boxWidth,
+    height: boxHeight,
+  }));
+const PAIN_LIT_LEVELS = 40; // red over the backdrop; the arrows add red only (640_pain.spr has a red palette)
+const PAIN_MIN_PIXELS = 200; // an arrow at full strength lights about 2000 pixels
+const PAIN_STRAY_PIXELS = 20; // lit pixels outside the four boxes
+const PAIN_MAX_FRAMES = 18; // CS shows an arrow 0.3 s; allow 0.6 s at 30 frames a second
 
 const e2e = (command: string, reply: RegExp) => server.commandAndWait(`as_command e2e.${command}`, reply);
 // Client commands go through stufftext: keys typed while the console is not open yet would play the game instead.
@@ -165,6 +187,26 @@ async function record(name: string, region: Region, action: () => Promise<unknow
   return [...Deno.readDirSync(directory)].map((entry) => `${directory}/${entry.name}`).sort();
 }
 
+// The lit pixels of a recorded pain frame (an image of PAIN alone) in each CS arrow box, then those outside all boxes.
+// The arrows add red only: 640_pain.spr has a red palette.
+async function painPixels(frame: string): Promise<number[]> {
+  const pixels = await Pixels.read(frame, { x: 0, y: 0, width: PAIN_SIDE, height: PAIN_SIDE });
+  const isLit = ([red, green, blue]: Rgb) =>
+    red - BACKDROP[0] > PAIN_LIT_LEVELS && Math.abs(green - BACKDROP[1]) < PAIN_LIT_LEVELS / 2 &&
+    Math.abs(blue - BACKDROP[2]) < PAIN_LIT_LEVELS / 2;
+  const inside = (x: number, y: number, box: Region) =>
+    x >= box.x && x < box.x + box.width && y >= box.y && y < box.y + box.height;
+  const counts = new Array<number>(PAIN_BOXES.length + 1).fill(0);
+  for (let y = 0; y < PAIN_SIDE; y++) {
+    for (let x = 0; x < PAIN_SIDE; x++) {
+      if (!isLit(pixels.at(x, y)!)) continue;
+      const box = PAIN_BOXES.findIndex((region) => inside(x, y, region));
+      counts[box >= 0 ? box : PAIN_BOXES.length]++;
+    }
+  }
+  return counts;
+}
+
 // The runs of consecutive frames in which a test is true, for example the bright phases of a blink.
 const runs = (frames: boolean[]) => frames.filter((on, index) => on && !frames[index - 1]).length;
 
@@ -220,6 +262,45 @@ try {
   await sleep(SETTLE_MS);
   await checkC4Icon(await shot("c4-on-black"));
   await backdrop(BACKDROP);
+
+  // Pain arrows: a hit from the front lights the front arrow only, a hit from the player itself all four, for 0.3 s.
+  const frontFrames = await record("pain-front", PAIN, () => e2e("hurt 10 front", /\[e2e\] hurt/));
+  const nearFrames = await record("pain-near", PAIN, () => e2e("hurt 10 near", /\[e2e\] hurt/));
+  const [fromFront, fromNear] = await Promise.all(
+    [frontFrames, nearFrames].map((frames) => Promise.all(frames.map(painPixels))),
+  );
+  const lit = (counts: number[], arrow: number) => counts[arrow] >= PAIN_MIN_PIXELS;
+  const arrowPixels = (counts: number[]) => counts.slice(0, PAIN_ARROWS.length).reduce((sum, count) => sum + count, 0);
+  const litFrames = (frames: number[][]) =>
+    frames.filter((counts) => PAIN_ARROWS.some((_, arrow) => lit(counts, arrow))).length;
+  const framesLit = { front: litFrames(fromFront), near: litFrames(fromNear) };
+  report.pain = {
+    columns: [...PAIN_ARROWS, "outside"].join(" "),
+    front: fromFront.map((counts) => counts.join(" ")),
+    near: fromNear.map((counts) => counts.join(" ")),
+    framesLit,
+  };
+  check(
+    fromFront.some((counts) => lit(counts, 0) && [1, 2, 3].every((arrow) => counts[arrow] < PAIN_STRAY_PIXELS)),
+    "a hit from the front must light the front arrow only",
+  );
+  check(
+    fromNear.some((counts) => PAIN_ARROWS.every((_, arrow) => lit(counts, arrow))),
+    "a hit from the player itself must light all four arrows",
+  );
+  check(
+    [...fromFront, ...fromNear].every((counts) => counts[PAIN_BOXES.length] < PAIN_STRAY_PIXELS),
+    "pain arrow pixels lie outside the CS arrow boxes",
+  );
+  check(
+    Object.values(framesLit).every((frames) => frames > 0 && frames <= PAIN_MAX_FRAMES),
+    `pain arrows must show for about 0.3 s: ${JSON.stringify(framesLit)}`,
+  );
+  const brightest = fromNear.reduce(
+    (best, counts, index) => arrowPixels(counts) > arrowPixels(fromNear[best]) ? index : best,
+    0,
+  );
+  if (cropDir) await Deno.copyFile(nearFrames[brightest], `${cropDir}/pain-near.png`);
 
   await e2e("health 20", /\[e2e\] health/);
   await e2e("armor 50", /\[e2e\] armor/);

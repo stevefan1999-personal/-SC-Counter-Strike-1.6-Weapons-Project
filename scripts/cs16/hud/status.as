@@ -1,4 +1,5 @@
-// The always-visible CS 1.6 HUD elements (docs/hud.md "Status elements"): their sprites and their registration.
+// The always-visible CS 1.6 HUD elements (docs/hud.md "Status elements") and the pain arrows of the CS health element:
+// their sprites and their registration.
 #include "draw"
 #include "health"
 #include "armour"
@@ -6,6 +7,7 @@
 #include "money"
 #include "flashlight"
 #include "statusicon"
+#include "pain"
 
 namespace CS16HUD
 {
@@ -19,12 +21,16 @@ namespace CS16HUD
     for( uint index = 0; index < STATUS_SPRITES.length(); ++index )
       PrecacheSprite( GENERATED_SPRITE_DIR + STATUS_SPRITES[index] );
     PrecacheSprite( ICON_SHEET_DIR + "640hud7.spr" ); // ammo and status icons
+    PrecacheSprite( PAIN_SPRITE );
     @g_Money = MoneyElement();
+    @g_Pain = PainElement();
     Register( HealthElement() );
     Register( ArmourElement() );
     Register( AmmoElement() );
     Register( g_Money );
     Register( FlashlightElement() );
     Register( StatusIconElement() );
+    Register( g_Pain );
+    g_Hooks.RegisterHook( Hooks::Player::PlayerTakeDamage, @OnPlayerTakeDamage );
   }
 }

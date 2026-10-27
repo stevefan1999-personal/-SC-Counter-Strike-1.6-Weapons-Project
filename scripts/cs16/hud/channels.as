@@ -36,9 +36,8 @@ namespace CS16HUD
   const uint FLASHLIGHT = 7; // flashlight.spr: casing and beam
   const uint FLASHLIGHT_ENERGY = 8; // flashlight_energy.spr: the energy bar, drawn in the same box
   const uint STATUS_ICON = 9; // CS status icon (the C4 carried by the player)
-  const uint RADAR_BACKGROUND = 10;
-  const uint RADAR_DOT_FIRST = 11; // 11-15
-  const uint RADAR_DOTS = 5;
+  const uint PAIN_ARROW_FIRST = 10; // pain arrows front, right, rear and left: 10-13
+  // 14-15 are free. The CS radar is not drawn: co-op has no teams or bomb for it to show.
 
   // Client channel of a kill-feed row's weapon icon, row 0 = the oldest line on screen.
   uint KillfeedIconChannel( uint row )
