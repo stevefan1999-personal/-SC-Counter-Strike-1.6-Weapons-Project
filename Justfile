@@ -494,7 +494,7 @@ metamod-test *args:
 [working-directory('metamod/counterlife')]
 metamod-lint:
   cargo fmt --check
-  cargo clippy --all-targets -- -D warnings
+  cargo clippy --all-targets --target {{plugin_target}} -- -D warnings
 
 # Boot a dedicated server with the plugin and join it with a fake client: just metamod-e2e
 [group('metamod')]
