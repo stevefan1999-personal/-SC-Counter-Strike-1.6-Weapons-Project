@@ -538,3 +538,166 @@ fixture-fov display=fixture_display resolution='1600x900' port='27049' clientpor
 [no-cd]
 fov-metrics +dirs:
   @deno run -A '{{justfile_directory()}}/tests/fixture/fov-metrics.ts' {{dirs}}
+
+image_registry := env('IMAGE_REGISTRY', 'ghcr.io/stevefan1999-personal')
+image_name := 'svencoop-counterlife'
+
+# Check out the pinned metamod-p-rs next to this repository when it is not already there.
+# The plugin's path dependency is ../../../metamod-p-rs from metamod/counterlife.
+[group('image')]
+[private]
+bindings:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  dest='{{justfile_directory()}}/../metamod-p-rs'
+  if test -f "$dest/Cargo.toml"; then
+    echo "using $dest"
+    exit 0
+  fi
+  rev=$(tr -d '[:space:]' < '{{justfile_directory()}}/metamod/counterlife/metamod-p-rs.rev')
+  git clone --filter=blob:none https://github.com/stevefan1999-personal/metamod-p-rs.git "$dest"
+  git -C "$dest" fetch --depth 1 origin "$rev"
+  git -C "$dest" checkout --detach FETCH_HEAD
+  sub=$(git -C "$dest" rev-parse 'HEAD:metamod-fallguys')
+  rm -rf "$dest/metamod-fallguys"
+  git clone --filter=blob:none --sparse https://github.com/hzqst/metamod-fallguys.git "$dest/metamod-fallguys"
+  git -C "$dest/metamod-fallguys" sparse-checkout set metamod/include
+  git -C "$dest/metamod-fallguys" fetch --depth 1 origin "$sub"
+  git -C "$dest/metamod-fallguys" checkout --detach FETCH_HEAD
+  test -f "$dest/metamod-fallguys/metamod/include/meta_api.h"
+
+# CS 1.6 sprites and hud.txt. A local install wins; otherwise keep the small tree under .image/half-life.
+# GitHub Actions has no Steam library, so the first run there installs the Half-Life dedicated server.
+[group('image')]
+[private]
+fetch-cs-sprites:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  local_cs='{{cstrike_dir}}'
+  cache='{{justfile_directory()}}/.image/half-life'
+  ready() { test -f "$1/sprites/640hud7.spr" && test -f "$1/sprites/hud.txt" && test -f "$1/../valve/sprites/640_pain.spr"; }
+  if ready "$local_cs"; then
+    echo "CS sprites: $local_cs"
+    exit 0
+  fi
+  if ready "$cache/cstrike"; then
+    echo "CS sprites: $cache/cstrike"
+    exit 0
+  fi
+  work=$(mktemp -d)
+  # SteamCMD writes as root, so a plain rm of the install fails and would fail the recipe.
+  trap 'docker run --rm -v "$work:/data" --entrypoint sh steamcmd/steamcmd:latest -c "rm -rf /data/* /data/.[!.]* /data/..?*"; rmdir "$work"' EXIT
+  docker run --rm -v "$work:/data" steamcmd/steamcmd:latest \
+    +force_install_dir /data \
+    +login anonymous \
+    +app_update 90 validate \
+    +quit
+  sheet=$(find "$work" -path '*/sprites/640hud7.spr' -print -quit)
+  test -n "$sheet"
+  cs=$(dirname "$(dirname "$sheet")")
+  pain=$(find "$work" -path '*/valve/sprites/640_pain.spr' -print -quit)
+  test -n "$pain"
+  mkdir -p "$cache/cstrike/sprites" "$cache/valve/sprites"
+  cp -a "$cs"/sprites/640hud*.spr "$cs/sprites/muzzleflash2.spr" "$cs/sprites/hud.txt" "$cs"/sprites/weapon_*.txt "$cache/cstrike/sprites/"
+  cp -a "$pain" "$cache/valve/sprites/"
+  ready "$cache/cstrike"
+
+# Assemble .image/root: git assets, CS sprites, generated HUD, metamod-svencoop and the Rust plugin.
+[group('image')]
+[private]
+image-root: (fetch-cs-sprites)
+  #!/usr/bin/env bash
+  set -euo pipefail
+  root='{{justfile_directory()}}/.image/root'
+  rm -rf "$root"
+  mkdir -p "$root/scripts" "$root/events" "$root/addons/metamod/dlls" "$root/addons/counterlife"
+  cp -a '{{justfile_directory()}}/models' '{{justfile_directory()}}/sound' '{{justfile_directory()}}/sprites' "$root/"
+  cp -a '{{justfile_directory()}}/scripts/cs16' "$root/scripts/cs16"
+  cp -a '{{justfile_directory()}}/scripts/store' "$root/scripts/store"
+  cp -a '{{justfile_directory()}}/scripts/counterlife.as' '{{justfile_directory()}}/scripts/DamageMoneyScore.as' "$root/scripts/"
+  cp -a '{{justfile_directory()}}/events/.' "$root/events/"
+  local_cs='{{cstrike_dir}}'
+  if test -f "$local_cs/sprites/640hud7.spr"; then cs="$local_cs"; else cs='{{justfile_directory()}}/.image/half-life/cstrike'; fi
+  while read -r asset destination; do
+    test -n "$asset"
+    test -f "$cs/$asset" || { echo "missing CS 1.6 asset: $cs/$asset" >&2; exit 1; }
+    if test -z "${destination:-}"; then destination="$(dirname "$asset")/cs16/$(basename "$asset")"; fi
+    install -D -m 644 "$cs/$asset" "$root/$destination"
+  done < <(rg -v '^\s*(#|$)' '{{justfile_directory()}}/cstrike-assets.txt')
+  deno run -R="$cs" -W="$root/sprites/cs16/hud" '{{justfile_directory()}}/tools/hudgen.ts' \
+    "$cs" "$root/sprites/cs16/hud" >/dev/null
+  download='{{state_root}}/metamod/{{metamod_release}}'
+  archive="$download/{{metamod_archive}}"
+  mkdir -p "$download"
+  if ! echo '{{metamod_sha256}}  '"$archive" | sha256sum --check --status 2>/dev/null; then
+    curl -fsSL -o "$archive" '{{metamod_url}}'
+    echo '{{metamod_sha256}}  '"$archive" | sha256sum --check
+  fi
+  rm -rf "$download/unpacked" && unzip -q "$archive" -d "$download/unpacked"
+  cp -a "$download/unpacked/build/addons/metamod/dlls/." "$root/addons/metamod/dlls/"
+  install -m 755 \
+    '{{justfile_directory()}}/metamod/counterlife/target/i686-unknown-linux-gnu/release/libcounterlife.so' \
+    "$root/addons/counterlife/counterlife.so"
+  printf 'linux addons/counterlife/counterlife.so\n' > "$root/addons/metamod/plugins.ini"
+  find "$root/addons" -name '*.so' -exec chmod 755 {} +
+  for so in "$root/addons/counterlife/counterlife.so" "$root/addons/metamod/dlls/metamod.so"; do
+    file "$so" | grep -q 'ELF 32-bit' || { echo "$so is not an i686 shared object" >&2; exit 1; }
+  done
+  find "$root" -mindepth 1 -maxdepth 1 ! -type d -print | grep -q . && { echo 'image root has a file; mounts need directories' >&2; exit 1; }
+  for required in \
+    addons/counterlife/counterlife.so \
+    addons/metamod/dlls/metamod.so \
+    addons/metamod/plugins.ini \
+    scripts/cs16/cs16_register.as \
+    scripts/counterlife.as \
+    scripts/DamageMoneyScore.as \
+    scripts/store/DamageMoneyScore.cfg \
+    sprites/cs16/icons/640hud1.spr \
+    sprites/cs16/hud \
+    events/cs16_muzzleflash2_s3_a0.txt
+  do
+    test -e "$root/$required" || { echo "image is missing $required" >&2; exit 1; }
+  done
+  echo "image root: $root"
+
+# Build the content image. dev loads it locally. publish pushes an OCI image to GHCR.
+# Publish does not change the shitgamelab fleet pin: just image publish <tag>
+[group('image')]
+[arg('stage', pattern='dev|publish')]
+image stage='dev' tag='auto': (bindings) (metamod-build 'release') (image-root)
+  #!/usr/bin/env bash
+  set -euo pipefail
+  stage='{{stage}}'
+  tag='{{tag}}'
+  if test "$tag" = auto; then
+    if test "$stage" = publish; then tag=$(git -C '{{justfile_directory()}}' rev-parse --short=12 HEAD); else tag=dev; fi
+  fi
+  if test "$stage" = publish; then
+    test -z "$(git -C '{{justfile_directory()}}' status --porcelain)" || { echo 'commit the tree before publishing' >&2; exit 1; }
+  fi
+  ref='{{image_registry}}/{{image_name}}:'"$tag"
+  printf 'FROM scratch\nCOPY . /\n' > '{{justfile_directory()}}/.image/Dockerfile'
+  builder=()
+  output=(--load)
+  if test "$stage" = publish; then
+    docker buildx inspect svencoop-oci >/dev/null 2>&1 || docker buildx create --name svencoop-oci --driver docker-container >/dev/null
+    builder=(--builder svencoop-oci)
+    output=(--output type=registry,oci-mediatypes=true)
+  fi
+  docker buildx build "${builder[@]}" \
+    --file '{{justfile_directory()}}/.image/Dockerfile' \
+    --platform linux/amd64 \
+    --provenance=false \
+    --sbom=false \
+    "${output[@]}" \
+    --tag "$ref" \
+    '{{justfile_directory()}}/.image/root'
+  if test "$stage" = publish; then
+    digest=$(docker buildx imagetools inspect "$ref" --format '{{"{{.Digest}}"}}')
+    echo "$ref@$digest"
+    if test -n "${GITHUB_STEP_SUMMARY:-}"; then
+      printf '### Sven Co-op content image\n\n`%s@%s`\n\nThe shitgamelab fleet stays on its pinned digest until that pin changes.\n' "$ref" "$digest" >> "$GITHUB_STEP_SUMMARY"
+    fi
+  else
+    echo "loaded $ref"
+  fi

@@ -1,0 +1,64 @@
+name: Content image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/content-image.yml
+      - Justfile
+      - cstrike-assets.txt
+      - events/**
+      - metamod/counterlife/**
+      - models/**
+      - scripts/**
+      - sound/**
+      - sprites/**
+      - tools/hudgen.ts
+      - tools/spr.ts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: content-image
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-10-24
+          targets: i686-unknown-linux-gnu
+
+      - name: 32-bit C toolchain and libclang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-multilib g++-multilib libc6-dev-i386 libclang-dev pkg-config
+
+      - uses: taiki-e/install-action@just
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: 2.9.8
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/cache@v4
+        with:
+          path: .image/half-life
+          key: cs16-sprite-inputs-v1
+
+      - name: Publish the content image
+        env:
+          IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+        run: just image publish "${{ github.sha }}"
