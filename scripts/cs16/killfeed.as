@@ -82,9 +82,13 @@ namespace CS16KILLFEED
 
   // cs16_killfeed_names: which names the feed draws. The engine has 8 text slots, and the kill feed shares them: game_text
   // and map scripts use 4-7, plugins and Sven's target info 0-3 (docs/hud-architecture.md, "Conflicts"). A new name on a
-  // slot replaces the text of a map or another plugin there, so by default only the victims show, on slots 0-3.
-  enum Names { NO_NAMES = 0, VICTIM_NAMES = 1, ALL_NAMES = 2 }
+  // slot replaces the text of a map or another plugin there. By default the feed draws both names, as CS 1.6 does, on
+  // maps without game_text, and only the victims on slots 0-3 where a game_text could lose its text to a killer name.
+  enum Names { NO_NAMES = 0, VICTIM_NAMES = 1, ALL_NAMES = 2, AUTO_NAMES = 3 }
   CCVar@ g_NamesCvar;
+  // Whether the map has a game_text entity, found at the first draw of each map, when the map's entities exist.
+  enum MapText { MAP_TEXT_UNKNOWN, MAP_TEXT_NONE, MAP_TEXT_PRESENT }
+  MapText g_MapText = MAP_TEXT_UNKNOWN;
 
   const uint NO_NOTICE = 0; // a row that is empty on the client; serials start at 1
   array<Notice@> g_Notices; // oldest first, as the rows from the top
@@ -99,8 +103,9 @@ namespace CS16KILLFEED
 
   void PluginInit()
   {
-    @g_NamesCvar = CCVar( "cs16_killfeed_names", VICTIM_NAMES, "Kill feed names. 2: killer and victim, as CS 1.6 (all 8 HUD "
-      + "text slots, so a kill replaces texts of game_text and map scripts), 1: victims only (text slots 0-3), 0: none",
+    @g_NamesCvar = CCVar( "cs16_killfeed_names", AUTO_NAMES, "Kill feed names. 3: 2 on maps without game_text, else 1. "
+      + "2: killer and victim, as CS 1.6 (all 8 HUD text slots, so a kill can replace texts of game_text and map scripts), "
+      + "1: victims only (text slots 0-3), 0: none",
       ConCommandFlag::AdminOnly, @OnNamesChanged );
     for( uint index = 0; index < ICON_SHEETS.length(); ++index )
       CS16HUD::PrecacheSprite( CS16HUD::IconSheet( ICON_SHEETS[index] ) );
@@ -113,6 +118,18 @@ namespace CS16KILLFEED
   void MapInit()
   {
     g_Notices.resize( 0 );
+    g_MapText = MAP_TEXT_UNKNOWN;
+  }
+
+  // The names to draw now: the cvar, with its automatic setting resolved for the current map.
+  int NamesToDraw()
+  {
+    const int names = g_NamesCvar.GetInt();
+    if( names != AUTO_NAMES )
+      return names;
+    if( g_MapText == MAP_TEXT_UNKNOWN )
+      g_MapText = g_EntityFuncs.FindEntityByClassname( null, "game_text" ) is null ? MAP_TEXT_NONE : MAP_TEXT_PRESENT;
+    return g_MapText == MAP_TEXT_PRESENT ? VICTIM_NAMES : ALL_NAMES;
   }
 
   HookReturnCode OnPlayerKilled( CBasePlayer@ victim, CBaseEntity@ attacker, int gib )
@@ -352,7 +369,7 @@ namespace CS16KILLFEED
       const float hold = notice.expireTime - g_Engine.time;
       const int top = Scaled( TOP, screen ) + int( row ) * Scaled( LINE_STEP, screen );
       const int gap = Scaled( GAP, screen );
-      const int names = g_NamesCvar.GetInt();
+      const int names = NamesToDraw();
       const uint victimSlot = CS16HUD::KILLFEED_VICTIM_SLOT_FIRST + notice.pair;
       int left = screen.width - Scaled( RIGHT_MARGIN, screen );
       if( names >= VICTIM_NAMES )
@@ -375,7 +392,8 @@ namespace CS16KILLFEED
       left -= notice.icon.width;
       SendIcon( player, CS16HUD::KillfeedIconChannel( row ), notice.icon, left, top, screen, hold );
       // The pair may still hold the killer of the notice that a fifth one pushed out, or of the last names setting.
-      const uint killerSlot = CS16HUD::KILLFEED_KILLER_SLOT_FIRST + notice.pair;
+      // Killers take the slots from 7 down: a game_text on channel 1 and a map script's first text use slot 4.
+      const uint killerSlot = CS16HUD::KILLFEED_KILLER_SLOT_FIRST + CS16HUD::KILLFEED_ROWS - 1 - notice.pair;
       if( names >= ALL_NAMES && !notice.killer.IsEmpty() )
         SendName( player, killerSlot, notice.killer, notice.killerColour, left - gap, top, screen, hold );
       else

@@ -133,15 +133,17 @@ The engine keeps 8 text slots. A new text on a slot replaces the old text on tha
 share a slot. The stock API gives plugins slots 0–3 and map scripts slots 4–7 (`sven-client-hudtext.md` 1.2), and
 `game_text` entities and Sven itself use them too (see [Text slots](#text-slots)).
 
-| Engine text slot | Constant                            | Text                   | Drawn with `cs16_killfeed_names` |
-| ---------------- | ----------------------------------- | ---------------------- | -------------------------------- |
-| 0–3              | `KILLFEED_VICTIM_SLOT_FIRST` + pair | kill feed victim names | 1 (default) and 2                |
-| 4–7              | `KILLFEED_KILLER_SLOT_FIRST` + pair | kill feed killer names | 2                                |
+| Engine text slot | Constant                                | Text                   | Drawn with `cs16_killfeed_names`               |
+| ---------------- | --------------------------------------- | ---------------------- | ---------------------------------------------- |
+| 0–3              | `KILLFEED_VICTIM_SLOT_FIRST` + pair     | kill feed victim names | 1, 2 and 3 (default)                           |
+| 7–4              | `KILLFEED_KILLER_SLOT_FIRST` + 3 − pair | kill feed killer names | 2, and 3 (default) on maps without `game_text` |
 
 Each notice holds one pair of slots (its victim slot and its killer slot, pair 0–3, the lowest free one) for its whole
 life, also when its row moves up. So a moving name replaces only its own text, and the client removes a name when its
 hold time ends: the feed sends no empty text when a row ends. `ClearText` sends an empty text only while the text that
-this plugin drew in the slot is still on the screen (`rawhud.as` keeps the end time of each text).
+this plugin drew in the slot is still on the screen (`rawhud.as` keeps the end time of each text). The killer slot of
+pair 0 is 7, so killer names reach slot 4, where a `game_text` on channel 1 and the first text of a map script go, only
+with four notices on screen.
 
 `KILLFEED_ROWS` is 4. Sven Co-op is a co-operative game, so players do not kill other players. A kill feed row shows a
 player who kills a monster, or a monster or the world that kills a player.
@@ -170,7 +172,8 @@ On these maps the map script and this plugin write the same targets:
 - The last sender wins. A sprite deletes a time or number display on the same channel, and the reverse.
 - The map script sends again when its own state changes. Then our element is gone until our next send.
 - `HudToggleElement( null, channel, false )` from the map script also hides our element on that channel.
-- A map text on slot 4 replaces the killer name of pair 0 (only with `cs16_killfeed_names 2`), and the reverse.
+- A map text on slot 4 replaces the killer name of pair 3 (with `cs16_killfeed_names` 2, or 3 on a map without
+  `game_text`), and the reverse.
 
 The foundation cannot find out if a map script uses a channel. The owner of a map-group element must accept the conflict
 or avoid it. Two ways to avoid it: merge the headshot icon into the weapon icon frame (`cs16-hud-spec.md` 5.5,
@@ -196,11 +199,12 @@ at the same x and y (`sven-client-hudtext.md` 1.4).
 So each kill-feed name can replace a text of a map, of a plugin or of Sven, and each of these texts can replace a name.
 `cs16_killfeed_names` (admin) sets the trade-off:
 
-| Value       | Names                          | Slots | Conflicts                                                                                                                                                 |
-| ----------- | ------------------------------ | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0           | none (icons only)              | none  | none                                                                                                                                                      |
-| 1 (default) | victims                        | 0–3   | texts of other plugins; the target info on slot 3 replaces the victim of a fourth notice while the player aims at a monster, and it comes back in 0.125 s |
-| 2           | killers and victims, as CS 1.6 | 0–7   | also `game_text` and map-script texts: a kill can remove the objective or story text of a map, which does not come back                                   |
+| Value       | Names                                                         | Slots      | Conflicts                                                                                                                                                 |
+| ----------- | ------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0           | none (icons only)                                             | none       | none                                                                                                                                                      |
+| 1           | victims                                                       | 0–3        | texts of other plugins; the target info on slot 3 replaces the victim of a fourth notice while the player aims at a monster, and it comes back in 0.125 s |
+| 2           | killers and victims, as CS 1.6                                | 0–7        | also `game_text` and map-script texts: a kill can remove the objective or story text of a map, which does not come back                                   |
+| 3 (default) | as 2 on maps without a `game_text` entity, as 1 on the others | 0–7 or 0–3 | as 2 or 1; a map script's text has no entity to detect, and four notices on screen can replace its slot-4 text                                            |
 
 ### This repository
 

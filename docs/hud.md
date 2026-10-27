@@ -98,10 +98,10 @@ the conflicts with five stock maps.
 | 27, 28         | plugin | money: dollar and three cells, last two cells            | `money.as`      |
 | 29–31          | plugin | kill feed weapon icons, rows 1–3                         | `killfeed.as`   |
 
-| Engine text slot | Text                                                                 | File          |
-| ---------------- | -------------------------------------------------------------------- | ------------- |
-| 0–3              | kill feed victim names (`cs16_killfeed_names` 1, the default, and 2) | `killfeed.as` |
-| 4–7              | kill feed killer names (`cs16_killfeed_names` 2)                     | `killfeed.as` |
+| Engine text slot | Text                                                                                              | File          |
+| ---------------- | ------------------------------------------------------------------------------------------------- | ------------- |
+| 0–3              | kill feed victim names (`cs16_killfeed_names` 1, 2 and 3, the default)                            | `killfeed.as` |
+| 4–7              | kill feed killer names, slot 7 first (`cs16_killfeed_names` 2, and 3 on maps without `game_text`) | `killfeed.as` |
 
 Maps (`game_text`, map scripts), other plugins and Sven's target info use the same text slots, so a name can replace
 their texts and the reverse. [`hud-architecture.md`](hud-architecture.md#text-slots) lists them; `cs16_killfeed_names`
@@ -717,7 +717,7 @@ is [cs16-killfeed-reference.md](research/cs16-killfeed-reference.md), which meas
 | Rows      | 4 at most. A new notice goes to the bottom. A fifth notice removes the oldest.                                                                                                                                                                                                                                      |
 | Lifetime  | 6.0 s. The oldest notice expires first, and the rows below it move up together.                                                                                                                                                                                                                                     |
 | Row top   | `s(32) + i × s(16)` for row `i` (0 is the top row). The icons and the names use the same top.                                                                                                                                                                                                                       |
-| Parts     | Right to left: the victim name ends at `W − s(12)`, then `s(5)`, the headshot icon and `s(5)` (headshots only), the weapon icon, `s(5)`, and the killer name. `cs16_killfeed_names` 1 (the default) leaves the killer name out, 0 both names.                                                                       |
+| Parts     | Right to left: the victim name ends at `W − s(12)`, then `s(5)`, the headshot icon and `s(5)` (headshots only), the weapon icon, `s(5)`, and the killer name. `cs16_killfeed_names` 3 (the default) leaves the killer name out on maps with a `game_text` entity, 1 always, and 0 leaves out both names.            |
 | Names     | Players in the CT colour (153,204,255), monsters in the T colour (255,63,63). The server sends one level more (154,205,255 and 255,64,64), because the client draws text one level darker.                                                                                                                          |
 | Icons     | `d_<weapon>` rects of `640hud1.spr`, `640hud2.spr` and `640hud16.spr` (the `hud.txt` 640 rows), 16 px high, drawn from the `hudgen` copies `cs16/hud/640hud*_icons.spr` (see [`hud-sprites.md`](hud-sprites.md#icon-sheets)) and added to the screen with the tint (255,80,0). The headshot icon has the same tint. |
 | No killer | A death from the world or from the victim itself shows `d_skull` and no killer name, as a CS suicide.                                                                                                                                                                                                               |
@@ -740,21 +740,24 @@ The data for one notice comes from the `PlayerKilled` and `MonsterKilled` hooks:
 
 ### Messages
 
-| Part          | Where                                                                                          |
-| ------------- | ---------------------------------------------------------------------------------------------- |
-| Weapon icon   | `KillfeedIconChannel(row)`: plugin channels 29–31 for rows 0–2, map channel 0 for row 3        |
-| Headshot icon | map channels 1–4 (`KILLFEED_HEADSHOT_FIRST + row`)                                             |
-| Victim names  | engine text slots 0–3 (`KILLFEED_VICTIM_SLOT_FIRST + pair`), with `cs16_killfeed_names` 1 or 2 |
-| Killer names  | engine text slots 4–7 (`KILLFEED_KILLER_SLOT_FIRST + pair`), with `cs16_killfeed_names` 2      |
+| Part          | Where                                                                                                                           |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Weapon icon   | `KillfeedIconChannel(row)`: plugin channels 29–31 for rows 0–2, map channel 0 for row 3                                         |
+| Headshot icon | map channels 1–4 (`KILLFEED_HEADSHOT_FIRST + row`)                                                                              |
+| Victim names  | engine text slots 0–3 (`KILLFEED_VICTIM_SLOT_FIRST + pair`), with `cs16_killfeed_names` 1, 2 or 3                               |
+| Killer names  | engine text slots 7–4 (`KILLFEED_KILLER_SLOT_FIRST + 3 − pair`), with `cs16_killfeed_names` 2, or 3 on maps without `game_text` |
 
 - The icons use `HUD_ELEM_ABSOLUTE_X | HUD_ELEM_NO_BORDER`: x is a negative pixel count, so the right edge of the icon
   is that far from the right screen edge, and y is a fraction of the height, `(top + 0.5) / H`. On the screen size of
   the player both give the CS pixel. Their width and height are never 0 (0 means "to the edge of the sheet").
-- `cs16_killfeed_names` (admin): 1 (default) draws the victim names only, 2 draws killer and victim as CS 1.6 does, 0
-  draws no names. The engine has 8 text slots, and maps (`game_text` on slots 4–7), other plugins (0–3) and Sven's
-  target info (3) use them too, so 2 lets a kill replace the objective text of a map
-  ([conflicts](hud-architecture.md#text-slots)). A name that the setting leaves out leaves no gap: without names the
-  icons end at `W − s(12)`.
+- `cs16_killfeed_names` (admin): 3 (default) draws killer and victim as CS 1.6 does on maps without a `game_text` entity
+  and the victim names only on the others, 2 always draws both, 1 the victim names only, 0 no names. The engine has 8
+  text slots, and maps (`game_text` on slots 4–7), other plugins (0–3) and Sven's target info (3) use them too, so 2
+  lets a kill replace the objective text of a map ([conflicts](hud-architecture.md#text-slots)). Killer names take slot
+  7 first, so they reach slot 4 (a `game_text` on channel 1, the first text of a map script) only with four notices on
+  screen. A map script's text has no entity to detect: on maps whose scripts print texts (for example `th_escape`, `snd`
+  and the `bridge` maps) set 1. A name that the setting leaves out leaves no gap: without names the icons end at
+  `W − s(12)`.
 - Each notice keeps one pair of text slots (victim, killer) while its row moves up. A row goes out only when it shows
   another notice: a new notice, rows that move up, or a resend (connection, map change, a spawn, `cs16_hud 1`, a new
   screen size, a new `cs16_killfeed_names`). For each player the server keeps the serial number of the notice in each

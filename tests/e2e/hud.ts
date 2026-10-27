@@ -284,7 +284,7 @@ try {
     await killNearest(index % 2 === 0 ? "head" : "body");
   }
   await capture("killfeed-4");
-  // cs16_killfeed_names: the default draws the victims only; 2 draws the killers too, as CS 1.6, on the same rows.
+  // cs16_killfeed_names: 1 draws the victims only; 2 draws the killers too, as CS 1.6, on the same rows.
   await server.command("as_command .cs16_killfeed_names 2");
   await sleep(KILLFEED_REDRAW_MS);
   await capture("killfeed-4-cs");
