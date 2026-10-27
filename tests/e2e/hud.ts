@@ -3,9 +3,12 @@
 // the C4 and check that the ammo counter and the c4 icon go. Exits 1 when a check fails.
 // Usage: deno run -A tests/e2e/hud.ts [port] [label]
 // The server install (SVEN_SERVER_DIR) must already contain the game content and the e2e plugin.
-import { Client, crop, PLAYER_NAME, Server, sleep } from "./driver.ts";
+import { Client, crop, PLAYER_NAME, record, Server, sleep } from "./driver.ts";
 import { measure } from "./hudboxes.ts";
 import { addedColour, Pixels, type Region, type Rgb } from "./hudcompare.ts";
+import { measureCrosshair } from "./crosshair-lines.ts";
+import { burstEnvelope } from "./crosshair-model.ts";
+import { load } from "../fixture/frame.ts";
 
 const MOTD_DELAY_MS = 3_000;
 const SETTLE_MS = 1_200;
@@ -37,6 +40,19 @@ const NAME_CHANNEL_SPREAD = 25;
 const isVictimRed = ([red, green, blue]: Rgb) =>
   red > 200 && green < 110 && Math.abs(green - blue) < NAME_CHANNEL_SPREAD;
 const isKillerBlue = ([red, green, blue]: Rgb) => red > 130 && red < 180 && green > 185 && green < 225 && blue > 235;
+// The AK-47 held for 1.5 s, recorded: its gap band once the spread has built up (from 0.5 s), and the time back to rest
+// (cs16-hud-spec.md A.2; weapon_ak47.as fires every 0.0955 s). The plugin sends the lines at most every 0.1 s, one step
+// of the server tick after the shot, so its samples may sit 1 px below the band, and its recovery can lag the 100 fps
+// model by a send interval plus a tick and a recording frame.
+const AK47_BURST = { gap: 4, shotDelta: 4, fireInterval: 0.0955, fireSeconds: 1.5 };
+const SERIES_SETTLED_SECONDS = 0.5;
+const SERIES_SECONDS = 3;
+const SERIES_FRAMES_PER_SECOND = 20;
+const SERIES_BAND_SLACK_PX = 1;
+const RECOVERY_EARLY_S = 0.15;
+const RECOVERY_LATE_S = 0.35;
+const CROSSHAIR_SCALE_BASE = 640; // cl_crosshair_size auto above 1024 px (cs16-hud-spec.md 3.12.5)
+const SERIES_HALF = 100; // the recorded square around the centre, inside which the widest AK-47 gap fits
 const VICTIM = "monster_scientist";
 const VICTIM_DISTANCES = [160, 220, 280, 340];
 const WEAPONS = ["weapon_csknife", "weapon_usp", "weapon_ak47", "weapon_m3", "weapon_awp", "weapon_hegrenade"];
@@ -125,6 +141,50 @@ async function changeLevel() {
     failures.push(`after changelevel the health glyphs are not settled: ${JSON.stringify(glyphs)}`);
   }
   await e2e("backdrop", /\[e2e\] backdrop/);
+}
+
+// The west line's gap in each frame of a recording of the AK-47 at rest, during held fire and after it, against the CS
+// rules at 100 frames a second.
+async function crosshairSeries() {
+  const centre = {
+    x: Math.floor(width / 2) - SERIES_HALF,
+    y: Math.floor(height / 2) - SERIES_HALF,
+    width: 2 * SERIES_HALF,
+    height: 2 * SERIES_HALF,
+  };
+  const frames = await record(
+    `${label}-crosshair-series`,
+    centre,
+    SERIES_SECONDS,
+    SERIES_FRAMES_PER_SECOND,
+    async () => {
+      await client.mouseDown();
+      await sleep(AK47_BURST.fireSeconds * 1000);
+      await client.mouseUp();
+    },
+  );
+  const gaps = await Promise.all(frames.map(async (frame) => measureCrosshair(await load(frame)).west?.gap ?? -1));
+  const restGap = gaps[0];
+  const fireStart = gaps.findIndex((gap) => gap > restGap);
+  const release = fireStart + Math.round(AK47_BURST.fireSeconds * SERIES_FRAMES_PER_SECOND);
+  const firing = gaps.slice(fireStart + Math.round(SERIES_SETTLED_SECONDS * SERIES_FRAMES_PER_SECOND), release);
+  const backAtRest = gaps.findIndex((gap, index) => index >= release && gap === restGap);
+  const ours = {
+    minGap: Math.min(...firing),
+    maxGap: Math.max(...firing),
+    recovery: backAtRest < 0 ? undefined : (backAtRest - release) / SERIES_FRAMES_PER_SECOND,
+  };
+  const model = burstEnvelope(AK47_BURST, width / CROSSHAIR_SCALE_BASE, SERIES_SETTLED_SECONDS);
+  report.crosshairSeries = { gaps: gaps.join(" "), ours, model };
+  if (fireStart < 0 || ours.minGap < model.minGap - SERIES_BAND_SLACK_PX || ours.maxGap > model.maxGap) {
+    failures.push(`the held AK-47 leaves the CS band: ${JSON.stringify(report.crosshairSeries)}`);
+  }
+  if (
+    ours.recovery === undefined || ours.recovery < model.recovery - RECOVERY_EARLY_S ||
+    ours.recovery > model.recovery + RECOVERY_LATE_S
+  ) {
+    failures.push(`the AK-47 crosshair does not come back to rest in time: ${JSON.stringify(report.crosshairSeries)}`);
+  }
 }
 
 // How many pixels of a region the HUD lit in one channel, on the backdrop.
@@ -244,6 +304,7 @@ try {
   await hold(() => client.mouseDown(), () => client.mouseUp(), "crosshair-firing", 600);
   await sleep(1_500);
   await capture("crosshair-rest");
+  await crosshairSeries();
   await hold(() => client.keyDown("w"), () => client.keyUp("w"), "crosshair-running", 700);
   await client.console("impulse 100");
   await sleep(SETTLE_MS);

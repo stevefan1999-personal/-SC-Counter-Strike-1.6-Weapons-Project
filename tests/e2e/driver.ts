@@ -170,3 +170,35 @@ export async function crop(
   ]);
   return target;
 }
+
+const RECORDER_TIMEOUT_MS = 10_000;
+const RECORDER_POLL_MS = 50;
+
+// Records a region of the screen for `seconds` at `framesPerSecond` around an action, for HUD changes that a single
+// screenshot cannot catch (a 0.1 s blink, a 0.3 s pain arrow, the crosshair during fire). Returns the frames, images of
+// the region alone, in order. The action starts after the first frame: x11grab can take longer to start than such a
+// change lasts.
+export async function record(
+  name: string,
+  region: { x: number; y: number; width: number; height: number },
+  seconds: number,
+  framesPerSecond: number,
+  action: () => Promise<unknown>,
+): Promise<string[]> {
+  const directory = `${stateRoot}/shots/${name}`;
+  await Deno.remove(directory, { recursive: true }).catch(() => {});
+  await Deno.mkdir(directory, { recursive: true });
+  const args = ["-hide_banner", "-loglevel", "error", "-f", "x11grab", "-framerate", String(framesPerSecond)];
+  args.push("-video_size", `${region.width}x${region.height}`, "-i", `${display}+${region.x},${region.y}`);
+  args.push("-t", String(seconds), "-start_number", "0", `${directory}/%03d.png`);
+  const recorder = new Deno.Command("ffmpeg", { args, stdout: "null", stderr: "piped" }).spawn();
+  const deadline = Date.now() + RECORDER_TIMEOUT_MS;
+  while (!(await Deno.stat(`${directory}/000.png`).then(() => true, () => false))) {
+    if (Date.now() > deadline) throw new E2eError("ffmpeg recorded no frame");
+    await sleep(RECORDER_POLL_MS);
+  }
+  await action();
+  const { success, stderr } = await recorder.output();
+  if (!success) throw new E2eError(`ffmpeg: ${new TextDecoder().decode(stderr)}`);
+  return [...Deno.readDirSync(directory)].map((entry) => `${directory}/${entry.name}`).sort();
+}

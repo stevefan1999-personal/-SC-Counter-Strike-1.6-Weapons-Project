@@ -6,7 +6,7 @@
 // the reference (REFERENCES); CS_REFERENCE_DIR overrides where the references are (default: the main checkout's
 // .e2e/reference, which git ignores); CSTRIKE_DIR is the CS 1.6 install. Prints a JSON report and exits 1 when a check
 // fails.
-import { Client, crop, Server, sleep } from "./driver.ts";
+import { Client, crop, record as recordRegion, Server, sleep } from "./driver.ts";
 import { measure } from "./hudboxes.ts";
 import { addedColour, matchBoxes, Pixels, rectError, type Region, type Rgb } from "./hudcompare.ts";
 import { parseSpr } from "../../tools/spr.ts";
@@ -18,7 +18,6 @@ const FADE_SETTLE_MS = 5_600; // CS fades end after 5 s
 const CHANGE_SHOT_MS = 300; // inside the 2.5 s change row of the money
 const CLIP_SECONDS = 2; // a recording around a command: the blink takes 0.3 s, a flash period 0.2 s
 const CLIP_FRAMES_PER_SECOND = 30; // three frames in each 0.1 s phase
-const RECORDER_TIMEOUT_MS = 10_000;
 const POLL_MS = 50;
 const JOIN_HOLD_MS = 3_000;
 const WEAPON_SWITCH_TRIES = 20;
@@ -55,7 +54,6 @@ const [portArg = "27017", label = "elements", cropDir] = Deno.args;
 const port = Number(portArg);
 const resolution = Deno.env.get("CL_RESOLUTION") ?? "1600x900";
 const [width, height] = resolution.split("x").map(Number);
-const display = Deno.env.get("CL_DISPLAY") ?? ":99";
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const stateRoot = Deno.env.get("CL_STATE_DIR") ?? `${repoRoot}.e2e`;
 const steamCommon = Deno.env.get("STEAM_COMMON") ?? `${Deno.env.get("HOME")}/.local/share/Steam/steamapps/common`;
@@ -174,27 +172,9 @@ async function checkC4Icon(image: string) {
   check(shifted.every((value) => value > error(0, 0)), `c4 icon matches as well one pixel off: ${shifted}`);
 }
 
-// Records a region of the screen around an action, for the 0.1 s phases of the money blink and the status icon flash.
-// The frames are images of the region alone.
-async function record(name: string, region: Region, action: () => Promise<unknown>): Promise<string[]> {
-  const directory = `${stateRoot}/shots/${label}-${name}`;
-  await Deno.remove(directory, { recursive: true }).catch(() => {});
-  await Deno.mkdir(directory, { recursive: true });
-  const args = ["-hide_banner", "-loglevel", "error", "-f", "x11grab", "-framerate", String(CLIP_FRAMES_PER_SECOND)];
-  args.push("-video_size", `${region.width}x${region.height}`, "-i", `${display}+${region.x},${region.y}`);
-  args.push("-t", String(CLIP_SECONDS), "-start_number", "0", `${directory}/%03d.png`);
-  const recorder = new Deno.Command("ffmpeg", { args, stdout: "null", stderr: "piped" }).spawn();
-  // The action must come after the first frame: a blink lasts 0.3 s and x11grab can take longer than that to start.
-  const deadline = Date.now() + RECORDER_TIMEOUT_MS;
-  while (!(await Deno.stat(`${directory}/000.png`).then(() => true, () => false))) {
-    if (Date.now() > deadline) throw new Error("ffmpeg recorded no frame");
-    await sleep(POLL_MS);
-  }
-  await action();
-  const { success, stderr } = await recorder.output();
-  if (!success) throw new Error(`ffmpeg: ${new TextDecoder().decode(stderr)}`);
-  return [...Deno.readDirSync(directory)].map((entry) => `${directory}/${entry.name}`).sort();
-}
+// A recording of the elements scenario: CLIP_SECONDS at CLIP_FRAMES_PER_SECOND.
+const record = (name: string, region: Region, action: () => Promise<unknown>) =>
+  recordRegion(`${label}-${name}`, region, CLIP_SECONDS, CLIP_FRAMES_PER_SECOND, action);
 
 // The lit pixels of a recorded pain frame (an image of PAIN alone) in each CS arrow box, then those outside all boxes.
 // The arrows add red only: 640_pain.spr has a red palette.
