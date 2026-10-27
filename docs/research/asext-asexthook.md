@@ -37,13 +37,13 @@ The side-channel pass returned no result. Section 4 covers side channels only as
 | `metamod-p-rs/`     | the checkout next to this repository                                                                                       | `9459e87`                                                 |
 | `outputdocs.txt`    | `sven-coop.github.io/outputdocs.txt`, the Sven AngelScript API dump                                                        | `623a077`                                                 |
 
-| File             | SHA-256                                                            | Notes                                                                                                     |
-| ---------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `hw.so`          | `8cead76a51204a4ba1036c85cc2099b7c3542950d924846a9aa2ccf619df7dfd` | engine of the client and of a listen server, `.re/engine/hw.so.i64`                                       |
-| `server.so`      | `7a980bbd4b03f7380092e45d0a7515085ffb5142e62589d87e2596e90d89d2ca` | game, `.re/server/server.so.i64`                                                                          |
-| `client.so`      | `50580344e1c59b3c77e8e4e52ed9f185fcec7da2da936873ec122f12c735a022` | client DLL, `.re/client/client.so.i64`                                                                    |
-| `engine_i686.so` | `ce7f5a36f7de11bfbe89707180ae4984e2de5a7b047c962c3ae1fc3e93354e3d` | engine of the dedicated server. No IDA database                                                           |
-| `asext.so`       | `f2956fbe8665949ea378ed0befd3ef64d2d24fd5bb2a77362370e6bbb6c159d0` | in `metamod-fallguys-ubuntu-i386.zip` of `v20261009a` (SHA-256 in `Justfile:472`). Not loaded into a game |
+| File             | SHA-256                                                            | Notes                                                                                                       |
+| ---------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `hw.so`          | `8cead76a51204a4ba1036c85cc2099b7c3542950d924846a9aa2ccf619df7dfd` | engine of the client and of a listen server, `.re/engine/hw.so.i64`                                         |
+| `server.so`      | `7a980bbd4b03f7380092e45d0a7515085ffb5142e62589d87e2596e90d89d2ca` | game, `.re/server/server.so.i64`                                                                            |
+| `client.so`      | `50580344e1c59b3c77e8e4e52ed9f185fcec7da2da936873ec122f12c735a022` | client DLL, `.re/client/client.so.i64`                                                                      |
+| `engine_i686.so` | `ce7f5a36f7de11bfbe89707180ae4984e2de5a7b047c962c3ae1fc3e93354e3d` | engine of the dedicated server: a running `svends_i686` maps it, not `hw.so`. No IDA database: `objdump -d` |
+| `asext.so`       | `f2956fbe8665949ea378ed0befd3ef64d2d24fd5bb2a77362370e6bbb6c159d0` | in `metamod-fallguys-ubuntu-i386.zip` of `v20261009a` (SHA-256 in `Justfile:472`). Not loaded into a game   |
 
 The GoldSrc_VibeSignatures dataset `svencoop-10257`
 ([snapshot](https://hlnd2t.github.io/GoldSrc_VibeSignatures/gamesymbols/svencoop-10257.354ed3ba2443e3ca53043ddb35e6093c6303124585f13670d08188640f857c5c.json),
@@ -387,12 +387,16 @@ Path of a key such as `_cs16res`, in `hw.so` unless the item names another file:
    `cls.userinfo`. The client removes no key. The only callers of `Info_RemovePrefixedKeys` (0x85A50) are server
    functions.
 5. **Server.** The HLDS reference removes only the key `password` from a new client's userinfo
-   ([`ReHLDS_Sven/rehlds/engine/sv_main.cpp:2198`][rh-checkuserinfo]). The engine gives the game the userinfo through
-   `pfnGetInfoKeyBuffer`. AngelScript reads it with `KeyValueBuffer@ GetInfoKeyBuffer(edict_t@ pEdict)` and
+   ([`ReHLDS_Sven/rehlds/engine/sv_main.cpp:2198`][rh-checkuserinfo]). Sven's engines do the same: `SV_CheckUserInfo`
+   (0xBA8B0) removes only `password` and cleans `name`, and `engine_i686.so` loads `password` at 0x5D51B and removes it
+   with `Info_RemoveKey` (0x34360) at 0x5D52E. The engine gives the game the userinfo through `pfnGetInfoKeyBuffer`.
+   AngelScript reads it with `KeyValueBuffer@ GetInfoKeyBuffer(edict_t@ pEdict)` and
    `string GetValue(const string& in szKey) const` (`outputdocs.txt:5145` and `:5398`).
 6. **Other players.** `SV_FullClientUpdate` (0xBCAE0), the update for a new connection (0xB88D0) and 0xB9540 call
    `Info_RemovePrefixedKeys(info, '_')` before `svc_updateuserinfo` (13). Thus other clients never get a `_` key. ReHLDS
-   does the same ([`sv_main.cpp:4116`][rh-fullupdate]). I did not check this in `engine_i686.so`.
+   does the same ([`sv_main.cpp:4116`][rh-fullupdate]). `engine_i686.so` does the same: it calls its
+   `Info_RemovePrefixedKeys` (0x344D0) with `_` at 0x5B7B7, 0x5C16B and 0x5F63F, each time before it writes 13.
+   `docs/research/sven-userinfo.md` on `feat/local-hudres` (`e6aca83`) finds the same.
 7. **Change during a game.** `SV_UpdateToReliableMessages` (0xC0080) handles the send flag of item 1 at most one time
    each second for each client. It calls `SV_ExtractFromUserinfo` (0xBF9D0, call at 0xC0367), which calls the game's
    `ClientUserInfoChanged`, and then `SV_FullClientUpdate`. The two other callers are `SV_ConnectClient` (0xC6B60, call
@@ -570,10 +574,11 @@ void SaveClientScreen( CBasePlayer@ player, const ScreenSize@ size )
 ## Open points
 
 - No in-game check of the userinfo key yet (step 1). Everything in section 6 is static.
-- `engine_i686.so` has no IDA database. The removal of `_` keys for other players (section 6, item 6) is checked only in
-  `hw.so` and in ReHLDS.
-- The length of a real Sven 5.26 userinfo is not measured. A full userinfo refuses the key, and a longer name or model
-  can remove it later (section 6, item 2).
+- The `engine_i686.so` checks (section 6, items 5 and 6) come from `objdump -d`, without an IDA database.
+- In a game, the userinfo of a Sven 5.26 client with a 6-character name had 12 keys and 173 bytes on the server
+  (`docs/research/sven-userinfo.md` on `feat/local-hudres`, `e6aca83`). `\_cs16res\2560x1440` adds 19 bytes: 192 of the
+  255 bytes, or 215 with `_cs16_hudres` for a client on the server's machine. A full userinfo refuses the key, and a
+  longer name or model can remove it later (section 6, item 2).
 - A crash of the client skips `Host_WriteConfiguration`. Then a key that the server put in during that session is lost,
   but the stored `.hudres` still works on that server.
 - If a future client blocks a stuffed `setinfo`, an old key stays in the client's config. At the next connection it
