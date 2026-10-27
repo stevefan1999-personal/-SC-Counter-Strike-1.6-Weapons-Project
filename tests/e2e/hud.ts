@@ -45,6 +45,7 @@ const isKillerBlue = ([red, green, blue]: Rgb) => red > 130 && red < 180 && gree
 // of the server tick after the shot, so its samples may sit 1 px below the band, and its recovery can lag the 100 fps
 // model by a send interval plus a tick and a recording frame.
 const AK47_BURST = { gap: 4, shotDelta: 4, fireInterval: 0.0955, fireSeconds: 1.5 };
+const AK47_CLIP = 30;
 const SERIES_SETTLED_SECONDS = 0.5;
 const SERIES_SECONDS = 5; // the first shot shows about 1 s into the recording, then 1.5 s of fire and the recovery
 const SERIES_FRAMES_PER_SECOND = 20;
@@ -152,6 +153,10 @@ async function crosshairSeries() {
     width: 2 * SERIES_HALF,
     height: 2 * SERIES_HALF,
   };
+  // A full clip: the firing step before held the trigger while it took its screenshot, which at 2560x1440 emptied
+  // the clip, so the burst stopped after three shots.
+  await e2e(`ammo ${AK47_CLIP} ${AK47_CLIP}`, /\[e2e\] ammo[^\n]*/);
+  await sleep(SETTLE_MS);
   const frames = await record(
     `${label}-crosshair-series`,
     centre,
