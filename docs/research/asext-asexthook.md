@@ -82,16 +82,17 @@ asext ("AngelScriptExt") is a metamod plugin of the metamod-svencoop package, wh
 It exports a C API, `ASEXT_*`. Other metamod plugins use this API to add native code to Sven's AngelScript, for map
 scripts and for plugins. asext does nothing alone.
 
-The `v20261009a` release has `asext.so` and three consumers of it: asqcvar, asusermsg and ascurl. The release
-`plugins.ini` does not list asext, because each consumer loads it with metamod's `pfnLoadPlugin`. This project downloads
-the release, but `just metamod-install` keeps its plugins off
-([Metamod plugin](../metamod.md#install-on-a-dedicated-server)).
+The `v20261009a` release has `asext.so` and four consumers of it: asqcvar, asusermsg, ascurl and fallguys (fallguys
+loads asext in [`fallguys@dac8db54/src/meta_api.cpp:296-307`][fg-asext]). The release `plugins.ini` does not list asext,
+because each consumer loads it with metamod's `pfnLoadPlugin`. This project downloads the release, but
+`just metamod-install` keeps its plugins off ([Metamod plugin](../metamod.md#install-on-a-dedicated-server)).
 
 ### 1.2 How it works
 
 1. **Symbols.** At `Meta_Attach`, asext finds 40 private functions and data objects in `server.so`. The release build
-   uses Linux byte signatures ([`asext@df03faf/src/meta_api.cpp:167`][axr-meta]). The main branch uses the
-   GoldSrc_VibeSignatures catalog through `pfnResolveGameSymbol` of metamod 5:17
+   uses Linux byte signatures when `server.so` has the interface `SCServerDLL003`, as ours has (string at 0x8FA078)
+   ([`asext@df03faf/src/meta_api.cpp:218-284`][axr-meta]). Else it looks for the symbol names of Sven 5.15. The main
+   branch uses the GoldSrc_VibeSignatures catalog through `pfnResolveGameSymbol` of metamod 5:17
    ([`asext/src/meta_api.cpp:148`][ax-meta]). One missing symbol stops the attach.
 2. **Hooks.** asext puts inline hooks on three functions of Sven's script system
    ([`asext/src/server_hook.cpp:181-260`][ax-hooks]):
@@ -103,13 +104,13 @@ the release, but `just metamod-install` keeps its plugins off
    - `CScriptBuilder::DefineWord` (0xEE470). After each module builder defines `SERVER` (0x11E497), asext runs the
      define callbacks.
 3. **Time.** AngelScript starts one time for each process, at the end of `pfnGameInit` (`server.so` 0x37CC20, call at
-   0x37DCFC). Thus a consumer registers its callbacks in `Meta_Attach` at server start
+   0x37DCFA). Thus a consumer registers its callbacks in `Meta_Attach` at server start
    ([`asext/USAGE.md:41`][ax-usage]). A registered function stays until the process stops, so a consumer must never
    unload ([`astemplate/src/plugin.cpp:162`][at-detach]).
 4. **Calls.** A native function uses one of the AngelScript calling conventions `asCALL_CDECL` (0), `asCALL_THISCALL`
    (3), `asCALL_CDECL_OBJLAST` (4) and `asCALL_CDECL_OBJFIRST` (5). `server.so` contains AngelScript 2.36.1, built with
    `AS_NO_EXCEPTIONS AS_LINUX AS_X86`. Thus native calls work.
-5. **ABI.** The release `asext.so` exports 48 symbols: 46 `extern "C"` cdecl functions and 2 function pointers
+5. **ABI.** The release `asext.so` exports 48 `ASEXT_*` symbols: 46 `extern "C"` cdecl functions and 2 function pointers
    (`ASEXT_CallHook`, `ASEXT_CallCASBaseCallable`). It has no version query. Its callbacks get no user-data pointer.
 
 Static check of the release asext against our `server.so` (no run):
@@ -135,7 +136,8 @@ Static check of the release asext against our `server.so` (no run):
 | Data helpers       | script strings (a 36-byte `CString`), arrays, `any` values and dictionaries                        | `ASEXT_CStringAssign`, `ASEXT_CStringdtor`, `ASEXT_CScriptDictionary_*`                                  | [`asext_api.h:311-381`][ax-api-data]                           | needed to give strings to a script                                                                     |
 | Client data        | none                                                                                               | the cvar-query slots of its engine and DLL tables are NULL                                               | [`engine_api.cpp:244-246`][ax-eng], [`dllapi.cpp:240`][ax-dll] | none                                                                                                   |
 
-[axr-meta]: https://github.com/metamod-svencoop/asext/blob/df03faf88e7e547d3f4f84b75ed0385bec5a0678/src/meta_api.cpp#L167
+[axr-meta]: https://github.com/metamod-svencoop/asext/blob/df03faf88e7e547d3f4f84b75ed0385bec5a0678/src/meta_api.cpp#L218-L284
+[fg-asext]: https://github.com/metamod-svencoop/fallguys/blob/dac8db54db189346e2e0eb5beefbc8de6c53985f/src/meta_api.cpp#L296-L307
 [axr-sig]: https://github.com/metamod-svencoop/asext/blob/df03faf88e7e547d3f4f84b75ed0385bec5a0678/src/signatures.h#L127
 [ax-meta]: https://github.com/metamod-svencoop/asext/blob/d65dbb54aa6007cf0e855cc77067eadf63a5eb40/src/meta_api.cpp#L148
 [ax-hooks]: https://github.com/metamod-svencoop/asext/blob/d65dbb54aa6007cf0e855cc77067eadf63a5eb40/src/server_hook.cpp#L181-L260
@@ -156,10 +158,10 @@ Static check of the release asext against our `server.so` (no run):
 ### 2.1 What it is
 
 asexthook is an AngelScript extension by DrAbc on top of asext. It adds hooks for combat, entities and relationships, a
-few methods and types, and the cvar `sv_fixgmr`. It has 42 releases, from `v20221112fix` to `v20250831`. The master
-branch (`3b908f31`) moved to the gamedata stack of metamod 5:17 on 2026-10-22 and 2026-10-23 (commits `825222f`,
-`628c28c` and `ad90ad8`). No release contains this code. Its README says that gameplay was checked only on a Windows
-listen server ([`README.md:159-165`][ah-readme]).
+few methods and types, and the cvar `sv_fixgmr`. It has 42 releases, from `v20221112` to `v20250831`. The master branch
+(`3b908f31`) moved to the gamedata stack of metamod 5:17 on 2026-10-22 and 2026-10-23 (commits `825222f`, `628c28c` and
+`ad90ad8`). No release contains this code. Its README says that gameplay was checked only on a Windows listen server
+([`README.md:159-165`][ah-readme]).
 
 ### 2.2 How it works
 
@@ -475,8 +477,8 @@ only the message check. The command filter at 0x56E90 also blocks commands from 
 | asext `v20261009a`                          | `asext.so` and a consumer                   | 40 byte signatures                 | exactly 5:16              | stock                | breaks: one signature holds a GOT offset of this build                       |
 | asext main                                  | `asext.so`, a consumer and the gamedata     | GoldSrc_VibeSignatures             | exactly 5:17 (no release) | stock                | no attach until the catalog lists the new files                              |
 | asexthook master                            | `asext.so`, `asexthook.so` and the gamedata | GoldSrc_VibeSignatures, 11 targets | exactly 5:17 (no release) | stock                | no attach until the catalog lists the new files                              |
-| asexthook `v20250831`                       | `asext.so` and `asexthook.so`               | byte signatures                    | 5:16                      | stock                | can break (byte signatures). Its ABI fit with the release asext is not known |
-| asqcvar `v20261009a`                        | `asext.so` and `asqcvar.so`                 | through asext                      | exactly 5:16              | stock                | breaks with asext                                                            |
+| asexthook `v20250831`                       | `asext.so` and `asexthook.so`               | byte signatures                    | exactly 5:16              | stock                | can break (byte signatures). Its ABI fit with the release asext is not known |
+| asqcvar `v20261009a`                        | `asext.so` and `asqcvar.so`                 | through asext                      | exactly 5:16 (asext)      | stock                | breaks with asext                                                            |
 | MetaHookSv plugin                           | none                                        | client gamedata                    | none                      | a Windows client mod | the client plugin needs updates                                              |
 
 - Our binaries are the dataset `svencoop-10257` (Evidence). The release asext resolves all its symbols on our
@@ -485,6 +487,10 @@ only the message check. The command filter at 0x56E90 also blocks commands from 
   metamod-svencoop/metamod and metamod-svencoop/asext have no tags (`git ls-remote --tags`).
 - asext main pins metamod `1a620468` (interface 5:17, `asext/cmake/Revisions.cmake:2`). The `v20261009a` metamod refuses
   a 5:17 plugin, and asext main refuses 5:16 (`asext/src/meta_api.cpp:93`).
+- asexthook `v20250831` compares the interface with `strcmp`, as master does (`src/source/meta_api.cpp:93` at
+  `836807ea`, the commit of the tag). It builds against the metamod-fallguys tree of 2025, which says 5:16
+  (`metamod/meta_api.h` at `3a02119`). asqcvar itself accepts 5:14 or newer (`asqcvar/src/meta_api.cpp:117-130`), but it
+  loads asext, and the release asext accepts only 5:16.
 - The release `asext.so` needs GLIBC_2.38, as the release `metamod.so` does.
 - Server-only and client mods: the whole asext family runs on the server only. MetaHookSv, ABCEnchance and SvenMod are
   client mods for Windows. The userinfo key needs no mod on either side.
